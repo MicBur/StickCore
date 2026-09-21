@@ -11,6 +11,7 @@
 #include "generators/TatamiFill.h"
 #include "generators/TextDigitizer.h"
 #include "generators/MonogramGenerator.h"
+#include "generators/HuntingMotifs.h"
 #include "generators/LogoGenerator.h"
 #include "generators/SvgDigitizer.h"
 #include "core/SvgPathParser.h"
@@ -383,6 +384,23 @@ void MainWindow::setupMenus()
     mefMenu->addAction(QStringLiteral("✒ Feiner Gold-Steppstich (Linien-Art)"), this, [this]{ loadMefOriginal(3); });
     mefMenu->addSeparator();
     mefMenu->addAction(QStringLiteral("❦ Kalligraphie-Variante (Schriftarten-Badge)"), this, &MainWindow::makeLogo);
+
+    QMenu* huntMenu = motMenu->addMenu(QStringLiteral("🌿 Jagd, Natur & Tradition (Eichenlaub, Hirsch, Keiler)"));
+    auto* oakMenu = huntMenu->addMenu(QStringLiteral("🌿 Eichenlaub mit Eicheln (Trachten & Schützen)"));
+    oakMenu->addAction(QStringLiteral("▶ Als fertige Stickerei laden"), this, [this]{ loadHuntingMotif(0, false); });
+    oakMenu->addAction(QStringLiteral("✏ Im 2D-Editor bearbeiten (Bézier-Pfade)"), this, [this]{ loadHuntingMotif(0, true); });
+
+    auto* stagMenu = huntMenu->addMenu(QStringLiteral("🦌 Kapitaler 12-Ender Hirschkopf"));
+    stagMenu->addAction(QStringLiteral("▶ Als fertige Stickerei laden"), this, [this]{ loadHuntingMotif(1, false); });
+    stagMenu->addAction(QStringLiteral("✏ Im 2D-Editor bearbeiten (Bézier-Pfade)"), this, [this]{ loadHuntingMotif(1, true); });
+
+    auto* boarMenu = huntMenu->addMenu(QStringLiteral("🐗 Keiler / Schwarzwild mit Hauer"));
+    boarMenu->addAction(QStringLiteral("▶ Als fertige Stickerei laden"), this, [this]{ loadHuntingMotif(2, false); });
+    boarMenu->addAction(QStringLiteral("✏ Im 2D-Editor bearbeiten (Bézier-Pfade)"), this, [this]{ loadHuntingMotif(2, true); });
+
+    auto* crestMenu = huntMenu->addMenu(QStringLiteral("🎖 Waidmannsheil-Medaillon (Kranz & Flinten)"));
+    crestMenu->addAction(QStringLiteral("▶ Als fertige Stickerei laden"), this, [this]{ loadHuntingMotif(3, false); });
+    crestMenu->addAction(QStringLiteral("✏ Im 2D-Editor bearbeiten (Bézier-Pfade)"), this, [this]{ loadHuntingMotif(3, true); });
 
     motMenu->addAction(QStringLiteral("📱 &Smartphone-Foto Upload (QR)…"), this, &MainWindow::phoneUpload, QKeySequence(Qt::CTRL | Qt::Key_U));
     motMenu->addSeparator();
@@ -941,6 +959,18 @@ QWidget* MainWindow::buildInfoPanel()
     m_underlay->setToolTip(QStringLiteral("Stickt zuerst Kontur & Unterlage, dann die Deckstiche — "
         "so wird die Stickerei fest und sauber, ohne Wellen."));
     form->addRow(QStringLiteral("Stichdichte"), m_density);
+    m_fillAngleSpin = new QDoubleSpinBox; m_fillAngleSpin->setRange(0.0, 360.0); m_fillAngleSpin->setSingleStep(15.0);
+    m_fillAngleSpin->setValue(45.0); m_fillAngleSpin->setSuffix(QStringLiteral("°"));
+    m_fillAngleSpin->setToolTip(QStringLiteral("Richtung der Stichreihen (0°-360°). Bricht das Licht auf dem Garn unterschiedlich."));
+
+    m_patternCombo = new QComboBox;
+    for (auto pt : { TatamiFill::PatternType::StandardTatami, TatamiFill::PatternType::Brick,
+                     TatamiFill::PatternType::Twill, TatamiFill::PatternType::Basketweave,
+                     TatamiFill::PatternType::Honeycomb, TatamiFill::PatternType::ContourEcho }) {
+        m_patternCombo->addItem(TatamiFill::patternName(pt), int(pt));
+    }
+    form->addRow(QStringLiteral("Füllwinkel"), m_fillAngleSpin);
+    form->addRow(QStringLiteral("Füllmuster"), m_patternCombo);
     form->addRow(QStringLiteral("Zugausgleich"), m_pull);
     form->addRow(QStringLiteral("Max. Stichlänge"), m_maxStitch);
     outer->addLayout(form);
@@ -1238,6 +1268,8 @@ void MainWindow::generate()
             if (i != outer && paths[i].count() >= 3) region.push_back(paths[i].toPolygon());
         TatamiFill::Params tp; tp.rowSpacingMm = density;
         tp.maxStitchMm = maxStit; tp.underlay = underlay;
+        tp.fillAngleDeg = m_fillAngleSpin ? m_fillAngleSpin->value() : 45.0;
+        tp.pattern = m_patternCombo ? TatamiFill::PatternType(m_patternCombo->currentData().toInt()) : TatamiFill::PatternType::StandardTatami;
         m_current = TatamiFill::generate(region, tp);
         m_current.palette.clear();
         m_current.palette.push_back(ThreadCatalog::snap(QColor(40, 90, 200)));
@@ -1353,6 +1385,23 @@ void MainWindow::makeText()
     slantSpin->setSuffix(QStringLiteral("°"));
     form->addRow(QStringLiteral("Neigung (Slant):"), slantSpin);
 
+    // Fill Angle
+    auto* angleSpin = new QDoubleSpinBox(&d);
+    angleSpin->setRange(0.0, 360.0);
+    angleSpin->setSingleStep(15.0);
+    angleSpin->setValue(45.0);
+    angleSpin->setSuffix(QStringLiteral("°"));
+    form->addRow(QStringLiteral("Füllwinkel:"), angleSpin);
+
+    // Fill Pattern
+    auto* patCombo = new QComboBox(&d);
+    for (auto pt : { TatamiFill::PatternType::StandardTatami, TatamiFill::PatternType::Brick,
+                     TatamiFill::PatternType::Twill, TatamiFill::PatternType::Basketweave,
+                     TatamiFill::PatternType::Honeycomb, TatamiFill::PatternType::ContourEcho }) {
+        patCombo->addItem(TatamiFill::patternName(pt), int(pt));
+    }
+    form->addRow(QStringLiteral("Füllmuster:"), patCombo);
+
     // Stitch Style
     auto* stitchCombo = new QComboBox(&d);
     stitchCombo->addItem(QStringLiteral("✦ Erhabener Satin-Rand auf Füllung (Janome Jr)"), int(TextDigitizer::StitchStyle::Raised));
@@ -1380,6 +1429,8 @@ void MainWindow::makeText()
     tp.arcRadiusMm     = radSpin->value();
     tp.letterSpacingMm = spaceSpin->value();
     tp.slantDeg        = slantSpin->value();
+    tp.fillAngleDeg    = angleSpin->value();
+    tp.pattern         = TatamiFill::PatternType(patCombo->currentData().toInt());
     tp.style           = TextDigitizer::StitchStyle(stitchCombo->currentData().toInt());
     tp.raised          = (tp.style == TextDigitizer::StitchStyle::Raised);
     tp.densityMm       = m_density->value();
@@ -1414,9 +1465,23 @@ void MainWindow::makeMonogram()
     auto* fill = new QComboBox;
     for (auto fst : { MonogramGenerator::Fill::Raised, MonogramGenerator::Fill::Contour })
         fill->addItem(MonogramGenerator::fillName(fst), int(fst));
-    auto* frame = new QComboBox; frame->addItems({QStringLiteral("Kein Rahmen"),
-        QStringLiteral("Oval"), QStringLiteral("Kreis")});
-    frame->setCurrentIndex(1);
+    auto* frame = new QComboBox;
+    for (auto fr : { MonogramGenerator::Frame::OakWreath,
+                     MonogramGenerator::Frame::LaurelWreath,
+                     MonogramGenerator::Frame::ShieldCrest,
+                     MonogramGenerator::Frame::BaroqueCartouche,
+                     MonogramGenerator::Frame::Oval,
+                     MonogramGenerator::Frame::Circle,
+                     MonogramGenerator::Frame::None }) {
+        frame->addItem(MonogramGenerator::frameName(fr), int(fr));
+    }
+
+    auto* angleSpin = new QDoubleSpinBox(&d);
+    angleSpin->setRange(0.0, 360.0);
+    angleSpin->setSingleStep(15.0);
+    angleSpin->setValue(45.0);
+    angleSpin->setSuffix(QStringLiteral("°"));
+
     QObject::connect(style, QOverload<int>::of(&QComboBox::currentIndexChanged), &d,
         [style, fill]{
             const auto s = MonogramGenerator::Style(style->currentData().toInt());
@@ -1434,7 +1499,8 @@ void MainWindow::makeMonogram()
     form->addRow(QString(), big);
     form->addRow(QStringLiteral("Schriftstil:"), style);
     form->addRow(QStringLiteral("Füllung:"), fill);
-    form->addRow(QStringLiteral("Rahmen:"), frame);
+    form->addRow(QStringLiteral("Füllwinkel:"), angleSpin);
+    form->addRow(QStringLiteral("Schmuckrahmen:"), frame);
     auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     form->addRow(bb);
     connect(bb, &QDialogButtonBox::accepted, &d, &QDialog::accept);
@@ -1444,18 +1510,17 @@ void MainWindow::makeMonogram()
     MonogramGenerator::Params mp;
     mp.letters = letters->text();
     mp.centerLarge = big->isChecked();
-    mp.frame = frame->currentIndex() == 2 ? MonogramGenerator::Frame::Circle
-             : frame->currentIndex() == 1 ? MonogramGenerator::Frame::Oval
-                                          : MonogramGenerator::Frame::None;
+    mp.frame = MonogramGenerator::Frame(frame->currentData().toInt());
     mp.style = MonogramGenerator::Style(style->currentData().toInt());
     mp.fill  = MonogramGenerator::Fill(fill->currentData().toInt());
+    mp.fillAngleDeg = angleSpin->value();
     mp.densityMm = m_density->value();
     mp.maxStitchMm = m_maxStitch->value();
     mp.underlay = m_underlay->isChecked();
-    mp.heightMm = 32.0;
+    mp.heightMm = 34.0;
     mp.color = QColor(40, 55, 90);
+    mp.frameColor = QColor(185, 140, 45); // Gold / Bronze
     m_current = MonogramGenerator::generate(mp);
-    m_current.palette = { ThreadCatalog::snap(mp.color) };
     setCurrentSequence(m_current, QStringLiteral("Monogramm: %1").arg(mp.letters));
 }
 
@@ -1929,6 +1994,30 @@ void MainWindow::captureManualScreenshots(const QString& outDir)
     // Restore MEF Logo
     loadMefOriginal(0);
     QApplication::processEvents();
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::loadHuntingMotif(int typeIdx, bool editable)
+{
+    const auto type = HuntingMotifs::MotifType(std::clamp(typeIdx, 0, 3));
+    const QString name = HuntingMotifs::motifName(type);
+
+    if (editable) {
+        QVector<EditPath> paths = HuntingMotifs::generateEditablePaths(type, 90.0);
+        m_editor->loadPaths(paths);
+        m_editor->setMode(PathEditorWidget::Mode::TatamiPolygon);
+        statusBar()->showMessage(QStringLiteral("'%1' als bearbeitbare Bézier-Pfade geladen (Punkte verschiebbar, F5 zum Berechnen).").arg(name), 6000);
+    } else {
+        HuntingMotifs::Params hp;
+        hp.widthMm = 90.0;
+        hp.fillAngleDeg = m_fillAngleSpin ? m_fillAngleSpin->value() : 45.0;
+        hp.pattern = m_patternCombo ? TatamiFill::PatternType(m_patternCombo->currentData().toInt()) : TatamiFill::PatternType::StandardTatami;
+        hp.densityMm = m_density ? m_density->value() : 0.40;
+        hp.underlay = m_underlay ? m_underlay->isChecked() : true;
+        m_current = HuntingMotifs::generateStitches(type, hp);
+        setCurrentSequence(m_current, name);
+        statusBar()->showMessage(QStringLiteral("'%1' als fertiges Stickmotiv erzeugt.").arg(name), 5000);
+    }
 }
 
 } // namespace stick

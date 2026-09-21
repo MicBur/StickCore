@@ -157,6 +157,7 @@ StitchSequence TextDigitizer::generate(const Params& p)
 
     TatamiFill::Params tp;
     tp.fillAngleDeg = p.fillAngleDeg;
+    tp.pattern      = p.pattern;
     tp.rowSpacingMm = p.densityMm;
     tp.maxStitchMm  = p.maxStitchMm;
     tp.underlay     = p.underlay;

@@ -189,4 +189,84 @@ QImage PhotoProcessor::sobelEdges(const QImage& gray8, int threshold)
     return out;
 }
 
+std::vector<int> PhotoProcessor::filterSpeckles(const std::vector<int>& labels, int W, int H, int minArea)
+{
+    if (labels.size() != size_t(W) * H || minArea <= 1) return labels;
+
+    std::vector<int> out = labels;
+    std::vector<uint8_t> visited(size_t(W) * H, 0);
+
+    std::vector<int> component;
+    component.reserve(minArea + 10);
+
+    for (int y = 0; y < H; ++y) {
+        for (int x = 0; x < W; ++x) {
+            const size_t idx = size_t(y) * W + x;
+            if (visited[idx]) continue;
+
+            const int curLabel = out[idx];
+            component.clear();
+            std::vector<std::pair<int, int>> queue;
+            queue.push_back({x, y});
+            visited[idx] = 1;
+
+            std::vector<int> neighborLabels;
+
+            size_t qHead = 0;
+            while (qHead < queue.size()) {
+                const int cx = queue[qHead].first;
+                const int cy = queue[qHead].second;
+                qHead++;
+                component.push_back(cy * W + cx);
+
+                static const int dx[4] = {0, 1, 0, -1};
+                static const int dy[4] = {-1, 0, 1, 0};
+                for (int d = 0; d < 4; ++d) {
+                    const int nx = cx + dx[d];
+                    const int ny = cy + dy[d];
+                    if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+                        const size_t nidx = size_t(ny) * W + nx;
+                        if (out[nidx] == curLabel) {
+                            if (!visited[nidx]) {
+                                visited[nidx] = 1;
+                                queue.push_back({nx, ny});
+                            }
+                        } else {
+                            neighborLabels.push_back(out[nidx]);
+                        }
+                    }
+                }
+            }
+
+            if (int(component.size()) < minArea && !neighborLabels.empty()) {
+                std::sort(neighborLabels.begin(), neighborLabels.end());
+                int bestNeighbor = neighborLabels[0];
+                int bestCount = 0;
+                int curCount = 0;
+                int lastVal = neighborLabels[0];
+                for (int nVal : neighborLabels) {
+                    if (nVal == lastVal) {
+                        curCount++;
+                    } else {
+                        if (curCount > bestCount) {
+                            bestCount = curCount;
+                            bestNeighbor = lastVal;
+                        }
+                        lastVal = nVal;
+                        curCount = 1;
+                    }
+                }
+                if (curCount > bestCount) {
+                    bestNeighbor = lastVal;
+                }
+
+                for (int pidx : component) {
+                    out[pidx] = bestNeighbor;
+                }
+            }
+        }
+    }
+    return out;
+}
+
 } // namespace stick

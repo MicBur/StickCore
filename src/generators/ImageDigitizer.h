@@ -51,6 +51,10 @@ public:
         int     colors        = 6;      ///< number of thread colours
         double  densityMm     = 0.50;   ///< fill row spacing
         bool    dropBackground= true;   ///< skip a dominant near-white background
+        double  fillAngleDeg  = 45.0;   ///< Stichwinkel in Grad (0° - 360°)
+        bool    multiAngle    = true;   ///< Automatischer Verzugsausgleich (je Farbe +45°)
+        bool    satinBorder   = false;  ///< Farbkonturen mit Satinstich nachzeichnen
+        double  borderWidthMm = 1.2;
 
         // --- Portrait / LineArt pre-processing ------------------------------
         int     blur          = 1;      ///< pre-blur radius in analysis px (0 = off)

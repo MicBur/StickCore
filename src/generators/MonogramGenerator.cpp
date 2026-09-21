@@ -6,6 +6,7 @@
 #include "generators/SatinGenerator.h"
 #include "generators/ContourFill.h"
 #include "core/Geometry.h"
+#include "core/ThreadCatalog.h"
 
 #include <QPainterPath>
 #include <QPolygonF>
@@ -73,6 +74,7 @@ StitchSequence letter(QChar c, double h, const MonogramGenerator::Params& mp) {
     tp.densityMm = mp.densityMm;
     tp.maxStitchMm = mp.maxStitchMm;
     tp.underlay = mp.underlay;
+    tp.fillAngleDeg = mp.fillAngleDeg;
 
     if (mp.fill == MonogramGenerator::Fill::Contour && ContourFill::available()) {
         const QPainterPath path = TextDigitizer::textPath(tp);
@@ -118,6 +120,20 @@ QString MonogramGenerator::fillName(Fill f)
     return QStringLiteral("Erhaben");
 }
 
+QString MonogramGenerator::frameName(Frame f)
+{
+    switch (f) {
+    case Frame::None:             return QStringLiteral("Kein Rahmen");
+    case Frame::Oval:             return QStringLiteral("Satinstich-Oval");
+    case Frame::Circle:           return QStringLiteral("Satinstich-Kreis");
+    case Frame::OakWreath:        return QStringLiteral("🌿 Eichenlaub-Kranz mit Eicheln");
+    case Frame::LaurelWreath:     return QStringLiteral("🍃 Römischer Lorbeerkranz");
+    case Frame::ShieldCrest:      return QStringLiteral("🛡 Wappenschild (Diamond Crest)");
+    case Frame::BaroqueCartouche:  return QStringLiteral("⚜ Barocke Rokoko-Kartusche");
+    }
+    return QStringLiteral("Kein Rahmen");
+}
+
 StitchSequence MonogramGenerator::generate(const Params& p)
 {
     QString L = p.letters.trimmed();
@@ -128,7 +144,14 @@ StitchSequence MonogramGenerator::generate(const Params& p)
     const int n = L.size();
     // per-letter heights
     std::vector<double> h(n, p.heightMm);
-    if (p.centerLarge && n == 3) { h[0] = h[2] = p.heightMm * 0.62; h[1] = p.heightMm; }
+    if (n == 1) {
+        h[0] = p.heightMm * 1.15; // single monumental centerpiece
+    } else if (p.centerLarge && n == 3) {
+        h[0] = h[2] = p.heightMm * 0.65;
+        h[1] = p.heightMm;
+    } else if (n == 2) {
+        h[0] = h[1] = p.heightMm * 0.90;
+    }
 
     // build each letter, measure width
     std::vector<StitchSequence> parts;
@@ -155,19 +178,117 @@ StitchSequence MonogramGenerator::generate(const Params& p)
     if (p.frame != Frame::None && !seq.empty()) {
         double x0, y0, x1, y1; seq.bounds(x0, y0, x1, y1);
         const double cx = 0.5*(x0+x1), cy = 0.5*(y0+y1);
-        const double margin = 0.34 * p.heightMm;
-        double a = 0.5*(x1-x0) + margin, b = 0.5*(y1-y0) + margin*1.15;
+        const double margin = 0.38 * p.heightMm;
+        double a = 0.5*(x1-x0) + margin;
+        double b = 0.5*(y1-y0) + margin * 1.15;
         if (p.frame == Frame::Circle) { a = b = std::max(a, b); }
-        QPolygonF ell; const int N = 72;
-        QPainterPath ellPath;
-        ellPath.addPolygon(ell);
-        ellPath.closeSubpath();
-        StitchSequence fBand = SatinGenerator::fromCenterline(ellPath, 2.0, 0.45, 0);
-        append(seq, fBand);
+
+        QPainterPath framePath;
+
+        if (p.frame == Frame::Oval || p.frame == Frame::Circle) {
+            QPolygonF ell; const int N = 72;
+            for (int i = 0; i < N; ++i) {
+                const double rad = i * 2.0 * PI / N;
+                ell.push_back(QPointF(cx + a * std::cos(rad), cy + b * std::sin(rad)));
+            }
+            framePath.addPolygon(ell);
+            framePath.closeSubpath();
+            StitchSequence fBand = SatinGenerator::fromCenterline(framePath, 2.2, 0.40, 1);
+            append(seq, fBand);
+        } else if (p.frame == Frame::OakWreath) {
+            // Oak wreath surrounding the monogram
+            const int leafCount = 12;
+            for (int i = 0; i < leafCount; ++i) {
+                const double aDeg = (double(i) / leafCount) * 360.0;
+                const double rad = aDeg * PI / 180.0;
+                const QPointF pt(cx + a * 1.05 * std::cos(rad), cy + b * 1.05 * std::sin(rad));
+                QPainterPath leaf;
+                leaf.moveTo(pt);
+                const double angle = aDeg + 90.0;
+                const double lrad = angle * PI / 180.0;
+                const double dx = std::cos(lrad) * 7.0, dy = std::sin(lrad) * 7.0;
+                const double nx = -std::sin(lrad) * 4.0, ny = std::cos(lrad) * 4.0;
+                leaf.cubicTo(pt.x() + dx*0.5 + nx, pt.y() + dy*0.5 + ny,
+                             pt.x() + dx*0.8 + nx, pt.y() + dy*0.8 + ny,
+                             pt.x() + dx, pt.y() + dy);
+                leaf.cubicTo(pt.x() + dx*0.8 - nx, pt.y() + dy*0.8 - ny,
+                             pt.x() + dx*0.5 - nx, pt.y() + dy*0.5 - ny,
+                             pt.x(), pt.y());
+                framePath.addPath(leaf);
+            }
+            QPolygonF ell; const int N = 64;
+            for (int i = 0; i < N; ++i) {
+                const double rad = i * 2.0 * PI / N;
+                ell.push_back(QPointF(cx + a * std::cos(rad), cy + b * std::sin(rad)));
+            }
+            framePath.addPolygon(ell);
+            framePath.closeSubpath();
+            StitchSequence fBand = SatinGenerator::fromCenterline(framePath, 1.8, 0.42, 1);
+            append(seq, fBand);
+        } else if (p.frame == Frame::LaurelWreath) {
+            // Classical Roman laurel wreath
+            const int leafCount = 14;
+            for (int i = 0; i < leafCount; ++i) {
+                const double t = double(i) / (leafCount - 1);
+                const double angL = -PI*0.5 + t * PI;
+                const double angR = -PI*0.5 - t * PI;
+                const QPointF pL(cx - a * std::cos(angL), cy + b * std::sin(angL));
+                const QPointF pR(cx + a * std::cos(angR), cy + b * std::sin(angR));
+
+                QPainterPath lL; lL.addEllipse(pL, 4.0, 2.0);
+                QPainterPath lR; lR.addEllipse(pR, 4.0, 2.0);
+                framePath.addPath(lL);
+                framePath.addPath(lR);
+            }
+            QPolygonF ell; const int N = 64;
+            for (int i = 0; i < N; ++i) {
+                const double rad = i * 2.0 * PI / N;
+                ell.push_back(QPointF(cx + a * std::cos(rad), cy + b * std::sin(rad)));
+            }
+            framePath.addPolygon(ell);
+            framePath.closeSubpath();
+            StitchSequence fBand = SatinGenerator::fromCenterline(framePath, 1.6, 0.40, 1);
+            append(seq, fBand);
+        } else if (p.frame == Frame::ShieldCrest) {
+            // Gothic heraldic shield
+            QPainterPath shield;
+            const double w2 = a * 1.1;
+            const double topY = cy + b * 1.15;
+            const double midY = cy - b * 0.1;
+            const double botY = cy - b * 1.25;
+            shield.moveTo(cx - w2, topY);
+            shield.cubicTo(cx - w2 * 0.5, topY + 3.0, cx, topY - 2.0, cx, topY);
+            shield.cubicTo(cx, topY - 2.0, cx + w2 * 0.5, topY + 3.0, cx + w2, topY);
+            shield.lineTo(cx + w2, midY);
+            shield.cubicTo(cx + w2, botY + b * 0.4, cx + w2 * 0.4, botY + 4.0, cx, botY);
+            shield.cubicTo(cx - w2 * 0.4, botY + 4.0, cx - w2, botY + b * 0.4, cx - w2, midY);
+            shield.closeSubpath();
+            StitchSequence fBand = SatinGenerator::fromCenterline(shield, 2.0, 0.42, 1);
+            append(seq, fBand);
+        } else if (p.frame == Frame::BaroqueCartouche) {
+            // Rococo cartouche: oval with decorative C-scrolls
+            QPainterPath rococo;
+            QPolygonF ell; const int N = 64;
+            for (int i = 0; i < N; ++i) {
+                const double rad = i * 2.0 * PI / N;
+                ell.push_back(QPointF(cx + a * std::cos(rad), cy + b * std::sin(rad)));
+            }
+            rococo.addPolygon(ell);
+            rococo.closeSubpath();
+            rococo.addEllipse(QPointF(cx, cy + b * 1.05), a * 0.25, b * 0.15);
+            rococo.addEllipse(QPointF(cx, cy - b * 1.05), a * 0.25, b * 0.15);
+            rococo.addEllipse(QPointF(cx - a * 1.05, cy), a * 0.15, b * 0.25);
+            rococo.addEllipse(QPointF(cx + a * 1.05, cy), a * 0.15, b * 0.25);
+            StitchSequence fBand = SatinGenerator::fromCenterline(rococo, 2.0, 0.42, 1);
+            append(seq, fBand);
+        }
     }
 
     seq.palette.clear();
-    seq.palette.emplace_back(p.color, QStringLiteral("Monogramm"));
+    seq.palette.push_back(ThreadCatalog::snap(p.color));
+    if (p.frame != Frame::None) {
+        seq.palette.push_back(ThreadCatalog::snap(p.frameColor));
+    }
     return seq;
 }
 

@@ -48,6 +48,8 @@ add_executable(StickCore WIN32
     src/generators/TextDigitizer.h
     src/generators/MonogramGenerator.cpp
     src/generators/MonogramGenerator.h
+    src/generators/HuntingMotifs.cpp
+    src/generators/HuntingMotifs.h
     src/generators/ContourFill.cpp
     src/generators/ContourFill.h
     src/generators/LogoGenerator.cpp
@@ -126,6 +128,7 @@ add_executable(StickCoreTests
     src/generators/AppliqueGenerator.cpp
     src/generators/TextDigitizer.cpp
     src/generators/MonogramGenerator.cpp
+    src/generators/HuntingMotifs.cpp
     src/generators/ContourFill.cpp
     src/generators/LogoGenerator.cpp
     src/generators/SvgDigitizer.cpp

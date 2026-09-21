@@ -16,7 +16,15 @@ namespace stick {
 
 class MonogramGenerator {
 public:
-    enum class Frame { None, Oval, Circle };
+    enum class Frame {
+        None,
+        Oval,
+        Circle,
+        OakWreath,        ///< Eichenlaub-Kranz mit Eicheln (Tradition & Meisterschaft)
+        LaurelWreath,     ///< Römischer Lorbeerkranz (Ehrenkranz)
+        ShieldCrest,      ///< Wappenschild / Diamond Crest
+        BaroqueCartouche  ///< Barocke Rokoko-Kartusche mit Ornamenten
+    };
 
     // Lettering styles for the initials. Each maps to a set of font families
     // (with cross-platform fallbacks) so it looks right on Windows and here.
@@ -52,13 +60,16 @@ public:
         double  heightMm    = 30.0;   ///< height of the (large) letters
         double  densityMm   = 0.45;   ///< fill row / contour-ring spacing
         double  maxStitchMm = 4.0;
+        double  fillAngleDeg= 45.0;   ///< Füllwinkel der Initialen (0° - 360°)
         bool    underlay    = true;
-        QColor  color       = QColor(60, 60, 70);
+        QColor  color       = QColor(40, 55, 90);      ///< Buchstaben-Garnfarbe
+        QColor  frameColor  = QColor(180, 140, 45);    ///< Rahmen-Garnfarbe (z.B. Gold)
     };
 
     /// Human-readable names (German) for UI menus.
     static QString styleName(Style s);
     static QString fillName(Fill f);
+    static QString frameName(Frame f);
 
     static StitchSequence generate(const Params& p);
 };

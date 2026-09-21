@@ -11,6 +11,7 @@
 #include "generators/OpenCvBridge.h"
 #include "generators/Underlay.h"
 #include "generators/AppliqueGenerator.h"
+#include "generators/HuntingMotifs.h"
 #include "core/ThreadCatalog.h"
 #include "core/MachineProfile.h"
 #include "codec/JefCodec.h"
@@ -657,6 +658,97 @@ int main(int argc, char** argv)
         const double origDist = std::hypot(testSeq.stitches[0].x - cx, testSeq.stitches[0].y - cy);
         const double rotDist  = std::hypot(fSeq.stitches[0].x - cx, fSeq.stitches[0].y - cy);
         CHECK(std::abs(origDist - rotDist) < 1e-4, "free rotate preserves distance from origin center");
+    }
+
+    std::printf("== TatamiFill Patterns & Angles ==\n");
+    {
+        QPolygonF poly;
+        poly << QPointF(0, 0) << QPointF(50, 0) << QPointF(50, 50) << QPointF(0, 50);
+        QVector<QPolygonF> polys{poly};
+
+        // Test each pattern type
+        for (auto pat : { TatamiFill::PatternType::StandardTatami,
+                          TatamiFill::PatternType::Brick,
+                          TatamiFill::PatternType::Twill,
+                          TatamiFill::PatternType::Basketweave,
+                          TatamiFill::PatternType::Honeycomb,
+                          TatamiFill::PatternType::ContourEcho }) {
+            TatamiFill::Params tp;
+            tp.pattern = pat;
+            tp.fillAngleDeg = 45.0;
+            StitchSequence s = TatamiFill::generate(polys, tp);
+            CHECK(!s.stitches.empty(), "pattern generated stitches");
+            CHECK(!TatamiFill::patternName(pat).isEmpty(), "pattern has valid display name");
+        }
+
+        // Test fill angle variations
+        for (double angle : { 0.0, 30.0, 90.0, 135.0, 270.0 }) {
+            TatamiFill::Params tp;
+            tp.fillAngleDeg = angle;
+            StitchSequence s = TatamiFill::generate(polys, tp);
+            CHECK(!s.stitches.empty(), "fill angle generated stitches");
+        }
+    }
+
+    std::printf("== Hunting & Tradition Motifs (HuntingMotifs) ==\n");
+    {
+        for (auto m : { HuntingMotifs::MotifType::OakBranch,
+                        HuntingMotifs::MotifType::StagHead,
+                        HuntingMotifs::MotifType::WildBoar,
+                        HuntingMotifs::MotifType::WaidmannsheilCrest }) {
+            // 1. Stitches generation
+            HuntingMotifs::Params p;
+            p.widthMm = 80.0;
+            p.fillAngleDeg = 30.0;
+            p.pattern = TatamiFill::PatternType::Brick;
+            p.satinOutline = true;
+            StitchSequence seq = HuntingMotifs::generateStitches(m, p);
+            CHECK(seq.stitches.size() > 100, "motif generated stitch stream > 100");
+            CHECK(!seq.palette.empty(), "motif has thread palette assigned");
+
+            double x0, y0, x1, y1;
+            seq.bounds(x0, y0, x1, y1);
+            const double w = x1 - x0;
+            CHECK(w > 50.0 && w < 100.0, "motif width matches ~80mm target");
+
+            // 2. Editable Bézier paths generation for 2D editor
+            QVector<EditPath> editPaths = HuntingMotifs::generateEditablePaths(m, 80.0);
+            CHECK(!editPaths.isEmpty(), "motif generated editable Bézier paths");
+            int totalNodes = 0;
+            for (const auto& ep : editPaths) totalNodes += ep.nodes.size();
+            CHECK(totalNodes >= 4, "motif edit paths contain interactive Bézier nodes");
+
+            // 3. Name & Description metadata
+            CHECK(!HuntingMotifs::motifName(m).isEmpty(), "motif has name");
+            CHECK(!HuntingMotifs::motifDescription(m).isEmpty(), "motif has detailed description");
+        }
+    }
+
+    std::printf("== Deluxe Monograms & Multi-Letter Layouts ==\n");
+    {
+        for (auto frame : { MonogramGenerator::Frame::OakWreath,
+                            MonogramGenerator::Frame::LaurelWreath,
+                            MonogramGenerator::Frame::ShieldCrest,
+                            MonogramGenerator::Frame::BaroqueCartouche }) {
+            MonogramGenerator::Params mp;
+            mp.letters = QStringLiteral("MB");
+            mp.frame = frame;
+            mp.heightMm = 35.0;
+            mp.fillAngleDeg = 60.0;
+            StitchSequence seq = MonogramGenerator::generate(mp);
+            CHECK(seq.stitches.size() > 200, "deluxe monogram produced stitches");
+            CHECK(!seq.palette.empty(), "deluxe monogram has palette");
+        }
+
+        // Test 1, 2, 3 letters
+        for (const QString& initials : { QStringLiteral("M"), QStringLiteral("AB"), QStringLiteral("JMB") }) {
+            MonogramGenerator::Params mp;
+            mp.letters = initials;
+            mp.frame = MonogramGenerator::Frame::OakWreath;
+            mp.heightMm = 30.0;
+            StitchSequence seq = MonogramGenerator::generate(mp);
+            CHECK(!seq.stitches.empty(), "multi-letter initials generated stitches");
+        }
     }
 
     std::printf("== Real reference round-trip ==\n");

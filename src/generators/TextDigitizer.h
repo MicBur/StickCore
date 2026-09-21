@@ -9,6 +9,7 @@
 #pragma once
 
 #include "core/StitchTypes.h"
+#include "generators/TatamiFill.h"
 #include <QPainterPath>
 #include <QString>
 #include <QStringList>
@@ -44,6 +45,7 @@ public:
         double  maxStitchMm = 4.0;    ///< max stitch length inside the fill
         bool    underlay    = true;   ///< lay underlay before the fill
         double  fillAngleDeg= 45.0;
+        TatamiFill::PatternType pattern = TatamiFill::PatternType::StandardTatami;
         bool    raised      = true;   ///< add satin border on top of the fill
         double  borderWidthMm = 1.8;
         double  borderPitchMm = 0.40;

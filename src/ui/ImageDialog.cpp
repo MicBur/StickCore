@@ -12,6 +12,7 @@
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QComboBox>
 #include <QCheckBox>
 #include <QStackedWidget>
@@ -80,7 +81,19 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
         auto* w = new QWidget; auto* f = new QFormLayout(w);
         m_colors = new QSpinBox; m_colors->setRange(2, 12); m_colors->setValue(6);
         f->addRow(QStringLiteral("Anzahl Farben:"), m_colors);
-        auto* hint = caption(QStringLiteral("Das Bild wird auf so viele Garnfarben reduziert."));
+
+        m_fillAngle = new QDoubleSpinBox;
+        m_fillAngle->setRange(0.0, 360.0);
+        m_fillAngle->setValue(45.0);
+        m_fillAngle->setSingleStep(15.0);
+        m_fillAngle->setSuffix(QStringLiteral("°"));
+        f->addRow(QStringLiteral("Füllwinkel:"), m_fillAngle);
+
+        m_multiAngle = new QCheckBox(QStringLiteral("Multi-Winkel Schutz (+45° je Farbe)"));
+        m_multiAngle->setChecked(true);
+        f->addRow(m_multiAngle);
+
+        auto* hint = caption(QStringLiteral("Garnfarben mit wechselndem Stichwinkel gegen Stoffverzug."));
         hint->setAlignment(Qt::AlignLeft);
         f->addRow(hint);
         m_stack->addWidget(w);
@@ -201,6 +214,8 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
     connect(m_contrast, &QSlider::valueChanged, this, [kick](int){ kick(); });
     connect(m_smooth,   &QSlider::valueChanged, this, [kick](int){ kick(); });
     connect(m_colors,   QOverload<int>::of(&QSpinBox::valueChanged), this, [kick](int){ kick(); });
+    connect(m_fillAngle, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [kick](double){ kick(); });
+    connect(m_multiAngle, &QCheckBox::toggled, this, [kick](bool){ kick(); });
     connect(m_tones,    QOverload<int>::of(&QSpinBox::valueChanged), this, [kick](int){ kick(); });
     connect(m_invert,   &QCheckBox::toggled, this, [kick](bool){ kick(); });
     connect(m_faceCrop, &QCheckBox::toggled, this, [kick](bool){ kick(); });
@@ -223,6 +238,8 @@ void ImageDialog::collectParams()
     p.widthMm   = m_widthMm->value();
     p.brand     = MachineProfile::current().defaultBrand;
     p.colors    = m_colors->value();
+    p.fillAngleDeg = m_fillAngle ? m_fillAngle->value() : 45.0;
+    p.multiAngle   = m_multiAngle ? m_multiAngle->isChecked() : true;
     p.portraitStyle = ImageDigitizer::PortraitStyle(m_portraitStyle->currentData().toInt());
     p.tones     = m_tones->value();
     p.contrast  = m_contrast->value() / 100.0;

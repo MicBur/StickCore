@@ -13,13 +13,25 @@ namespace stick {
 
 class TatamiFill {
 public:
+    enum class PatternType {
+        StandardTatami, ///< 1/4 Versatz (0.25) – klassische glatte Stickfüllung
+        Brick,          ///< 1/2 Versatz (0.50) – Ziegelverbund / Mauerwerk
+        Twill,          ///< 1/3 Versatz (0.33) – Diagonalköper mit Seidenglanz
+        Basketweave,    ///< Korbgeflecht – plastische Textur
+        Honeycomb,      ///< Waben- & Gitternetzwerk (Doppelkreuz)
+        ContourEcho     ///< Konturfüllung / Wellen (konzentrisch)
+    };
+
+    static QString patternName(PatternType p);
+
     struct Params {
-        double fillAngleDeg = 0.0;   ///< Fill direction θ.
-        double rowSpacingMm = 0.40;  ///< Distance between scan rows S.
-        double maxStitchMm  = 4.00;  ///< Maximum stitch length L_max.
-        double phaseFrac    = 0.25;  ///< Per-row puncture phase shift (× L_max).
-        bool   underlay     = true;  ///< Lay underlay (edge + cross) before the fill.
-        int    colorIdx     = 0;
+        double      fillAngleDeg = 0.0;   ///< Fill direction θ (0° - 360°).
+        double      rowSpacingMm = 0.40;  ///< Distance between scan rows S.
+        double      maxStitchMm  = 4.00;  ///< Maximum stitch length L_max.
+        double      phaseFrac    = 0.25;  ///< Per-row puncture phase shift (× L_max).
+        PatternType pattern      = PatternType::StandardTatami; ///< Pattern style
+        bool        underlay     = true;  ///< Lay underlay (edge + cross) before the fill.
+        int         colorIdx     = 0;
     };
 
     /// region[0] is the outer boundary; region[1..] are holes.

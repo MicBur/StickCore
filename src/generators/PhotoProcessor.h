@@ -35,6 +35,10 @@ public:
 
     /// Sobel edges: output 0 (black) on edges, 255 elsewhere.
     static QImage sobelEdges(const QImage& gray8, int threshold);
+
+    /// Cleans isolated small pixel clusters (< minArea) by reassigning them to
+    /// their most frequent neighboring color label, preventing micro-stitches.
+    static std::vector<int> filterSpeckles(const std::vector<int>& labels, int W, int H, int minArea = 16);
 };
 
 } // namespace stick

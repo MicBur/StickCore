@@ -105,8 +105,17 @@ void rasterFillLabel(StitchSequence& seq,
                      int W, int H, int rowStep, double maxStitch,
                      std::function<double(double)> X,
                      std::function<double(double)> Y,
-                     int colorIdx, bool firstColor)
+                     int colorIdx, bool firstColor,
+                     double angleDeg = 0.0)
 {
+    const double rad = angleDeg * 3.14159265358979323846 / 180.0;
+    const double cosA = std::cos(rad);
+    const double sinA = std::sin(rad);
+
+    auto rot = [cosA, sinA](double px, double py) -> std::pair<double, double> {
+        return { px * cosA - py * sinA, px * sinA + py * cosA };
+    };
+
     bool firstOfColor = true;
     bool reverse = false;
     for (int y = rowStep/2; y < H; y += rowStep, reverse = !reverse) {
@@ -125,12 +134,16 @@ void rasterFillLabel(StitchSequence& seq,
             const double yy = Y(y);
             quint32 startFlag = firstOfColor ? SF_ColorChange : SF_Jump;
             if (firstColor && firstOfColor) startFlag = SF_Jump;
-            seq.add(xa, yy, startFlag, colorIdx);
+            auto p0 = rot(xa, yy);
+            seq.add(p0.first, p0.second, startFlag, colorIdx);
             firstOfColor = false;
             const double span = std::abs(xb - xa);
             const int n = std::max(1, int(std::ceil(span / maxStitch)));
-            for (int s = 1; s <= n; ++s)
-                seq.add(xa + (xb - xa) * (double(s)/n), yy, SF_Normal, colorIdx);
+            for (int s = 1; s <= n; ++s) {
+                const double curX = xa + (xb - xa) * (double(s)/n);
+                auto ps = rot(curX, yy);
+                seq.add(ps.first, ps.second, SF_Normal, colorIdx);
+            }
         }
     }
 }
@@ -144,6 +157,9 @@ static StitchSequence generateColors(const QImage& src, const ImageDigitizer::Pa
 {
     StitchSequence seq;
     QImage img = analysisScaled(src, p.maxProcessPx);
+    if (OpenCvBridge::available()) {
+        img = OpenCvBridge::bilateralDenoise(img, 7, 60.0, 60.0);
+    }
     const int W = img.width(), H = img.height();
     if (W < 2 || H < 2) return seq;
 
@@ -175,6 +191,9 @@ static StitchSequence generateColors(const QImage& src, const ImageDigitizer::Pa
         }
     }
 
+    // Clean isolated pixel noise so tiny micro-stitches and single-needle jumps disappear
+    label = PhotoProcessor::filterSpeckles(label, W, H, 16);
+
     std::vector<long> cnt(K, 0);
     for (int l : label) cnt[l]++;
 
@@ -196,9 +215,14 @@ static StitchSequence generateColors(const QImage& src, const ImageDigitizer::Pa
     auto Y = [=](double ypx){ return (cyPx - ypx) * mmPerPx; };
     const int rowStep = std::max(1, int(std::llround(p.densityMm / mmPerPx)));
 
-    for (std::size_t oi = 0; oi < order.size(); ++oi)
+    for (std::size_t oi = 0; oi < order.size(); ++oi) {
+        double angle = p.fillAngleDeg;
+        if (p.multiAngle) {
+            angle = p.fillAngleDeg + (oi * 45.0);
+        }
         rasterFillLabel(seq, label, order[oi], W, H, rowStep, p.maxStitchMm,
-                        X, Y, int(oi), oi == 0);
+                        X, Y, int(oi), oi == 0, angle);
+    }
 
     for (int k : order) {
         const QColor c(int(std::round(cen[k].r)), int(std::round(cen[k].g)), int(std::round(cen[k].b)));

@@ -59,6 +59,7 @@ private slots:
     void exportJef();
     void exportDst();
     void exportWorksheet();
+    void loadHuntingMotif(int typeIdx, bool editable);
 
     // Janome Digitizer Jr Transformations
     void mirrorHorizontal();
@@ -122,6 +123,8 @@ private:
     QLabel*           m_timeEstLabel     = nullptr;
     QListWidget*      m_threadList  = nullptr;
     QDoubleSpinBox*   m_density     = nullptr;
+    QDoubleSpinBox*   m_fillAngleSpin = nullptr;
+    QComboBox*        m_patternCombo  = nullptr;
     QDoubleSpinBox*   m_pull        = nullptr;
     QDoubleSpinBox*   m_maxStitch   = nullptr;
     QCheckBox*        m_underlay    = nullptr;

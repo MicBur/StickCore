@@ -39,6 +39,9 @@ public:
     /// Comic-style stylise (edge-preserving smoothing + quantised colour).
     static QImage stylize(const QImage& src);
 
+    /// Edge-preserving bilateral smoothing for color images before color quantization.
+    static QImage bilateralDenoise(const QImage& src, int d = 7, double sigmaColor = 50.0, double sigmaSpace = 50.0);
+
     /// High-quality single-tone "Konterfei" mask for a photo portrait: combines
     /// a solid dark silhouette (bilateral + Otsu) with adaptive detail edges so
     /// the result is both solid AND shows facial features. Returns a grayscale

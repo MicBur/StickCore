@@ -180,6 +180,15 @@ QImage OpenCvBridge::stylize(const QImage& src)
     return bgrToQImage(out);
 }
 
+QImage OpenCvBridge::bilateralDenoise(const QImage& src, int d, double sigmaColor, double sigmaSpace)
+{
+    if (src.isNull()) return src;
+    cv::Mat bgr = toBgr(src);
+    cv::Mat out;
+    cv::bilateralFilter(bgr, out, d, sigmaColor, sigmaSpace);
+    return bgrToQImage(out);
+}
+
 QImage OpenCvBridge::portraitComic(const QImage& gray, bool invert,
                                    double solidBias, int adaptiveBlock, int adaptiveC)
 {
@@ -304,6 +313,7 @@ QImage  OpenCvBridge::autoFaceCrop(const QImage& src, bool* found) { if (found) 
 QImage  OpenCvBridge::adaptiveThreshold(const QImage& gray, int, int, bool) { return gray; }
 QImage  OpenCvBridge::cannyEdges(const QImage& gray, int, int, int) { return gray; }
 QImage  OpenCvBridge::stylize(const QImage& src) { return src; }
+QImage  OpenCvBridge::bilateralDenoise(const QImage& src, int, double, double) { return src; }
 QImage  OpenCvBridge::portraitComic(const QImage& gray, bool, double, int, int) { return gray; }
 QImage  OpenCvBridge::silhouette(const QImage& gray, bool, double) { return gray; }
 QImage  OpenCvBridge::sketch(const QImage& gray, bool) { return gray; }

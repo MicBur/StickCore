@@ -18,8 +18,10 @@
 // ---------------------------------------------------------------------------
 #include "generators/TatamiFill.h"
 #include "generators/Underlay.h"
+#include "generators/ContourFill.h"
 #include "core/Geometry.h"
 
+#include <QPainterPath>
 #include <QTransform>
 #include <algorithm>
 #include <cmath>
@@ -90,6 +92,19 @@ void emitRun(double x0, double x1, double y, double maxLen, double phase,
 
 } // namespace
 
+QString TatamiFill::patternName(PatternType p)
+{
+    switch (p) {
+        case PatternType::StandardTatami: return QStringLiteral("Standard-Tatami (1/4 Versatz, glatt)");
+        case PatternType::Brick:          return QStringLiteral("Brick / Ziegel (1/2 Versatz, robust)");
+        case PatternType::Twill:          return QStringLiteral("Twill / Köper (1/3 Versatz, Seidenglanz)");
+        case PatternType::Basketweave:    return QStringLiteral("Korbgeflecht (Block-Textur)");
+        case PatternType::Honeycomb:      return QStringLiteral("Honeycomb / Waben (Gitternetz)");
+        case PatternType::ContourEcho:     return QStringLiteral("Kontur / Jahresringe (Folgt der Form)");
+    }
+    return QStringLiteral("Standard-Tatami");
+}
+
 StitchSequence TatamiFill::generate(const QPolygonF& outer, const Params& p)
 {
     QVector<QPolygonF> region;
@@ -104,17 +119,71 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
     if (region.isEmpty() || region.front().size() < 3)
         return seq;
 
-    // Underlay first (edge run + a sparse cross layer), then the cover fill.
+    // 1. Contour / Echo Fill (concentric rings following region boundaries)
+    if (p.pattern == PatternType::ContourEcho) {
+        if (p.underlay) {
+            StitchSequence ul = Underlay::forFill(region, p.fillAngleDeg, p.colorIdx);
+            seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
+        }
+        QPainterPath path;
+        path.addPolygon(region[0]);
+        for (int i = 1; i < region.size(); ++i) {
+            QPainterPath hole;
+            hole.addPolygon(region[i]);
+            path = path.subtracted(hole);
+        }
+        ContourFill::Params cp;
+        cp.spacingMm = std::max(0.3, p.rowSpacingMm * 1.5);
+        cp.maxStitchMm = p.maxStitchMm;
+        cp.colorIdx = p.colorIdx;
+        StitchSequence cseq = ContourFill::generate(path, cp);
+        if (!cseq.empty()) {
+            seq.stitches.insert(seq.stitches.end(), cseq.stitches.begin(), cseq.stitches.end());
+            if (seq.palette.empty())
+                seq.palette.emplace_back(QColor(40, 60, 140), QStringLiteral("Kontur-Füllung"));
+            return seq;
+        }
+    }
+
+    // 2. Honeycomb / Waben Lattice (two cross-hatching passes at θ - 30° and θ + 30°)
+    if (p.pattern == PatternType::Honeycomb) {
+        if (p.underlay) {
+            StitchSequence ul = Underlay::forFill(region, p.fillAngleDeg, p.colorIdx);
+            seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
+        }
+        const double latticeSpacing = p.rowSpacingMm * 1.75;
+        StitchSequence pass1 = fillOnly(region, p.fillAngleDeg - 30.0, latticeSpacing,
+                                        p.maxStitchMm, 0.5, p.colorIdx);
+        StitchSequence pass2 = fillOnly(region, p.fillAngleDeg + 30.0, latticeSpacing,
+                                        p.maxStitchMm, 0.5, p.colorIdx);
+        seq.stitches.insert(seq.stitches.end(), pass1.stitches.begin(), pass1.stitches.end());
+        seq.stitches.insert(seq.stitches.end(), pass2.stitches.begin(), pass2.stitches.end());
+        if (seq.palette.empty())
+            seq.palette.emplace_back(QColor(40, 60, 140), QStringLiteral("Waben"));
+        return seq;
+    }
+
+    // 3. Scan-line patterns: StandardTatami, Brick, Twill, Basketweave
+    double effectivePhase = p.phaseFrac;
+    if (p.pattern == PatternType::StandardTatami)
+        effectivePhase = 0.25;
+    else if (p.pattern == PatternType::Brick)
+        effectivePhase = 0.50;
+    else if (p.pattern == PatternType::Twill)
+        effectivePhase = 0.333333;
+    else if (p.pattern == PatternType::Basketweave)
+        effectivePhase = -1.0; // Sentinel for 4-phase block cycle
+
     if (p.underlay) {
         StitchSequence ul = Underlay::forFill(region, p.fillAngleDeg, p.colorIdx);
         seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
     }
     StitchSequence cover = fillOnly(region, p.fillAngleDeg, p.rowSpacingMm,
-                                    p.maxStitchMm, p.phaseFrac, p.colorIdx);
+                                    p.maxStitchMm, effectivePhase, p.colorIdx);
     seq.stitches.insert(seq.stitches.end(), cover.stitches.begin(), cover.stitches.end());
 
     if (seq.palette.empty())
-        seq.palette.emplace_back(QColor(40, 60, 140), QStringLiteral("Tatami"));
+        seq.palette.emplace_back(QColor(40, 60, 140), patternName(p.pattern));
     return seq;
 }
 
@@ -147,7 +216,7 @@ StitchSequence TatamiFill::fillOnly(const QVector<QPolygonF>& region,
 
     const double S      = std::max(rowSpacingMm, 1e-3);
     const double maxLen = std::max(maxStitchMm, 0.5);
-    const double phaseStep = phaseFrac * maxLen;
+    const double phaseStep = (phaseFrac >= 0.0) ? (phaseFrac * maxLen) : 0.0;
 
     QVector<RunPoint> pts;              // ordered stitch points (scan frame)
     int row = 0;
@@ -160,7 +229,12 @@ StitchSequence TatamiFill::fillOnly(const QVector<QPolygonF>& region,
         if (xs.size() < 2) continue;
         std::sort(xs.begin(), xs.end());
 
-        const double phase = phaseStep * row;
+        double phase = phaseStep * row;
+        if (phaseFrac < 0.0) {
+            // Basketweave 4-row block shift cycle
+            static const double bwPhases[4] = { 0.0, 0.50, 0.25, 0.75 };
+            phase = bwPhases[row % 4] * maxLen;
+        }
 
         // Pair crossings (even-odd). For boustrophedon we consume spans in the
         // travel direction of this row.

@@ -15,6 +15,7 @@
 class QLabel;
 class QSlider;
 class QSpinBox;
+class QDoubleSpinBox;
 class QComboBox;
 class QCheckBox;
 class QTimer;
@@ -45,7 +46,9 @@ private:
     QStackedWidget* m_stack = nullptr;
 
     // Colors page
-    QSpinBox*  m_colors   = nullptr;
+    QSpinBox*       m_colors     = nullptr;
+    QDoubleSpinBox* m_fillAngle  = nullptr;
+    QCheckBox*      m_multiAngle = nullptr;
     // Portrait page
     QComboBox* m_portraitStyle = nullptr;
     QLabel*    m_tonesLabel = nullptr;
