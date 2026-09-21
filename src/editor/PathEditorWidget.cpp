@@ -2,6 +2,7 @@
 //  StickCore  –  PathEditorWidget.cpp
 // ---------------------------------------------------------------------------
 #include "editor/PathEditorWidget.h"
+#include "core/MachineProfile.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -12,6 +13,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QToolButton>
+#include <QComboBox>
 #include <QSlider>
 #include <QLabel>
 #include <QFrame>
@@ -139,11 +141,12 @@ public:
         update();
     }
 
-    void setHoop(double wMm, double hMm, const QString& name)
+    void setHoop(double wMm, double hMm, const QString& name, HoopType type = HoopType::HoopB_140x200)
     {
         m_hoopW = wMm;
         m_hoopH = hMm;
         m_hoopName = name;
+        m_hoopType = type;
         update();
     }
 
@@ -235,6 +238,7 @@ private:
     double m_hoopW = 140.0;
     double m_hoopH = 200.0;
     QString m_hoopName = QStringLiteral("Rahmen B 140×200");
+    HoopType m_hoopType = HoopType::HoopB_140x200;
 
     PathEditorWidget::CanvasMode m_canvasMode = PathEditorWidget::CanvasMode::Stitches2D;
     PathEditorWidget::Mode       m_bezierMode = PathEditorWidget::Mode::SatinRails;
@@ -353,10 +357,15 @@ void Canvas2DWidget::drawGridAndHoop(QPainter& g)
         const QPointF br = toScreen(QPointF(hw, -hh));
         const QRectF hoopRect(tl, br);
 
-        // Smooth rounded hoop boundary matching real embroidery frames
-        const double cornerPx = std::min(18.0, 12.0 * m_scale);
         QPainterPath hp;
-        hp.addRoundedRect(hoopRect, cornerPx, cornerPx);
+        if (m_hoopType == HoopType::HoopC_50x50) {
+            // Circular Free Arm frame (50x50 mm)
+            hp.addEllipse(hoopRect);
+        } else {
+            // Smooth rounded hoop boundary matching real embroidery frames
+            const double cornerPx = std::min(18.0, 12.0 * m_scale);
+            hp.addRoundedRect(hoopRect, cornerPx, cornerPx);
+        }
 
         // Outer subtle glow / shadow
         g.setPen(QPen(QColor(45, 212, 191, 40), 3.0));
@@ -370,6 +379,38 @@ void Canvas2DWidget::drawGridAndHoop(QPainter& g)
         g.setPen(QPen(QColor(45, 212, 191, 55), 1.0, Qt::DotLine));
         g.drawLine(toScreen(QPointF(-hw, 0)), toScreen(QPointF(hw, 0)));
         g.drawLine(toScreen(QPointF(0, -hh)), toScreen(QPointF(0, hh)));
+
+        // Specialty guides:
+        if (m_hoopType == HoopType::HoopHat_100x90) {
+            // Cap visor / brim guide at bottom
+            QPainterPath brim;
+            brim.moveTo(toScreen(QPointF(-hw * 0.85, -hh)));
+            brim.quadTo(toScreen(QPointF(0.0, -hh - 22.0)), toScreen(QPointF(hw * 0.85, -hh)));
+            g.setPen(QPen(QColor(251, 146, 60, 180), 1.6, Qt::DashDotLine));
+            g.drawPath(brim);
+            g.setPen(QColor(251, 146, 60, 220));
+            QFont fCap = g.font(); fCap.setPointSize(9); fCap.setBold(true); g.setFont(fCap);
+            g.drawText(toScreen(QPointF(-34.0, -hh - 8.0)), QStringLiteral("🧢 Mützenschirm"));
+        } else if (m_hoopType == HoopType::HoopD_230x200) {
+            // Giga Hoop: 2 overlapping 140x200 fields (Feld 1 & Feld 2)
+            const double sW = 140.0;
+            const QRectF r1(toScreen(QPointF(-hw, hh)), toScreen(QPointF(-hw + sW, -hh)));
+            const QRectF r2(toScreen(QPointF(hw - sW, hh)), toScreen(QPointF(hw, -hh)));
+            g.setPen(QPen(QColor(56, 189, 248, 120), 1.0, Qt::DashLine));
+            g.drawRoundedRect(r1, 10, 10);
+            g.setPen(QPen(QColor(168, 85, 247, 120), 1.0, Qt::DashLine));
+            g.drawRoundedRect(r2, 10, 10);
+            QFont fGiga = g.font(); fGiga.setPointSize(9); fGiga.setBold(true); g.setFont(fGiga);
+            g.setPen(QColor(56, 189, 248, 200));
+            g.drawText(r1.topLeft() + QPointF(8, 36), QStringLiteral("① Feld 1 (140×200)"));
+            g.setPen(QColor(168, 85, 247, 200));
+            g.drawText(r2.topRight() + QPointF(-115, 36), QStringLiteral("② Feld 2 (140×200)"));
+        } else if (m_hoopType == HoopType::HoopMag_140x200 || m_hoopType == HoopType::HoopMag_100x100) {
+            // Magnetic brackets
+            g.setPen(QColor(234, 179, 8, 210));
+            QFont fMag = g.font(); fMag.setPointSize(9); fMag.setBold(true); g.setFont(fMag);
+            g.drawText(hoopRect.topRight() + QPointF(-75, 20), QStringLiteral("🧲 Magnet"));
+        }
 
         // Hoop Label
         g.setPen(QColor(45, 212, 191));
@@ -804,9 +845,32 @@ void PathEditorWidget::setupUi()
     m_btnHoop->setToolTip(QStringLiteral("Janome-Stickrahmen in 2D ein-/ausblenden"));
     connect(m_btnHoop, &QToolButton::toggled, this, [this](bool c){ m_canvas->setShowHoop(c); });
 
+    m_hoopCombo = new QComboBox(tb);
+    m_hoopCombo->setStyleSheet(QStringLiteral(
+        "QComboBox { background:#20242e; color:#e2e8f0; border:1px solid #374151; "
+        "border-radius:4px; padding:2px 8px; font-size:11px; min-width:145px; } "
+        "QComboBox::drop-down { border:none; width:16px; } "
+        "QComboBox QAbstractItemView { background:#1e222b; color:#e2e8f0; selection-background-color:#0284c7; }"));
+    m_hoopCombo->setToolTip(QStringLiteral("Stickrahmen direkt auf der 2D-Leinwand auswählen"));
+    const auto& mp = MachineProfile::current();
+    for (HoopType t : mp.hoops) {
+        const HoopSpec hs = hoopSpec(t);
+        m_hoopCombo->addItem(QStringLiteral("%1 (%2×%3)").arg(QString::fromLatin1(hs.name)).arg(int(hs.widthMm)).arg(int(hs.heightMm)),
+                             static_cast<int>(t));
+    }
+    connect(m_hoopCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx){
+        if (idx >= 0 && idx < m_hoopCombo->count()) {
+            HoopType ht = static_cast<HoopType>(m_hoopCombo->itemData(idx).toInt());
+            const HoopSpec hs = hoopSpec(ht);
+            m_canvas->setHoop(hs.widthMm, hs.heightMm, QString::fromLatin1(hs.name), ht);
+            emit hoopSelected(ht);
+        }
+    });
+
     tbLay->addWidget(m_btnPoints);
     tbLay->addWidget(m_btnJumps);
     tbLay->addWidget(m_btnHoop);
+    tbLay->addWidget(m_hoopCombo);
 
     // Separator line
     auto* sep2 = new QFrame(tb);
@@ -912,9 +976,32 @@ void PathEditorWidget::clearBackgroundImage()
     m_canvas->clearBackgroundImage();
 }
 
-void PathEditorWidget::setHoop(double wMm, double hMm, const QString& name)
+void PathEditorWidget::setHoop(double wMm, double hMm, const QString& name, HoopType type)
 {
-    m_canvas->setHoop(wMm, hMm, name);
+    m_canvas->setHoop(wMm, hMm, name, type);
+    if (m_hoopCombo) {
+        for (int i = 0; i < m_hoopCombo->count(); ++i) {
+            if (m_hoopCombo->itemData(i).toInt() == static_cast<int>(type)) {
+                QSignalBlocker b(m_hoopCombo);
+                m_hoopCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+}
+
+void PathEditorWidget::setSelectedHoop(HoopType type)
+{
+    const HoopSpec hs = hoopSpec(type);
+    setHoop(hs.widthMm, hs.heightMm, QString::fromLatin1(hs.name), type);
+}
+
+HoopType PathEditorWidget::selectedHoop() const
+{
+    if (m_hoopCombo && m_hoopCombo->currentIndex() >= 0) {
+        return static_cast<HoopType>(m_hoopCombo->currentData().toInt());
+    }
+    return HoopType::HoopB_140x200;
 }
 
 void PathEditorWidget::setCanvasMode(CanvasMode mode)

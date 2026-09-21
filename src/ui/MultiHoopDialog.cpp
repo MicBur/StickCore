@@ -38,10 +38,15 @@ MultiHoopDialog::MultiHoopDialog(const QRectF& designBounds, QWidget* parent)
     form->setSpacing(8);
 
     m_hoopPreset = new QComboBox(this);
-    m_hoopPreset->addItem(QStringLiteral("Janome Rahmen B (140 x 200 mm) - Standard"), QSizeF(140, 200));
-    m_hoopPreset->addItem(QStringLiteral("Janome Rahmen A (126 x 110 mm)"), QSizeF(126, 110));
-    m_hoopPreset->addItem(QStringLiteral("Freiarm-Rahmen C (50 x 50 mm)"), QSizeF(50, 50));
-    m_hoopPreset->addItem(QStringLiteral("Quadratisch SQ14 (140 x 140 mm)"), QSizeF(140, 140));
+    m_hoopPreset->addItem(QStringLiteral("Janome B (140 x 200 mm) - Groß (Standard)"), QSizeF(140, 200));
+    m_hoopPreset->addItem(QStringLiteral("Janome A (126 x 110 mm) - Standard"), QSizeF(126, 110));
+    m_hoopPreset->addItem(QStringLiteral("Janome C (50 x 50 mm) - Freiarm"), QSizeF(50, 50));
+    m_hoopPreset->addItem(QStringLiteral("Janome F (110 x 110 mm) - Federklemme"), QSizeF(110, 110));
+    m_hoopPreset->addItem(QStringLiteral("Kappenrahmen (100 x 90 mm) - Mützeneinsatz"), QSizeF(100, 90));
+    m_hoopPreset->addItem(QStringLiteral("Magnetrahmen (140 x 200 mm) - Sew Tech"), QSizeF(140, 200));
+    m_hoopPreset->addItem(QStringLiteral("Magnetrahmen (100 x 100 mm) - 4\"x4\""), QSizeF(100, 100));
+    m_hoopPreset->addItem(QStringLiteral("Janome SQ14 (140 x 140 mm) - Quadratisch"), QSizeF(140, 140));
+    m_hoopPreset->addItem(QStringLiteral("Janome D Giga (230 x 200 mm) - Versetzrahmen"), QSizeF(230, 200));
     m_hoopPreset->addItem(QStringLiteral("Großrahmen (200 x 280 mm)"), QSizeF(200, 280));
     m_hoopPreset->addItem(QStringLiteral("Benutzerdefiniert..."), QSizeF(0, 0));
     connect(m_hoopPreset, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MultiHoopDialog::onHoopPresetChanged);

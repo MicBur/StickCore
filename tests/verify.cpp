@@ -1160,19 +1160,74 @@ int main(int argc, char** argv)
     std::printf("== Janome Hoops Palette & Fit ==\n");
     {
         const auto& mp = MachineProfile::current();
-        bool hasHoopC = false, hasHoopSQ14 = false;
+        bool hasHoopA = false, hasHoopB = false, hasHoopC = false, hasHoopD = false;
+        bool hasHoopF = false, hasHoopHat = false, hasHoopMagLarge = false, hasHoopMagMed = false, hasHoopSQ14 = false;
         for (HoopType ht : mp.hoops) {
-            if (ht == HoopType::HoopC_50x50) hasHoopC = true;
-            if (ht == HoopType::HoopSQ14_140) hasHoopSQ14 = true;
+            if (ht == HoopType::HoopA_126x110)   hasHoopA = true;
+            if (ht == HoopType::HoopB_140x200)   hasHoopB = true;
+            if (ht == HoopType::HoopC_50x50)     hasHoopC = true;
+            if (ht == HoopType::HoopD_230x200)   hasHoopD = true;
+            if (ht == HoopType::HoopF_110x110)   hasHoopF = true;
+            if (ht == HoopType::HoopHat_100x90)  hasHoopHat = true;
+            if (ht == HoopType::HoopMag_140x200) hasHoopMagLarge = true;
+            if (ht == HoopType::HoopMag_100x100) hasHoopMagMed = true;
+            if (ht == HoopType::HoopSQ14_140)    hasHoopSQ14 = true;
         }
+        CHECK(hasHoopA, "MachineProfile includes Janome Hoop A 126x110");
+        CHECK(hasHoopB, "MachineProfile includes Janome Hoop B 140x200");
         CHECK(hasHoopC, "MachineProfile includes Janome Hoop C 50x50");
+        CHECK(hasHoopD, "MachineProfile includes Janome Giga Hoop D 230x200");
+        CHECK(hasHoopF, "MachineProfile includes Janome Spring Hoop F 110x110");
+        CHECK(hasHoopHat, "MachineProfile includes Hat Hoop 100x90 (Cap insert)");
+        CHECK(hasHoopMagLarge, "MachineProfile includes Magnetic Hoop 140x200 (Sew Tech)");
+        CHECK(hasHoopMagMed, "MachineProfile includes Magnetic Hoop 100x100 (Sew Tech 4x4)");
         CHECK(hasHoopSQ14, "MachineProfile includes Janome Hoop SQ14 140x140");
 
         const HoopSpec specC = hoopSpec(HoopType::HoopC_50x50);
         CHECK(specC.widthMm == 50.0 && specC.heightMm == 50.0, "Hoop C dimensions 50x50 mm");
+        CHECK(specC.jefCode == 1, "Hoop C JEF code is 1");
 
         const HoopSpec specSQ14 = hoopSpec(HoopType::HoopSQ14_140);
         CHECK(specSQ14.widthMm == 140.0 && specSQ14.heightMm == 140.0, "Hoop SQ14 dimensions 140x140 mm");
+        CHECK(specSQ14.jefCode == 15, "Hoop SQ14 JEF code is 15");
+
+        const HoopSpec specHat = hoopSpec(HoopType::HoopHat_100x90);
+        CHECK(specHat.widthMm == 100.0 && specHat.heightMm == 90.0, "Hat Hoop dimensions 100x90 mm");
+        CHECK(specHat.jefCode == 2, "Hat Hoop writes JEF code 2 (mounted in Hoop B frame)");
+
+        const HoopSpec specMagLarge = hoopSpec(HoopType::HoopMag_140x200);
+        CHECK(specMagLarge.widthMm == 140.0 && specMagLarge.heightMm == 200.0, "Magnetic Large dimensions 140x200 mm");
+        CHECK(specMagLarge.jefCode == 2, "Magnetic Large writes JEF code 2");
+
+        const HoopSpec specMagMed = hoopSpec(HoopType::HoopMag_100x100);
+        CHECK(specMagMed.widthMm == 100.0 && specMagMed.heightMm == 100.0, "Magnetic Medium dimensions 100x100 mm");
+        CHECK(specMagMed.jefCode == 0, "Magnetic Medium writes JEF code 0");
+
+        const HoopSpec specF = hoopSpec(HoopType::HoopF_110x110);
+        CHECK(specF.widthMm == 110.0 && specF.heightMm == 110.0, "Spring Hoop F dimensions 110x110 mm");
+        CHECK(specF.jefCode == 3, "Spring Hoop F JEF code is 3");
+
+        const HoopSpec specD = hoopSpec(HoopType::HoopD_230x200);
+        CHECK(specD.widthMm == 230.0 && specD.heightMm == 200.0, "Giga Hoop D dimensions 230x200 mm");
+        CHECK(specD.jefCode == 4, "Giga Hoop D JEF code is 4");
+
+        // Verify JEF export header byte 0x20 for Hat Hoop
+        StitchSequence hatSeq;
+        hatSeq.add(-20.0, 0.0);
+        hatSeq.add(20.0, 0.0);
+        hatSeq.palette.push_back(ThreadColor(QColor(212, 175, 55), QStringLiteral("Gold"), 1083));
+        const QString hatJefPath = QDir::tempPath() + QStringLiteral("/test_hat_hoop.jef");
+        auto hatRes = JefCodec::exportToFile(hatJefPath, hatSeq, HoopType::HoopHat_100x90);
+        CHECK(hatRes.ok, "JEF export for Hat Hoop succeeded");
+        QFile hatF(hatJefPath);
+        CHECK(hatF.open(QIODevice::ReadOnly), "test_hat_hoop.jef opened");
+        QByteArray hatBytes = hatF.readAll();
+        hatF.close();
+        hatF.remove();
+        CHECK(hatBytes.size() > 0x24, "hat JEF file has full header");
+        const quint32 writtenHoopCode = static_cast<quint8>(hatBytes[0x20]) |
+                                       (static_cast<quint8>(hatBytes[0x21]) << 8);
+        CHECK(writtenHoopCode == 2, "hat JEF header byte 0x20 is code 2 (Hoop B hardware compatibility)");
 
         bool fits = false;
         HoopType chosenSmall = fitHoopFor(35.0, 40.0, &fits);

@@ -94,7 +94,7 @@ JefCodec::Result JefCodec::exportToFile(const QString& path,
                                         HoopType hoop)
 {
     const HoopSpec hs = hoopSpec(hoop);
-    return exportToFile(path, seq, static_cast<int>(hoop), hs.widthMm, hs.heightMm);
+    return exportToFile(path, seq, hs.jefCode, hs.widthMm, hs.heightMm);
 }
 
 JefCodec::Result JefCodec::exportToFile(const QString& path,

@@ -211,13 +211,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     m_view   = new StitchGLWidget(this);
     const HoopSpec initHs = hoopSpec(HoopType::HoopB_140x200);
     m_view->setHoop(initHs.widthMm, initHs.heightMm, QString::fromLatin1(initHs.name));
-    m_editor->setHoop(initHs.widthMm, initHs.heightMm, QString::fromLatin1(initHs.name));
+    m_editor->setHoop(initHs.widthMm, initHs.heightMm, QString::fromLatin1(initHs.name), HoopType::HoopB_140x200);
 
     connect(m_editor, &PathEditorWidget::designMoved, this, [this](double dx, double dy){
         m_view->setSequence(m_editor->sequence());
         m_current = m_editor->sequence();
         updateInfoPanel();
     });
+    connect(m_editor, &PathEditorWidget::hoopSelected, this, &MainWindow::selectHoop);
 
     QWidget* centerView = buildCenterView();
     QWidget* panel = buildInfoPanel();
@@ -437,6 +438,43 @@ void MainWindow::setupMenus()
     if (m_actMoveMode)  simMenu->addAction(m_actMoveMode);
     simMenu->addSeparator();
     if (m_actHoop)      simMenu->addAction(m_actHoop);
+
+    m_hoopMenu = simMenu->addMenu(QStringLiteral("⭕ &Stickrahmen auswählen"));
+    m_hoopActionGroup = new QActionGroup(this);
+
+    auto* actAuto = m_hoopMenu->addAction(QStringLiteral("✨ Automatisch (beste Passform)"), this, [this]{
+        m_hoopCombo->setCurrentIndex(0);
+    });
+    actAuto->setCheckable(true);
+    actAuto->setChecked(true);
+    m_hoopActionGroup->addAction(actAuto);
+
+    m_hoopMenu->addSeparator();
+    auto* secStd = m_hoopMenu->addAction(QStringLiteral("── Janome MC350E Original & Zubehör ──"));
+    secStd->setEnabled(false);
+
+    const auto& mp = MachineProfile::current();
+    for (HoopType t : mp.hoops) {
+        const HoopSpec hs = hoopSpec(t);
+        if (t == HoopType::HoopHat_100x90) {
+            m_hoopMenu->addSeparator();
+            auto* secSpec = m_hoopMenu->addAction(QStringLiteral("── Spezial- & Magnetrahmen ──"));
+            secSpec->setEnabled(false);
+        } else if (t == HoopType::HoopSQ23_230) {
+            m_hoopMenu->addSeparator();
+            auto* secBig = m_hoopMenu->addAction(QStringLiteral("── Großmaschinen-Referenz ──"));
+            secBig->setEnabled(false);
+        }
+
+        auto* act = m_hoopMenu->addAction(QString::fromLatin1(hs.displayName), this, [this, t]{
+            selectHoop(t);
+        });
+        act->setCheckable(true);
+        act->setToolTip(QString::fromLatin1(hs.description));
+        m_hoopActionGroup->addAction(act);
+    }
+
+    simMenu->addSeparator();
     if (m_actTopDown)   simMenu->addAction(m_actTopDown);
     simMenu->addAction(QStringLiteral("&Im Rahmen zentrieren"), this, &MainWindow::centerCurrentDesign, QKeySequence(Qt::CTRL | Qt::Key_0));
 
@@ -883,8 +921,13 @@ QWidget* MainWindow::buildInfoPanel()
     // --- Hoop ---
     outer->addWidget(sectionTitle(QStringLiteral("Stickrahmen")));
     m_hoopCombo = new QComboBox;
-    m_hoopCombo->addItem(QStringLiteral("Automatisch"));
-    for (HoopType t : mp.hoops) m_hoopCombo->addItem(QString::fromLatin1(hoopSpec(t).name));
+    m_hoopCombo->addItem(QStringLiteral("✨ Automatisch (optimale Passform)"), -1);
+    for (HoopType t : mp.hoops) {
+        const HoopSpec hs = hoopSpec(t);
+        m_hoopCombo->addItem(QString::fromLatin1(hs.displayName), static_cast<int>(t));
+        const int curIdx = m_hoopCombo->count() - 1;
+        m_hoopCombo->setItemData(curIdx, QString::fromLatin1(hs.description), Qt::ToolTipRole);
+    }
     connect(m_hoopCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::onHoopComboChanged);
     outer->addWidget(m_hoopCombo);
 
@@ -1113,8 +1156,8 @@ void MainWindow::onHoopComboChanged(int idx)
 {
     const auto& mp = MachineProfile::current();
     HoopType ht;
-    if (idx > 0 && idx - 1 < int(mp.hoops.size())) {
-        ht = mp.hoops[idx - 1];
+    if (idx > 0 && idx < m_hoopCombo->count()) {
+        ht = static_cast<HoopType>(m_hoopCombo->itemData(idx).toInt());
     } else {
         double x0, y0, x1, y1;
         if (m_current.bounds(x0, y0, x1, y1)) {
@@ -1125,7 +1168,36 @@ void MainWindow::onHoopComboChanged(int idx)
     }
     const HoopSpec hs = hoopSpec(ht);
     m_view->setHoop(hs.widthMm, hs.heightMm, QString::fromLatin1(hs.name));
-    m_editor->setHoop(hs.widthMm, hs.heightMm, QString::fromLatin1(hs.name));
+    m_editor->setHoop(hs.widthMm, hs.heightMm, QString::fromLatin1(hs.name), ht);
+
+    if (m_hoopActionGroup) {
+        const auto acts = m_hoopActionGroup->actions();
+        if (idx <= 0 && !acts.isEmpty()) {
+            acts.first()->setChecked(true);
+        } else {
+            for (auto* act : acts) {
+                if (act->text() == QString::fromLatin1(hs.displayName)) {
+                    act->setChecked(true);
+                    break;
+                }
+            }
+        }
+    }
+
+    updateInfoPanel();
+}
+
+void MainWindow::selectHoop(HoopType type)
+{
+    for (int i = 0; i < m_hoopCombo->count(); ++i) {
+        if (m_hoopCombo->itemData(i).toInt() == static_cast<int>(type)) {
+            m_hoopCombo->setCurrentIndex(i);
+            return;
+        }
+    }
+    const HoopSpec hs = hoopSpec(type);
+    m_view->setHoop(hs.widthMm, hs.heightMm, QString::fromLatin1(hs.name));
+    m_editor->setHoop(hs.widthMm, hs.heightMm, QString::fromLatin1(hs.name), type);
     updateInfoPanel();
 }
 
@@ -1673,7 +1745,7 @@ void MainWindow::placeDesign()
 
     HoopType ht;
     const int idx = m_hoopCombo ? m_hoopCombo->currentIndex() : 0;
-    if (idx > 0 && idx - 1 < int(mp.hoops.size())) ht = mp.hoops[idx - 1];
+    if (idx > 0 && idx < m_hoopCombo->count()) ht = static_cast<HoopType>(m_hoopCombo->itemData(idx).toInt());
     else ht = mp.hoopFor(w, h);
     const HoopSpec hs = hoopSpec(ht);
 
@@ -1830,7 +1902,7 @@ void MainWindow::exportJef()
     if (m_hoopCombo->currentIndex() <= 0)
         hoop = mp.hoopFor(x1 - x0, y1 - y0);
     else
-        hoop = mp.hoops[m_hoopCombo->currentIndex() - 1];
+        hoop = static_cast<HoopType>(m_hoopCombo->currentData().toInt());
 
     const JefCodec::Result res = JefCodec::exportToFile(path, m_current, hoop);
     if (res.ok)

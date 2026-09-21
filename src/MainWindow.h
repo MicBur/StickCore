@@ -89,6 +89,7 @@ private slots:
     void centerCurrentDesign();
     void onPositionSpinChanged();
     void onHoopComboChanged(int idx);
+    void selectHoop(HoopType type);
 
 private:
     void     setupMenus();
@@ -117,6 +118,8 @@ private:
 
     // View & Movement actions
     QAction*          m_actHoop     = nullptr;
+    QMenu*            m_hoopMenu    = nullptr;
+    QActionGroup*     m_hoopActionGroup = nullptr;
     QAction*          m_actTopDown  = nullptr;
     QAction*          m_actMoveMode = nullptr;
     QAction*          m_actOrbitMode = nullptr;

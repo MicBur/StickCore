@@ -21,15 +21,18 @@ struct MachineProfile {
     double  maxHeightMm   = 200.0;   // 7.9"
     int     maxSpeedSpm   = 650;     // stitches per minute
 
-    // Hoops physically available on Janome Memory Craft (in preferred size order).
+    // Hoops physically available on Janome Memory Craft MC350E & compatible setups.
     std::vector<HoopType> hoops = {
-        HoopType::HoopA_126x110,  // Standard (126 x 110 mm)
-        HoopType::HoopB_140x200,  // Large (140 x 200 mm)
-        HoopType::HoopC_50x50,    // Free Arm / Pocket (50 x 50 mm)
-        HoopType::HoopSQ14_140,   // Square (140 x 140 mm)
-        HoopType::HoopF_126x110,  // Spring Loaded (126 x 110 mm)
-        HoopType::HoopD_230x200,  // Giga (230 x 200 mm)
-        HoopType::HoopSQ23_230    // Macro Square (230 x 230 mm)
+        HoopType::HoopB_140x200,   // Groß (140 x 200 mm) - Standard
+        HoopType::HoopA_126x110,   // Standard (126 x 110 mm)
+        HoopType::HoopC_50x50,     // Freiarm (50 x 50 mm) - Original-Zubehör #850803000
+        HoopType::HoopD_230x200,   // Giga Versatzrahmen (230 x 200 mm) - Original-Zubehör #850406009
+        HoopType::HoopF_110x110,   // Federrahmen Quilt (110 x 110 mm) - Original-Zubehör #850411007
+        HoopType::HoopHat_100x90,  // Kappenrahmen (100 x 90 mm) - Mützeneinsatz in Rahmen B
+        HoopType::HoopMag_140x200, // Magnetrahmen Groß (140 x 200 mm) - Sew Tech / Snap Hoop
+        HoopType::HoopMag_100x100, // Magnetrahmen Mittel (100 x 100 mm) - Sew Tech 4"x4"
+        HoopType::HoopSQ14_140,    // Quadratisch SQ14 (140 x 140 mm)
+        HoopType::HoopSQ23_230     // Groß-Quadrat SQ23 (230 x 230 mm, MC500E/550E Referenz)
     };
 
     // Thread brands the machine's colour matching supports.

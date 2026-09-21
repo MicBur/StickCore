@@ -17,6 +17,7 @@
 class QToolButton;
 class QSlider;
 class QLabel;
+class QComboBox;
 
 namespace stick {
 
@@ -45,7 +46,7 @@ public:
     void translatePaths(double dxMm, double dyMm);
     void centerPaths();
 
-    // 2D Stitch sequence API
+    // Stitches API
     void setSequence(const StitchSequence& seq);
     const StitchSequence& sequence() const;
 
@@ -55,7 +56,9 @@ public:
     void clearBackgroundImage();
 
     // Hoop & view display
-    void setHoop(double wMm, double hMm, const QString& name);
+    void setHoop(double wMm, double hMm, const QString& name, HoopType type = HoopType::HoopB_140x200);
+    void setSelectedHoop(HoopType type);
+    HoopType selectedHoop() const;
     void setCanvasMode(CanvasMode mode);
     CanvasMode canvasMode() const;
 
@@ -72,6 +75,7 @@ signals:
     void geometryChanged();
     void designMoved(double dx, double dy);
     void canvasModeChanged(CanvasMode mode);
+    void hoopSelected(HoopType type);
 
 private:
     void setupUi();
@@ -84,6 +88,7 @@ private:
     QToolButton* m_btnPoints   = nullptr;
     QToolButton* m_btnJumps    = nullptr;
     QToolButton* m_btnHoop     = nullptr;
+    QComboBox*   m_hoopCombo   = nullptr;
     QToolButton* m_btnFit      = nullptr;
     QToolButton* m_btnZoomIn   = nullptr;
     QToolButton* m_btnZoomOut  = nullptr;
