@@ -69,6 +69,12 @@ private slots:
     void multiHoopSplit();
     void applyTatamiCarving();
 
+    // High-End Specialty Fills & Outlines (Wilcom & Bernina)
+    void generateGradientFill();
+    void generateBeanStitchOutline();
+    void generateStipplingFill();
+    void generateFlorentineFill();
+
     // Janome Digitizer Jr Transformations
     void mirrorHorizontal();
     void mirrorVertical();

@@ -41,6 +41,10 @@
 #include "generators/SfumatoGenerator.h"
 #include "generators/CrossStitchGenerator.h"
 #include "generators/MultiHoopSplitter.h"
+#include "generators/GradientFill.h"
+#include "generators/BeanStitchGenerator.h"
+#include "generators/StipplingGenerator.h"
+#include "generators/FlorentineFill.h"
 
 #include <QApplication>
 #include <QTimer>
@@ -393,6 +397,12 @@ void MainWindow::setupMenus()
     motMenu->addAction(QStringLiteral("🌫 Sfumato Photo-Stitch (Fotorealistisch)…"), this, &MainWindow::digitizeSfumato);
     motMenu->addAction(QStringLiteral("✖ Traditioneller Kreuzstich (Aida Raster)…"), this, &MainWindow::digitizeCrossStitch);
     motMenu->addAction(QStringLiteral("⚜ Tatami Prägemuster (Carving / Eichenlaub / Stern)…"), this, &MainWindow::applyTatamiCarving);
+    
+    QMenu* highEndMenu = motMenu->addMenu(QStringLiteral("💎 Meister-Füllungen & Spezialstiche (Wilcom & Bernina)"));
+    highEndMenu->addAction(QStringLiteral("🎨 Farbverlaufs-Füllung (Ombré / Gradient Tatami)…"), this, &MainWindow::generateGradientFill);
+    highEndMenu->addAction(QStringLiteral("🪡 Dreifachstich / Bean Stitch (Plastische Kontur)…"), this, &MainWindow::generateBeanStitchOutline);
+    highEndMenu->addAction(QStringLiteral("🧵 Mäander- & Quiltfüllung (Stippling Meander)…"), this, &MainWindow::generateStipplingFill);
+    highEndMenu->addAction(QStringLiteral("〰 Florentiner Wellen-Tatami (Curved Wave Fill)…"), this, &MainWindow::generateFlorentineFill);
 
     QMenu* mefMenu = motMenu->addMenu(QStringLiteral("👑 Modewerkstatt Knüppel (Original Vektor-Logo)"));
     mefMenu->addAction(QStringLiteral("👑 Meister-Aufnäher (Foto-Original: Kettelrand & Satinschrift)"), this, [this]{ loadMefOriginal(0); });
@@ -2293,6 +2303,168 @@ void MainWindow::applyTatamiCarving()
     statusBar()->showMessage(
         QStringLiteral("Tatami-Prägemuster (%1) erfolgreich mit %2 Stichen generiert.")
             .arg(CarvingPattern::presetName(chosen)).arg(m_current.size()), 6000);
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::generateGradientFill()
+{
+    QPolygonF poly;
+    for (const auto& p : m_editor->paths()) {
+        if (p.count() >= 3) { poly = p.toPolygon(); break; }
+    }
+    if (poly.isEmpty()) {
+        poly << QPointF(-35, -40) << QPointF(35, -40) << QPointF(35, 10)
+             << QPointF(0, 40) << QPointF(-35, 10);
+    }
+
+    QStringList palettePresets;
+    palettePresets << QStringLiteral("✨ Meister-Gold zu Kupfer/Bronze (Madeira 1083 → 1070)")
+                   << QStringLiteral("👑 Königsblau zu Himmelblau / Cyan (Madeira 1134 → 1029)")
+                   << QStringLiteral("🍷 Bordeauxrot zu Champagner / Rosé (Madeira 1184 → 1017)")
+                   << QStringLiteral("🌲 Tannengrün zu Lindgrün / Salbei (Madeira 1170 → 1100)");
+
+    bool ok = false;
+    const QString choice = QInputDialog::getItem(
+        this, QStringLiteral("Farbverlaufs-Füllung (Ombré Tatami)"),
+        QStringLiteral("Garnfarben-Verlauf wählen (Farbe 1 dichtet ab, Farbe 2 dichtet an):"),
+        palettePresets, 0, false, &ok);
+    if (!ok) return;
+
+    GradientFill::Params gp;
+    gp.angleDeg = m_fillAngleSpin ? m_fillAngleSpin->value() : 0.0;
+    gp.minSpacingMm = 0.35;
+    gp.maxSpacingMm = 1.80;
+    gp.maxStitchMm = m_maxStitch ? m_maxStitch->value() : 4.0;
+    gp.underlay = m_underlay ? m_underlay->isChecked() : true;
+
+    if (choice.contains(QStringLiteral("Königsblau"))) {
+        gp.color1 = ThreadColor(QColor(25, 25, 112), QStringLiteral("Königsblau"), 1134);
+        gp.color2 = ThreadColor(QColor(0, 191, 255), QStringLiteral("Cyanblau"), 1029);
+    } else if (choice.contains(QStringLiteral("Bordeauxrot"))) {
+        gp.color1 = ThreadColor(QColor(128, 0, 32), QStringLiteral("Bordeaux"), 1184);
+        gp.color2 = ThreadColor(QColor(245, 222, 179), QStringLiteral("Champagner"), 1017);
+    } else if (choice.contains(QStringLiteral("Tannengrün"))) {
+        gp.color1 = ThreadColor(QColor(34, 139, 34), QStringLiteral("Tannengrün"), 1170);
+        gp.color2 = ThreadColor(QColor(144, 238, 144), QStringLiteral("Lindgrün"), 1100);
+    } else {
+        gp.color1 = ThreadColor(QColor(212, 175, 55), QStringLiteral("Madeira Gold"), 1083);
+        gp.color2 = ThreadColor(QColor(184, 115, 51), QStringLiteral("Kupfer/Bronze"), 1070);
+    }
+
+    m_current = GradientFill::generate(poly, gp);
+    setCurrentSequence(m_current, QStringLiteral("Ombré-Farbverlauf (%1 → %2)")
+                       .arg(gp.color1.description, gp.color2.description));
+    statusBar()->showMessage(
+        QStringLiteral("Farbverlaufs-Füllung (Ombré) mit %1 Stichen und automatischem Farbwechsel generiert.")
+            .arg(m_current.size()), 6000);
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::generateBeanStitchOutline()
+{
+    QPainterPath path;
+    const auto paths = m_editor->paths();
+    if (!paths.isEmpty()) {
+        for (const auto& p : paths) {
+            if (p.count() >= 2) path.addPath(p.toPainterPath());
+        }
+    }
+    if (path.isEmpty()) {
+        path.addRoundedRect(QRectF(-40, -40, 80, 80), 14, 14);
+    }
+
+    QStringList modeList;
+    modeList << QStringLiteral("🪡 3-Pass Dreifachstich (Standard Bean Stitch – erhabene Kontur)")
+             << QStringLiteral("🧶 5-Pass Schwerer Bohnenstich (Relief-Optik für Loden & Walk)");
+
+    bool ok = false;
+    const QString choice = QInputDialog::getItem(
+        this, QStringLiteral("Dreifachstich / Bean Stitch wählen"),
+        QStringLiteral("Wiederholungsanzahl pro Nadelstich-Segment wählen:"),
+        modeList, 0, false, &ok);
+    if (!ok) return;
+
+    BeanStitchGenerator::Params bp;
+    bp.mode = choice.contains(QStringLiteral("5-Pass"))
+              ? BeanStitchGenerator::Mode::FivePass
+              : BeanStitchGenerator::Mode::TriplePass;
+    bp.stitchLengthMm = 2.50;
+    bp.threadColor = ThreadColor(QColor(40, 40, 40), QStringLiteral("Anthrazit Kontur"));
+
+    m_current = BeanStitchGenerator::generate(path, bp);
+    setCurrentSequence(m_current, QStringLiteral("Bean Stitch (%1)")
+                       .arg(bp.mode == BeanStitchGenerator::Mode::FivePass ? "5-Pass" : "3-Pass"));
+    statusBar()->showMessage(
+        QStringLiteral("Bean Stitch Kontur (%1) erfolgreich mit %2 Stichen berechnet.")
+            .arg(bp.mode == BeanStitchGenerator::Mode::FivePass ? "5-Pass" : "3-Pass")
+            .arg(m_current.size()), 6000);
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::generateStipplingFill()
+{
+    QPolygonF poly;
+    for (const auto& p : m_editor->paths()) {
+        if (p.count() >= 3) { poly = p.toPolygon(); break; }
+    }
+    if (poly.isEmpty()) {
+        const double s = 35.0;
+        poly << QPointF(-s, -s) << QPointF(s, -s) << QPointF(s, s) << QPointF(-s, s);
+    }
+
+    bool ok = false;
+    const double spacing = QInputDialog::getDouble(
+        this, QStringLiteral("Mäander- & Quiltfüllung (Stippling)"),
+        QStringLiteral("Schlaufenabstand der Quilt-Wellen in mm (2.5 - 8.0 mm):"),
+        4.0, 2.0, 8.0, 1, &ok);
+    if (!ok) return;
+
+    StipplingGenerator::Params sp;
+    sp.loopSpacingMm = spacing;
+    sp.stitchLengthMm = 2.20;
+    sp.marginMm = 1.50;
+    sp.threadColor = ThreadColor(QColor(70, 130, 180), QStringLiteral("Quilt-Blau"));
+
+    m_current = StipplingGenerator::generate(poly, sp);
+    setCurrentSequence(m_current, QStringLiteral("Mäander-Quilt (Stippling %1 mm)").arg(spacing, 0, 'f', 1));
+    statusBar()->showMessage(
+        QStringLiteral("Mäander-Quiltfüllung (Stippling) mit %1 Stichen unterbrechungsfrei generiert.")
+            .arg(m_current.size()), 6000);
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::generateFlorentineFill()
+{
+    QPolygonF poly;
+    for (const auto& p : m_editor->paths()) {
+        if (p.count() >= 3) { poly = p.toPolygon(); break; }
+    }
+    if (poly.isEmpty()) {
+        poly << QPointF(-40, -30) << QPointF(40, -30) << QPointF(45, 10)
+             << QPointF(0, 35) << QPointF(-45, 10);
+    }
+
+    bool ok = false;
+    const double amplitude = QInputDialog::getDouble(
+        this, QStringLiteral("Florentiner Wellen-Tatami (Curved Wave Fill)"),
+        QStringLiteral("Wellen-Amplitude in mm (Schwingungshöhe der Fadenreihen):"),
+        4.5, 1.0, 15.0, 1, &ok);
+    if (!ok) return;
+
+    FlorentineFill::Params fp;
+    fp.angleDeg = m_fillAngleSpin ? m_fillAngleSpin->value() : 0.0;
+    fp.rowSpacingMm = m_density ? m_density->value() : 0.40;
+    fp.maxStitchMm = m_maxStitch ? m_maxStitch->value() : 3.80;
+    fp.amplitudeMm = amplitude;
+    fp.wavelengthMm = 26.0;
+    fp.underlay = m_underlay ? m_underlay->isChecked() : true;
+    fp.threadColor = ThreadColor(QColor(0, 139, 139), QStringLiteral("Smaragd Wellenglanz"));
+
+    m_current = FlorentineFill::generate(poly, fp);
+    setCurrentSequence(m_current, QStringLiteral("Florentiner Wellen-Tatami (Amp %1 mm)").arg(amplitude, 0, 'f', 1));
+    statusBar()->showMessage(
+        QStringLiteral("Florentiner Wellen-Tatami mit %1 Stichen erfolgreich berechnet.")
+            .arg(m_current.size()), 6000);
 }
 
 } // namespace stick

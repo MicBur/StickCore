@@ -78,6 +78,14 @@ add_executable(StickCore WIN32
     src/generators/CrossStitchGenerator.h
     src/generators/MultiHoopSplitter.cpp
     src/generators/MultiHoopSplitter.h
+    src/generators/GradientFill.cpp
+    src/generators/GradientFill.h
+    src/generators/BeanStitchGenerator.cpp
+    src/generators/BeanStitchGenerator.h
+    src/generators/StipplingGenerator.cpp
+    src/generators/StipplingGenerator.h
+    src/generators/FlorentineFill.cpp
+    src/generators/FlorentineFill.h
     src/ui/ThreadPickDialog.cpp
     src/ui/ThreadPickDialog.h
     src/ui/ImageDialog.cpp
@@ -161,6 +169,10 @@ add_executable(StickCoreTests
     src/generators/SfumatoGenerator.cpp
     src/generators/CrossStitchGenerator.cpp
     src/generators/MultiHoopSplitter.cpp
+    src/generators/GradientFill.cpp
+    src/generators/BeanStitchGenerator.cpp
+    src/generators/StipplingGenerator.cpp
+    src/generators/FlorentineFill.cpp
     src/codec/JefCodec.cpp
     src/codec/DstCodec.cpp
     src/library/DesignFactory.cpp

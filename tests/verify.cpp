@@ -27,6 +27,10 @@
 #include "generators/SfumatoGenerator.h"
 #include "generators/CrossStitchGenerator.h"
 #include "generators/MultiHoopSplitter.h"
+#include "generators/GradientFill.h"
+#include "generators/BeanStitchGenerator.h"
+#include "generators/StipplingGenerator.h"
+#include "generators/FlorentineFill.h"
 #include <QDir>
 #include <QGuiApplication>
 #include <QFontDatabase>
@@ -1593,6 +1597,131 @@ int main(int argc, char** argv)
         CHECK(!res.hoop2.empty(), "hoop 2 has stitches");
         CHECK(res.hoop1.palette.size() > bigSeq.palette.size(), "registration crosshair color added to hoop 1");
         CHECK(res.hoop2.palette.size() > bigSeq.palette.size(), "registration crosshair color prepended to hoop 2");
+    }
+
+    std::printf("== High-End Fill 1: Gradient / Ombré Tatami Fill ==\n");
+    {
+        QPolygonF poly;
+        const double s = 30.0;
+        poly << QPointF(-s, -s) << QPointF(s, -s) << QPointF(s, s) << QPointF(-s, s);
+
+        GradientFill::Params gp;
+        gp.minSpacingMm = 0.40;
+        gp.maxSpacingMm = 2.00;
+        gp.color1 = ThreadColor(QColor(212, 175, 55), QStringLiteral("Gold"));
+        gp.color2 = ThreadColor(QColor(184, 115, 51), QStringLiteral("Bronze"));
+        gp.underlay = true;
+
+        StitchSequence gseq = GradientFill::generate(poly, gp);
+        CHECK(!gseq.empty(), "gradient fill produced stitches");
+        CHECK(gseq.palette.size() == 2, "gradient fill has exactly 2 thread colors");
+
+        int countCol0 = 0, countCol1 = 0;
+        bool hasColorChange = false;
+        for (const auto& st : gseq.stitches) {
+            if (st.colorIdx == 0) countCol0++;
+            if (st.colorIdx == 1) countCol1++;
+            if (st.is(SF_ColorChange)) hasColorChange = true;
+        }
+        CHECK(countCol0 > 50, "gradient pass 1 has > 50 stitches");
+        CHECK(countCol1 > 50, "gradient pass 2 has > 50 stitches");
+        CHECK(hasColorChange, "gradient sequence contains SF_ColorChange");
+
+        const QString testJef = QDir::tempPath() + QStringLiteral("/_test_gradient.jef");
+        auto jefRes = JefCodec::exportToFile(testJef, gseq, HoopType::HoopB_140x200);
+        CHECK(jefRes.ok, "gradient sequence exported cleanly to JEF");
+    }
+
+    std::printf("== High-End Fill 2: Bean Stitch (3-Pass & 5-Pass Triple Run) ==\n");
+    {
+        QVector<QPointF> pts;
+        pts << QPointF(0.0, 0.0) << QPointF(5.0, 0.0) << QPointF(10.0, 0.0);
+
+        BeanStitchGenerator::Params bp3;
+        bp3.stitchLengthMm = 5.0; // exact 2 segments of 5mm
+        bp3.mode = BeanStitchGenerator::Mode::TriplePass;
+        bp3.closed = false;
+
+        StitchSequence seq3 = BeanStitchGenerator::generate(pts, bp3);
+        // 1 initial node + 2 segments * 3 passes = 7 stitches
+        CHECK(seq3.size() == 7, "3-pass bean stitch generates exactly 7 stitches for 2 segments");
+        CHECK(seq3.stitches[0].is(SF_Jump), "first stitch is jump to start");
+        CHECK(seq3.stitches[1].x == 5.0 && seq3.stitches[2].x == 0.0 && seq3.stitches[3].x == 5.0,
+              "segment 1 executed forward-backward-forward");
+        CHECK(seq3.stitches[4].x == 10.0 && seq3.stitches[5].x == 5.0 && seq3.stitches[6].x == 10.0,
+              "segment 2 executed forward-backward-forward");
+
+        BeanStitchGenerator::Params bp5 = bp3;
+        bp5.mode = BeanStitchGenerator::Mode::FivePass;
+        StitchSequence seq5 = BeanStitchGenerator::generate(pts, bp5);
+        // 1 initial node + 2 segments * 5 passes = 11 stitches
+        CHECK(seq5.size() == 11, "5-pass bean stitch generates exactly 11 stitches for 2 segments");
+
+        QPainterPath path;
+        path.addEllipse(QPointF(0, 0), 20, 20);
+        StitchSequence pathSeq = BeanStitchGenerator::generate(path, bp3);
+        CHECK(!pathSeq.empty() && pathSeq.size() > 20, "bean stitch on QPainterPath generated valid stitches");
+        const QString testJef = QDir::tempPath() + QStringLiteral("/_test_bean.jef");
+        auto jefRes = JefCodec::exportToFile(testJef, pathSeq, HoopType::HoopA_126x110);
+        CHECK(jefRes.ok, "bean stitch exported cleanly to JEF");
+    }
+
+    std::printf("== High-End Fill 3: Stippling / Meander Fill ==\n");
+    {
+        QPolygonF poly;
+        const double s = 30.0;
+        poly << QPointF(-s, -s) << QPointF(s, -s) << QPointF(s, s) << QPointF(-s, s);
+
+        StipplingGenerator::Params sp;
+        sp.loopSpacingMm = 4.0;
+        sp.stitchLengthMm = 2.0;
+        sp.marginMm = 1.5;
+
+        StitchSequence sseq = StipplingGenerator::generate(poly, sp);
+        CHECK(!sseq.empty(), "stippling generated stitches");
+        CHECK(sseq.size() > 100, "stippling has sufficient density (>100 stitches)");
+
+        bool allInside = true;
+        for (const auto& st : sseq.stitches) {
+            if (st.x < -s - 0.5 || st.x > s + 0.5 || st.y < -s - 0.5 || st.y > s + 0.5) {
+                allInside = false;
+                break;
+            }
+        }
+        CHECK(allInside, "all stippling stitches stay inside polygon bounding box");
+
+        const QString testJef = QDir::tempPath() + QStringLiteral("/_test_stipple.jef");
+        auto jefRes = JefCodec::exportToFile(testJef, sseq, HoopType::HoopA_126x110);
+        CHECK(jefRes.ok, "stippling sequence exported cleanly to JEF");
+    }
+
+    std::printf("== High-End Fill 4: Florentine Curved Tatami Fill ==\n");
+    {
+        QPolygonF poly;
+        const double s = 30.0;
+        poly << QPointF(-s, -s) << QPointF(s, -s) << QPointF(s, s) << QPointF(-s, s);
+
+        FlorentineFill::Params fp;
+        fp.amplitudeMm = 5.0;
+        fp.wavelengthMm = 25.0;
+        fp.rowSpacingMm = 0.50;
+        fp.underlay = true;
+
+        StitchSequence fseq = FlorentineFill::generate(poly, fp);
+        CHECK(!fseq.empty(), "florentine fill produced stitches");
+        CHECK(fseq.size() > 200, "florentine fill has >200 stitches");
+
+        // Check wave height variation
+        double minY = 1000.0, maxY = -1000.0;
+        for (const auto& st : fseq.stitches) {
+            minY = std::min(minY, st.y);
+            maxY = std::max(maxY, st.y);
+        }
+        CHECK(maxY - minY >= 2.0 * s, "florentine fill spans full polygon height");
+
+        const QString testJef = QDir::tempPath() + QStringLiteral("/_test_florentine.jef");
+        auto jefRes = JefCodec::exportToFile(testJef, fseq, HoopType::HoopB_140x200);
+        CHECK(jefRes.ok, "florentine sequence exported cleanly to JEF");
     }
 
     std::printf("== Real reference round-trip ==\n");
