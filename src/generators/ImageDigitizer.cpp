@@ -353,7 +353,7 @@ InternalQuantized runQuantization(const QImage& src, const ImageDigitizer::Param
     // 2. Brightness Steps / Tones (Inkscape Multicolor Posterize)
     // =======================================================================
     if (p.separation == ImageDigitizer::SeparationMode::Tones) {
-        const int numTones = std::clamp(p.colors, 2, 8);
+        const int numTones = std::clamp(p.colors, 2, 16);
         q.K = numTones + 1; // 0..numTones-1 are foreground tones, numTones is background
         q.backgroundIdx = numTones;
         q.centers.resize(q.K);

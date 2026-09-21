@@ -1935,6 +1935,36 @@ int main(int argc, char** argv)
             CHECK(!crossSeq.empty(), "ImageDigitizer Mode::CrossStitch produces valid cross stitches");
             CHECK(crossSeq.palette.size() <= 3, "CrossStitch palette bounded by color count");
 
+            // 9b. Test CrossStitch and Colors mode with flexible color counts up to 16
+            {
+                ImageDigitizer::Params pCross16 = pCross;
+                pCross16.colors = 16;
+                StitchSequence cross16Seq = ImageDigitizer::generate(skullImg, pCross16);
+                CHECK(!cross16Seq.empty(), "CrossStitch with 16 colors produces valid stitches");
+                CHECK(cross16Seq.palette.size() <= 16, "CrossStitch palette bounded by 16 colors");
+
+                // Test 6 colors in Colors mode
+                ImageDigitizer::Params pCol6 = pColors;
+                pCol6.colors = 6;
+                auto pal6 = ImageDigitizer::extractPalette(skullImg, pCol6);
+                CHECK(!pal6.empty() && pal6.size() <= 7, "Colors mode with 6 colors extracts correct palette");
+
+                // Test 12 tones in Tones mode
+                ImageDigitizer::Params pTone12;
+                pTone12.mode = ImageDigitizer::Mode::Colors;
+                pTone12.separation = ImageDigitizer::SeparationMode::Tones;
+                pTone12.colors = 12;
+                pTone12.widthMm = 80.0;
+                auto palTone12 = ImageDigitizer::extractPalette(skullImg, pTone12);
+                CHECK(!palTone12.empty() && palTone12.size() <= 13, "Tones mode with 12 tones extracts correct palette");
+
+                // Test 16 colors in Colors mode
+                ImageDigitizer::Params pCol16 = pColors;
+                pCol16.colors = 16;
+                auto pal16 = ImageDigitizer::extractPalette(skullImg, pCol16);
+                CHECK(!pal16.empty() && pal16.size() <= 17, "Colors mode with 16 colors extracts up to 16 thread colors + background");
+            }
+
             // 10. Test ImageDigitizer::Mode::Sfumato via unified API
             ImageDigitizer::Params pSfumato;
             pSfumato.mode = ImageDigitizer::Mode::Sfumato;

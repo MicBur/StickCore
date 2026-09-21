@@ -90,7 +90,7 @@ public:
 
         // --- Colors / Vektor-Zerlegung (Bitmap to Path wie Inkscape) --------
         SeparationMode separation     = SeparationMode::Colors; ///< Colors (K-Means) vs Tones (Helligkeit)
-        int     colors        = 4;      ///< number of thread colours / tones (1..8)
+        int     colors        = 3;      ///< number of thread colours / tones (1..16)
         int     stencilThreshold = -1;  ///< 0..255 manual threshold for 1-color stencil (-1 = auto Otsu)
         double  densityMm     = 0.40;   ///< fill row spacing (0.30 - 0.65 mm)
         bool    dropBackground= true;   ///< skip dominant background color

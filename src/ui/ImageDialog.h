@@ -75,6 +75,7 @@ private:
     // Page 0 – Colors (Vector-Tatami & Inkscape Bitmap to Path)
     QComboBox*      m_separation    = nullptr;
     QSpinBox*       m_colors        = nullptr;
+    QLabel*         m_colorHintLabel= nullptr;
     QLabel*         m_stencilLabel  = nullptr;
     QSlider*        m_stencilSlider = nullptr;
     QComboBox*      m_tatamiPattern = nullptr;
@@ -102,6 +103,7 @@ private:
     // Page 2 – Cross-Stitch
     QComboBox*      m_crossAida          = nullptr;
     QComboBox*      m_crossStyle         = nullptr;
+    QSpinBox*       m_crossColors        = nullptr;
 
     // Page 3 – LineArt
     QComboBox*      m_lineArtStitch      = nullptr;

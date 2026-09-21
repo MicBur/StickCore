@@ -163,9 +163,41 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
         f->addRow(QStringLiteral("Vektor-Zerlegung:"), m_separation);
 
         m_colors = new QSpinBox;
-        m_colors->setRange(1, 8);
+        m_colors->setRange(1, 16);
         m_colors->setValue(3);
-        f->addRow(QStringLiteral("Anzahl Farben / Töne:"), m_colors);
+        m_colors->setFixedWidth(60);
+
+        auto* colorBox = new QVBoxLayout;
+        colorBox->setSpacing(4);
+
+        auto* spinRow = new QHBoxLayout;
+        spinRow->addWidget(m_colors, 0);
+
+        auto addPresetBtn = [this, spinRow](const QString& text, int val) {
+            auto* b = new QPushButton(text);
+            b->setCursor(Qt::PointingHandCursor);
+            b->setStyleSheet(QStringLiteral("QPushButton { padding: 3px 7px; font-size: 11px; background: #334155; color: #f1f5f9; border-radius: 3px; border: 1px solid #475569; } "
+                                            "QPushButton:hover { background: #2563eb; border-color: #3b82f6; }"));
+            connect(b, &QPushButton::clicked, this, [this, val]{ m_colors->setValue(val); });
+            spinRow->addWidget(b);
+        };
+        addPresetBtn(QStringLiteral("1 Schablone"), 1);
+        addPresetBtn(QStringLiteral("2 Duoton"), 2);
+        addPresetBtn(QStringLiteral("3 Trio (Schädel)"), 3);
+        addPresetBtn(QStringLiteral("4"), 4);
+        addPresetBtn(QStringLiteral("6"), 6);
+        addPresetBtn(QStringLiteral("8"), 8);
+        addPresetBtn(QStringLiteral("12"), 12);
+        addPresetBtn(QStringLiteral("16"), 16);
+        spinRow->addStretch();
+        colorBox->addLayout(spinRow);
+
+        m_colorHintLabel = new QLabel;
+        m_colorHintLabel->setStyleSheet(QStringLiteral("font-size: 11px; color: #93c5fd;"));
+        m_colorHintLabel->setWordWrap(true);
+        colorBox->addWidget(m_colorHintLabel);
+
+        f->addRow(QStringLiteral("Anzahl Farben / Töne:"), colorBox);
 
         m_stencilLabel = new QLabel(QStringLiteral("Schablonen-Schwellwert:"));
         m_stencilSlider = new QSlider(Qt::Horizontal);
@@ -302,6 +334,32 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
         m_crossStyle->addItem(QStringLiteral("Halbes Kreuz (Petit Point /)"), int(CrossStitchGenerator::StitchStyle::HalfCross));
         f->addRow(QStringLiteral("Kreuzstich-Art:"), m_crossStyle);
 
+        m_crossColors = new QSpinBox;
+        m_crossColors->setRange(2, 16);
+        m_crossColors->setValue(6);
+        m_crossColors->setFixedWidth(60);
+
+        auto* crossColorRow = new QHBoxLayout;
+        crossColorRow->addWidget(m_crossColors, 0);
+
+        auto addCrossPreset = [this, crossColorRow](const QString& text, int val) {
+            auto* b = new QPushButton(text);
+            b->setCursor(Qt::PointingHandCursor);
+            b->setStyleSheet(QStringLiteral("QPushButton { padding: 3px 7px; font-size: 11px; background: #334155; color: #f1f5f9; border-radius: 3px; border: 1px solid #475569; } "
+                                            "QPushButton:hover { background: #2563eb; border-color: #3b82f6; }"));
+            connect(b, &QPushButton::clicked, this, [this, val]{ m_crossColors->setValue(val); });
+            crossColorRow->addWidget(b);
+        };
+        addCrossPreset(QStringLiteral("2"), 2);
+        addCrossPreset(QStringLiteral("3"), 3);
+        addCrossPreset(QStringLiteral("4"), 4);
+        addCrossPreset(QStringLiteral("6"), 6);
+        addCrossPreset(QStringLiteral("8"), 8);
+        addCrossPreset(QStringLiteral("12"), 12);
+        addCrossPreset(QStringLiteral("16"), 16);
+        crossColorRow->addStretch();
+        f->addRow(QStringLiteral("Max. Garnfarben:"), crossColorRow);
+
         auto* hint = caption(QStringLiteral("Traditionelle Zählstickerei auf standardisierten Aida-Rasterzellen für Trachten & historische Motive."));
         hint->setAlignment(Qt::AlignLeft); hint->setWordWrap(true);
         f->addRow(hint);
@@ -359,7 +417,7 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
 
         m_tonesLabel = new QLabel(QStringLiteral("Tonstufen:"));
         m_tones = new QSpinBox;
-        m_tones->setRange(2, 6);
+        m_tones->setRange(2, 12);
         m_tones->setValue(3);
         f->addRow(m_tonesLabel, m_tones);
 
@@ -526,13 +584,30 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
     connect(m_fabricCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ImageDialog::updatePreviewDisplay);
 
     // Colors page connections
+    auto updateColorHint = [this](int val) {
+        if (!m_colorHintLabel) return;
+        if (val == 1) {
+            m_colorHintLabel->setText(QStringLiteral("💡 1 Farbe: Schablone / Silhouette (wie Inkscape Schwellwert – optimal für Patches & Logos)."));
+        } else if (val == 2) {
+            m_colorHintLabel->setText(QStringLiteral("💡 2 Farben: Duoton (starker Kontrast Vordergrund / Hintergrund)."));
+        } else if (val == 3) {
+            m_colorHintLabel->setText(QStringLiteral("💡 3 Farben: Schatten, Mitteltöne & Glanzlichter (ideal für Schädel, Knochen & Reliefs)."));
+        } else if (val <= 6) {
+            m_colorHintLabel->setText(QStringLiteral("💡 %1 Farben: Ausgewogene Vektor-Tatami mit K-Means Kantenerhalt.").arg(val));
+        } else {
+            m_colorHintLabel->setText(QStringLiteral("💡 %1 Farben: Hohe Farbauflösung für bunte Wappen & detailreiche Motive.").arg(val));
+        }
+    };
+    updateColorHint(m_colors->value());
+
     connect(m_separation, QOverload<int>::of(&QComboBox::currentIndexChanged), this, kick);
     connect(m_stencilSlider, &QSlider::valueChanged, this, kick);
-    connect(m_colors, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, kick](int val){
+    connect(m_colors, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, kick, updateColorHint](int val){
         const bool is1 = (val == 1);
         m_stencilLabel->setVisible(is1);
         m_stencilSlider->setVisible(is1);
         m_separation->setEnabled(!is1);
+        updateColorHint(val);
         m_params.activeColors.clear();
         kick();
     });
@@ -554,6 +629,9 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
     // CrossStitch connections
     connect(m_crossAida, QOverload<int>::of(&QComboBox::currentIndexChanged), this, kick);
     connect(m_crossStyle, QOverload<int>::of(&QComboBox::currentIndexChanged), this, kick);
+    if (m_crossColors) {
+        connect(m_crossColors, QOverload<int>::of(&QSpinBox::valueChanged), this, kick);
+    }
 
     // LineArt connections
     connect(m_lineArtStitch, QOverload<int>::of(&QComboBox::currentIndexChanged), this, kick);
@@ -640,6 +718,9 @@ void ImageDialog::collectParams()
     // Cross-Stitch
     p.crossStitchAida  = CrossStitchGenerator::AidaCount(m_crossAida->currentData().toInt());
     p.crossStitchStyle = CrossStitchGenerator::StitchStyle(m_crossStyle->currentData().toInt());
+    if (p.mode == ImageDigitizer::Mode::CrossStitch && m_crossColors) {
+        p.colors = m_crossColors->value();
+    }
 
     // LineArt
     p.lineArtStitch = ImageDigitizer::LineArtStitch(m_lineArtStitch->currentData().toInt());
