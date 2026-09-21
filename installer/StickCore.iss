@@ -13,7 +13,7 @@ AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
-OutputDir=Output
+OutputDir=..\Output
 OutputBaseFilename=StickCoreSetup
 Compression=lzma2
 SolidCompression=yes
@@ -30,7 +30,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Everything windeployqt produced (the exe plus all required Qt DLLs/plugins).
-Source: "deploy\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\deploy\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\StickCore"; Filename: "{app}\StickCore.exe"
