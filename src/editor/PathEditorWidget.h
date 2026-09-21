@@ -45,6 +45,9 @@ public:
 
     void translatePaths(double dxMm, double dyMm);
     void centerPaths();
+    bool pathsBounds(double& minX, double& minY, double& maxX, double& maxY) const;
+    void scalePaths(double factor, const QPointF& center);
+    void fitPathsToHoop(double marginMm = 5.0);
 
     // Stitches API
     void setSequence(const StitchSequence& seq);
@@ -76,6 +79,7 @@ signals:
     void designMoved(double dx, double dy);
     void canvasModeChanged(CanvasMode mode);
     void hoopSelected(HoopType type);
+    void fitToHoopRequested();
 
 private:
     void setupUi();
@@ -89,6 +93,7 @@ private:
     QToolButton* m_btnJumps    = nullptr;
     QToolButton* m_btnHoop     = nullptr;
     QComboBox*   m_hoopCombo   = nullptr;
+    QToolButton* m_btnFitHoop  = nullptr;
     QToolButton* m_btnFit      = nullptr;
     QToolButton* m_btnZoomIn   = nullptr;
     QToolButton* m_btnZoomOut  = nullptr;

@@ -333,7 +333,7 @@
       <span class="toc-page-num">Kapitel 3</span>
     </li>
     <li class="toc-item">
-      <span><b>4. Janome Stickrahmen, Überlauf-Überwachung & Verschieben</b></span>
+      <span><b>4. Janome Stickrahmen, Überlauf-Überwachung, Skalierung & Einpassen</b></span>
       <span class="toc-page-num">Kapitel 4</span>
     </li>
     <li class="toc-item">
@@ -527,7 +527,7 @@
 <div class="chapter">
   <div class="chapter-header">
     <div class="chapter-num">04</div>
-    <h1 class="chapter-title">Janome Stickrahmen, Überlauf-Überwachung & Verschieben</h1>
+    <h1 class="chapter-title">Janome Stickrahmen, Überlauf-Überwachung, Objekt-Skalierung & Rahmen-Einpassen</h1>
   </div>
 
   <p>
@@ -629,9 +629,32 @@
   <h3>Digitizer Jr Transformationen:</h3>
   <p>
     Im Menü <b>Bearbeiten</b> oder über die Schnellzugriffstasten:
-    <br>• <b>Horizontal spiegeln</b> (<kbd>Strg</kbd> + <kbd>H</kbd>) & <b>Vertikal spiegeln</b> (<kbd>Strg</kbd> + <kbd>V</kbd>).
-    <br>• <b>90° Drehen</b> im Uhrzeigersinn (<kbd>Strg</kbd> + <kbd>R</kbd>) oder gegen den Uhrzeigersinn (<kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd>).
-    <br>• <b>Freie Rotation:</b> Beliebiger Winkel von -180° bis +180° mit automatischer Neuberechnung der Bounding-Box.
+    <br>• <b>Horizontal spiegeln</b> (<kbd>F7</kbd>) & <b>Vertikal spiegeln</b> (<kbd>F8</kbd>).
+    <br>• <b>90° Drehen</b> im Uhrzeigersinn (<kbd>F9</kbd>) oder gegen den Uhrzeigersinn (<kbd>Shift</kbd> + <kbd>F9</kbd>).
+    <br>• <b>Freie Rotation:</b> Beliebiger Winkel von -180° bis +180° mit automatischer Neuberechnung der Bounding-Box (<kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd>).
+  </p>
+
+  <h3>📐 Parametrische Objekt-Skalierung, Rahmen-Einpassen & automatische Stichneuberechnung:</h3>
+  <p>
+    Ein häufiges Problem einfacher Stickprogramme: Wird ein Motiv vergrößert oder verkleinert, werden lediglich die Koordinaten multipliziert. Die Folge: Beim Vergrößern entstehen unschöne Lücken und lose Fäden (Floats), beim Verkleinern stauchen sich die Stiche so stark zusammen, dass die Nadel abbricht oder der Stoff perforiert wird.
+  </p>
+  <div class="callout callout-info">
+    <b>Die StickCore-Architektur: Echte dynamische Neuberechnung!</b>
+    <br>• <b>Vektor-Objekte & Pfade (2D-Editor):</b> Werden die Pfadobjekte skaliert oder eingepasst, werden die Bézier-Konturen exakt transformiert und der Stichgenerator (Tatami- oder Satinstich) generiert das gesamte Muster <b>von Grund auf neu</b>. Die eingestellte Stichdichte (z.&nbsp;B. 0,40&nbsp;mm Reihenabstand), der Zugausgleich und die Unterlegstiche bleiben 100% millimetergenau erhalten!
+    <br>• <b>Fertige Stickmuster (JEF/DST/Motive):</b> Verfügt ein geladenes Motiv über keine Vektorkonturen, aktiviert StickCore den <b>Dichte-Resampling-Filter</b>: Zu lange Stiche (&gt;&nbsp;4,0&nbsp;mm) werden automatisch in sauber getaktete Steppstiche unterteilt (Subdivision), während gefährliche Mikrostiche (&lt;&nbsp;0,35&nbsp;mm) eliminiert werden.
+  </div>
+
+  <h4>1-Klick „📐 Einpassen & neu berechnen“ (<kbd>Strg</kbd> + <kbd>Umschalt</kbd> + <kbd>F</kbd>):</h4>
+  <p>
+    Mit einem einzigen Klick auf das neue Werkzeugsymbol <b>„📐 Einpassen“</b> (in der 2D-Toolbar, im Menü <i>Bearbeiten</i>, in der Hauptwerkzeugleiste oder direkt im rechten Bedienfeld unter dem Rahmen-Wähler) skaliert StickCore das Motiv proportional so ein, dass es das gewählte Stickfeld maximal ausfüllt – unter Einhaltung eines 5&nbsp;mm Sicherheitsabstands zum Rahmenrand. Bei Rundrahmen (z.&nbsp;B. Janome Hoop C Freiarm Ø 50&nbsp;mm) berechnet StickCore automatisch die Raumdiagonale, sodass keine Ecken überstehen.
+  </p>
+
+  <h4>Komfortabler Skalierungs-Dialog (<kbd>Strg</kbd> + <kbd>R</kbd>):</h4>
+  <p>
+    Über <i>Bearbeiten → Größe ändern & neu berechnen…</i> öffnen Sie das Dialogfenster für millimetergenaue Maßvorgaben:
+    <br>• <b>Breite & Höhe in Millimetern:</b> Direkte Eingabe mit gekoppeltem Seitenverhältnis (Proportional-Sperre).
+    <br>• <b>Prozentuale Skalierung:</b> Stufenlose Vergrößerung / Verkleinerung von 10% bis 500%.
+    <br>• <b>Rahmen-Presets:</b> Schnelltasten für <code>[95% Rahmen]</code>, <code>[90% Rahmen]</code>, <code>[80% Rahmen]</code> und <code>[100% Reset]</code> passen das Motiv blitzschnell an gängige Produktionsgrößen an.
   </p>
 </div>
 

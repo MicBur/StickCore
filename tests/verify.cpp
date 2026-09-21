@@ -1724,6 +1724,107 @@ int main(int argc, char** argv)
         CHECK(jefRes.ok, "florentine sequence exported cleanly to JEF");
     }
 
+    std::printf("== Parametric Object Scaling, Density Resampling & Fit to Hoop ==\n");
+    {
+        // 1. Test StitchSequence::scaled() upscale with long-stitch subdivision
+        StitchSequence seq;
+        seq.palette.emplace_back(QColor(255, 0, 0), "Rot", 101);
+        seq.stitches.emplace_back(0.0, 0.0, SF_Jump, 0);
+        seq.stitches.emplace_back(0.0, 0.0, SF_Normal, 0);
+        seq.stitches.emplace_back(3.0, 0.0, SF_Normal, 0);
+        seq.stitches.emplace_back(6.0, 0.0, SF_Normal, 0);
+        seq.stitches.emplace_back(6.0, 0.0, SF_End, 0);
+
+        // Scale by 2.0 -> segment length becomes 6.0 mm. With maxStitchMm=3.5, it must be subdivided!
+        StitchSequence upscaled = seq.scaled(2.0, QPointF(0.0, 0.0), 3.5, 0.35);
+        CHECK(upscaled.palette.size() == 1, "scaled preserves palette");
+        CHECK(upscaled.stitches.back().is(SF_End), "scaled preserves SF_End marker");
+
+        double maxStitchLen = 0.0;
+        for (size_t i = 1; i < upscaled.stitches.size(); ++i) {
+            if (upscaled.stitches[i].flags & (SF_Jump | SF_End)) continue;
+            double dx = upscaled.stitches[i].x - upscaled.stitches[i-1].x;
+            double dy = upscaled.stitches[i].y - upscaled.stitches[i-1].y;
+            maxStitchLen = std::max(maxStitchLen, std::hypot(dx, dy));
+        }
+        CHECK(maxStitchLen <= 3.501, "upscale subdivides stitches so none exceeds maxStitchMm (3.5mm)");
+        CHECK(upscaled.size() > seq.size(), "subdivision created additional needle points to prevent thread float");
+
+        // 2. Test StitchSequence::scaled() downscale with micro-stitch filtering
+        StitchSequence denseSeq;
+        denseSeq.palette.emplace_back(QColor(0, 128, 0), "Gruen", 102);
+        denseSeq.stitches.emplace_back(0.0, 0.0, SF_Jump, 0);
+        for (int i = 0; i <= 10; ++i) {
+            denseSeq.stitches.emplace_back(i * 0.40, 0.0, SF_Normal, 0);
+        }
+        denseSeq.stitches.back().flags |= SF_End;
+
+        // Scale down by 0.5 -> segment length becomes 0.20 mm (< minStitchMm 0.35 mm). Micro-stitches should be filtered!
+        StitchSequence downscaled = denseSeq.scaled(0.5, QPointF(0.0, 0.0), 4.0, 0.35);
+        CHECK(downscaled.size() < denseSeq.size(), "downscale filters out micro-stitches < 0.35mm to protect needle");
+
+        // 3. Test Bézier EditPath scaling & bounding calculation
+        EditPath ep;
+        ep.nodes.push_back(BezierNode(QPointF(-20.0, -10.0)));
+        ep.nodes.push_back(BezierNode(QPointF(20.0, -10.0)));
+        ep.nodes.push_back(BezierNode(QPointF(20.0, 10.0)));
+        ep.nodes.push_back(BezierNode(QPointF(-20.0, 10.0)));
+        ep.closed = true;
+
+        // Original bounds: 40 x 20 mm, center (0, 0)
+        double minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+        for (const auto& nd : ep.nodes) {
+            minX = std::min(minX, nd.pos.x());
+            maxX = std::max(maxX, nd.pos.x());
+            minY = std::min(minY, nd.pos.y());
+            maxY = std::max(maxY, nd.pos.y());
+        }
+        CHECK(std::abs((maxX - minX) - 40.0) < 1e-4, "path initial width is 40mm");
+        CHECK(std::abs((maxY - minY) - 20.0) < 1e-4, "path initial height is 20mm");
+
+        // Scale paths around center (0, 0) by factor 2.5
+        const double scaleF = 2.5;
+        for (auto& nd : ep.nodes) {
+            nd.pos *= scaleF;
+            nd.ctrlIn *= scaleF;
+            nd.ctrlOut *= scaleF;
+        }
+        minX = 1e9; minY = 1e9; maxX = -1e9; maxY = -1e9;
+        for (const auto& nd : ep.nodes) {
+            minX = std::min(minX, nd.pos.x());
+            maxX = std::max(maxX, nd.pos.x());
+            minY = std::min(minY, nd.pos.y());
+            maxY = std::max(maxY, nd.pos.y());
+        }
+        CHECK(std::abs((maxX - minX) - 100.0) < 1e-4, "scaled path width is 100mm");
+        CHECK(std::abs((maxY - minY) - 50.0) < 1e-4, "scaled path height is 50mm");
+
+        // 4. Test Fit-to-Hoop logic for standard Hoop B (140 x 200 mm, 5mm margin)
+        const double hoopW = 140.0, hoopH = 200.0, margin = 5.0;
+        const double usableW = hoopW - 2.0 * margin; // 130mm
+        const double usableH = hoopH - 2.0 * margin; // 190mm
+        const double curW = maxX - minX;             // 100mm
+        const double curH = maxY - minY;             // 50mm
+        const double fitFactor = std::min(usableW / curW, usableH / curH); // min(130/100, 190/50) = 1.30
+        CHECK(std::abs(fitFactor - 1.30) < 1e-4, "fit to Hoop B calculates exact 1.30x factor (130mm width)");
+        const double fittedW = curW * fitFactor;
+        const double fittedH = curH * fitFactor;
+        CHECK(fittedW <= usableW + 1e-4 && fittedH <= usableH + 1e-4, "fitted geometry stays strictly inside hoop safety margin");
+
+        // 5. Test Fit-to-Hoop logic for circular Hoop C (50 x 50 mm, target diameter 40mm)
+        const double targetDiag = 50.0 - 2.0 * margin; // 40mm
+        const double diag = std::hypot(fittedW, fittedH);
+        const double circFitFactor = targetDiag / diag;
+        CHECK(circFitFactor < 1.0, "large design is shrunk to fit circular Hoop C");
+        const double inCircDiag = diag * circFitFactor;
+        CHECK(std::abs(inCircDiag - 40.0) < 1e-4, "design diagonal matches 40mm circular boundary exactly");
+
+        // 6. Test JEF Export of scaled stitch sequence
+        const QString scaledJef = QDir::tempPath() + QStringLiteral("/_test_scaled.jef");
+        auto sres = JefCodec::exportToFile(scaledJef, upscaled, HoopType::HoopB_140x200);
+        CHECK(sres.ok, "resampled scaled stitches export cleanly to JEF");
+    }
+
     std::printf("== Real reference round-trip ==\n");
     const char* ref = (argc > 1 && argv[1][0] != '-') ? argv[1] : nullptr;
     if (ref) {

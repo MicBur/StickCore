@@ -109,6 +109,63 @@ public:
         }
     }
 
+    bool pathsBounds(double& minX, double& minY, double& maxX, double& maxY) const
+    {
+        if (m_paths.isEmpty()) return false;
+        minX = 1e9; maxX = -1e9; minY = 1e9; maxY = -1e9;
+        int count = 0;
+        for (const auto& p : m_paths) {
+            for (const auto& nd : p.nodes) {
+                minX = std::min(minX, nd.pos.x());
+                maxX = std::max(maxX, nd.pos.x());
+                minY = std::min(minY, nd.pos.y());
+                maxY = std::max(maxY, nd.pos.y());
+                ++count;
+            }
+        }
+        return count > 0;
+    }
+
+    void scalePaths(double factor, const QPointF& center)
+    {
+        if (factor <= 1e-6) return;
+        for (auto& p : m_paths) {
+            for (auto& nd : p.nodes) {
+                nd.pos = center + (nd.pos - center) * factor;
+                nd.ctrlIn = center + (nd.ctrlIn - center) * factor;
+                nd.ctrlOut = center + (nd.ctrlOut - center) * factor;
+            }
+        }
+        emit geometryChanged();
+        update();
+    }
+
+    void fitPathsToHoop(double marginMm = 5.0)
+    {
+        double minX, minY, maxX, maxY;
+        if (!pathsBounds(minX, minY, maxX, maxY)) return;
+        const double w = maxX - minX;
+        const double h = maxY - minY;
+        if (w <= 1e-3 || h <= 1e-3) return;
+
+        if (m_hoopType == HoopType::HoopC_50x50) {
+            const double diag = std::hypot(w, h);
+            const double targetDiag = std::max(10.0, 50.0 - 2.0 * marginMm);
+            const double factor = targetDiag / diag;
+            const QPointF center(0.5 * (minX + maxX), 0.5 * (minY + maxY));
+            scalePaths(factor, center);
+            centerPaths();
+            return;
+        }
+
+        const double usableW = std::max(10.0, m_hoopW - 2.0 * marginMm);
+        const double usableH = std::max(10.0, m_hoopH - 2.0 * marginMm);
+        const double factor = std::min(usableW / w, usableH / h);
+        const QPointF center(0.5 * (minX + maxX), 0.5 * (minY + maxY));
+        scalePaths(factor, center);
+        centerPaths();
+    }
+
     // --- Stitches API ---
     void setSequence(const StitchSequence& seq)
     {
@@ -872,6 +929,13 @@ void PathEditorWidget::setupUi()
     tbLay->addWidget(m_btnHoop);
     tbLay->addWidget(m_hoopCombo);
 
+    m_btnFitHoop = new QToolButton(tb);
+    m_btnFitHoop->setText(QStringLiteral("📐 Einpassen"));
+    m_btnFitHoop->setStyleSheet(QStringLiteral("QToolButton { color:#38bdf8; font-weight:bold; }"));
+    m_btnFitHoop->setToolTip(QStringLiteral("Objekt / Pfade proportional an den gewählten Stickrahmen anpassen & Stiche neu berechnen"));
+    connect(m_btnFitHoop, &QToolButton::clicked, this, &PathEditorWidget::fitToHoopRequested);
+    tbLay->addWidget(m_btnFitHoop);
+
     // Separator line
     auto* sep2 = new QFrame(tb);
     sep2->setFrameShape(QFrame::VLine);
@@ -948,6 +1012,18 @@ const EditPath& PathEditorWidget::path(int i) const { return m_canvas->path(i); 
 QVector<EditPath> PathEditorWidget::paths() const { return m_canvas->paths(); }
 void PathEditorWidget::translatePaths(double dx, double dy) { m_canvas->translatePaths(dx, dy); }
 void PathEditorWidget::centerPaths() { m_canvas->centerPaths(); }
+bool PathEditorWidget::pathsBounds(double& minX, double& minY, double& maxX, double& maxY) const
+{
+    return m_canvas->pathsBounds(minX, minY, maxX, maxY);
+}
+void PathEditorWidget::scalePaths(double factor, const QPointF& center)
+{
+    m_canvas->scalePaths(factor, center);
+}
+void PathEditorWidget::fitPathsToHoop(double marginMm)
+{
+    m_canvas->fitPathsToHoop(marginMm);
+}
 
 void PathEditorWidget::setSequence(const StitchSequence& seq)
 {

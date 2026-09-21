@@ -11,9 +11,11 @@
 #include <QColor>
 #include <QMetaType>
 #include <QRectF>
+#include <QPointF>
 #include <QString>
 #include <QVector>
 #include <cmath>
+#include <algorithm>
 #include <vector>
 
 namespace stick {
@@ -118,6 +120,58 @@ struct StitchSequence {
         double x0 = 0, y0 = 0, x1 = 0, y1 = 0;
         if (!bounds(x0, y0, x1, y1)) return QRectF();
         return QRectF(x0, y0, x1 - x0, y1 - y0);
+    }
+
+    /// Scales all stitches around a center point with stitch-density resampling:
+    /// Subdivides segments that stretch beyond maxStitchMm, and filters micro-stitches < minStitchMm.
+    StitchSequence scaled(double factor, const QPointF& center, double maxStitchMm = 4.0, double minStitchMm = 0.35) const
+    {
+        StitchSequence out;
+        out.palette = palette;
+        if (stitches.empty() || factor <= 1e-6) return out;
+
+        out.stitches.reserve(stitches.size());
+        QPointF prevPt;
+        bool hasPrev = false;
+
+        for (const auto& s : stitches) {
+            const double newX = center.x() + (s.x - center.x()) * factor;
+            const double newY = center.y() + (s.y - center.y()) * factor;
+            const QPointF curPt(newX, newY);
+
+            if ((s.flags & (SF_Jump | SF_ColorChange | SF_Stop | SF_End)) != 0u || !hasPrev) {
+                out.stitches.emplace_back(newX, newY, s.flags, s.colorIdx);
+                prevPt = curPt;
+                hasPrev = true;
+                continue;
+            }
+
+            const double dx = curPt.x() - prevPt.x();
+            const double dy = curPt.y() - prevPt.y();
+            const double dist = std::hypot(dx, dy);
+
+            // Filter out redundant micro-stitches when scaled down heavily
+            if (dist < minStitchMm && !(s.flags & (SF_ColorChange | SF_Stop | SF_End))) {
+                continue;
+            }
+
+            // Subdivide long stitch segments when scaled up significantly
+            if (dist > maxStitchMm && maxStitchMm > 0.5) {
+                const int steps = std::max(1, static_cast<int>(std::ceil(dist / maxStitchMm)));
+                for (int step = 1; step < steps; ++step) {
+                    const double t = static_cast<double>(step) / steps;
+                    out.stitches.emplace_back(prevPt.x() + t * dx, prevPt.y() + t * dy, SF_Normal, s.colorIdx);
+                }
+            }
+
+            out.stitches.emplace_back(newX, newY, s.flags, s.colorIdx);
+            prevPt = curPt;
+        }
+
+        if (!out.stitches.empty() && !out.stitches.back().is(SF_End)) {
+            out.stitches.back().flags |= SF_End;
+        }
+        return out;
     }
 };
 

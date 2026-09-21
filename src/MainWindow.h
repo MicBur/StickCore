@@ -49,6 +49,7 @@ private slots:
     void makeApplique();
     void digitizeImage();
     void resizeDesign();
+    void fitDesignToHoop();
     void placeDesign();
     void exportSizeVariants();
     void phoneUpload();

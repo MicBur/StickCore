@@ -223,6 +223,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         updateInfoPanel();
     });
     connect(m_editor, &PathEditorWidget::hoopSelected, this, &MainWindow::selectHoop);
+    connect(m_editor, &PathEditorWidget::fitToHoopRequested, this, &MainWindow::fitDesignToHoop);
 
     QWidget* centerView = buildCenterView();
     QWidget* panel = buildInfoPanel();
@@ -252,6 +253,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     tb->addAction(QStringLiteral("Neuer Pfad"), m_editor, &PathEditorWidget::newPath);
     tb->addAction(QStringLiteral("Löschen"),    m_editor, &PathEditorWidget::clearAll);
     tb->addAction(QStringLiteral("⚡ Berechnen ▶"), this, &MainWindow::generate);
+    tb->addAction(QStringLiteral("📐 Einpassen"),  this, &MainWindow::fitDesignToHoop);
     tb->addSeparator();
 
     auto* moveGroup = new QActionGroup(this);
@@ -372,7 +374,8 @@ void MainWindow::setupMenus()
 
     // --- Bearbeiten ---
     QMenu* editMenu = menuBar()->addMenu(QStringLiteral("&Bearbeiten"));
-    editMenu->addAction(QStringLiteral("&Größe ändern…"), this, &MainWindow::resizeDesign, QKeySequence(Qt::CTRL | Qt::Key_R));
+    editMenu->addAction(QStringLiteral("📐 An aktuellen Rahmen &einpassen & neu berechnen"), this, &MainWindow::fitDesignToHoop, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
+    editMenu->addAction(QStringLiteral("&Größe ändern & neu berechnen…"), this, &MainWindow::resizeDesign, QKeySequence(Qt::CTRL | Qt::Key_R));
     editMenu->addAction(QStringLiteral("Im &Rahmen platzieren…"), this, &MainWindow::placeDesign);
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("↔ Horizontal &spiegeln"), this, &MainWindow::mirrorHorizontal, QKeySequence(Qt::Key_F7));
@@ -940,6 +943,11 @@ QWidget* MainWindow::buildInfoPanel()
     }
     connect(m_hoopCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::onHoopComboChanged);
     outer->addWidget(m_hoopCombo);
+
+    auto* btnFitHoop = new QPushButton(QStringLiteral("📐 An Rahmen anpassen & neu berechnen"));
+    btnFitHoop->setToolTip(QStringLiteral("Skaliert das Motiv optimal in den gewählten Rahmen und berechnet alle Stiche mit exakter Dichte neu (Strg+Umschalt+F)"));
+    connect(btnFitHoop, &QPushButton::clicked, this, &MainWindow::fitDesignToHoop);
+    outer->addWidget(btnFitHoop);
 
     // --- Position im Rahmen ---
     outer->addWidget(sectionTitle(QStringLiteral("Position im Rahmen")));
@@ -1624,27 +1632,238 @@ void MainWindow::makeMonogram()
 }
 
 // ---------------------------------------------------------------------------
-void MainWindow::resizeDesign()
+void MainWindow::fitDesignToHoop()
 {
-    if (m_current.empty()) {
-        QMessageBox::information(this, windowTitle(), QStringLiteral("Zuerst ein Motiv erzeugen."));
+    const bool hasPaths = (m_editor && m_editor->pathCount() > 0);
+    const bool hasStitches = !m_current.empty();
+
+    if (!hasPaths && !hasStitches) {
+        QMessageBox::information(this, windowTitle(),
+            QStringLiteral("Kein Motiv oder Vektorpfad vorhanden – bitte zuerst ein Motiv laden oder zeichnen."));
         return;
     }
-    double x0, y0, x1, y1; m_current.bounds(x0, y0, x1, y1);
-    const double curW = x1 - x0;
-    bool ok = false;
-    const double target = QInputDialog::getDouble(this, QStringLiteral("Größe ändern"),
-        QStringLiteral("Neue Breite (mm):"), curW, 5.0, 300.0, 1, &ok);
-    if (!ok || curW < 1e-6) return;
 
-    const double f = target / curW;
-    const double cx = 0.5 * (x0 + x1), cy = 0.5 * (y0 + y1);
-    for (Stitch& s : m_current.stitches) { s.x = cx + (s.x - cx) * f; s.y = cy + (s.y - cy) * f; }
+    const auto hoop = m_view->hoop();
+    const double hoopW = hoop.widthMm;
+    const double hoopH = hoop.heightMm;
+    const HoopType ht = m_editor ? m_editor->selectedHoop() : HoopType::HoopB_140x200;
+    const double marginMm = 5.0;
 
-    setCurrentSequence(m_current, QStringLiteral("Skaliert"));
+    if (hasPaths) {
+        // Recalculate directly from scaled vector paths
+        m_editor->fitPathsToHoop(marginMm);
+        generate();
+        statusBar()->showMessage(
+            QStringLiteral("Objekt-Vektoren an Rahmen %1 angepasst & Stiche (%2 Stiche) mit exakter Dichte neu berechnet.")
+                .arg(hoop.name).arg(m_current.realStitchCount()), 8000);
+        return;
+    }
+
+    // Otherwise resample existing stitches preserving density
+    double minX, minY, maxX, maxY;
+    if (!m_current.bounds(minX, minY, maxX, maxY)) return;
+    const double curW = maxX - minX;
+    const double curH = maxY - minY;
+    if (curW <= 1e-3 || curH <= 1e-3) return;
+
+    double factor = 1.0;
+    if (ht == HoopType::HoopC_50x50) {
+        const double diag = std::hypot(curW, curH);
+        const double targetDiag = std::max(10.0, 50.0 - 2.0 * marginMm);
+        factor = targetDiag / diag;
+    } else {
+        const double usableW = std::max(10.0, hoopW - 2.0 * marginMm);
+        const double usableH = std::max(10.0, hoopH - 2.0 * marginMm);
+        factor = std::min(usableW / curW, usableH / curH);
+    }
+
+    const QPointF center(0.5 * (minX + maxX), 0.5 * (minY + maxY));
+    const double maxStitch = m_maxStitch ? m_maxStitch->value() : 4.0;
+    m_current = m_current.scaled(factor, center, maxStitch, 0.35);
+
+    // Center design in hoop
+    double nx0, ny0, nx1, ny1;
+    if (m_current.bounds(nx0, ny0, nx1, ny1)) {
+        const double shiftX = -0.5 * (nx0 + nx1);
+        const double shiftY = -0.5 * (ny0 + ny1);
+        for (Stitch& s : m_current.stitches) {
+            s.x += shiftX;
+            s.y += shiftY;
+        }
+    }
+
+    setCurrentSequence(m_current, QStringLiteral("Eingepasst"));
+    m_editor->setSequence(m_current);
+    m_view->setSequence(m_current);
+    m_view->showAll();
+    updateInfoPanel();
     statusBar()->showMessage(
-        QStringLiteral("Auf %1 mm Breite skaliert. Tipp: bei großen Änderungen das Motiv neu erzeugen (Dichte).")
-            .arg(target, 0, 'f', 1), 8000);
+        QStringLiteral("Motiv auf %1 × %2 mm im Rahmen %3 eingepasst (%4 Stiche mit Dichte-Erhalt neu berechnet).")
+            .arg(curW * factor, 0, 'f', 1).arg(curH * factor, 0, 'f', 1)
+            .arg(hoop.name).arg(m_current.realStitchCount()), 8000);
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::resizeDesign()
+{
+    const bool hasPaths = (m_editor && m_editor->pathCount() > 0);
+    const bool hasStitches = !m_current.empty();
+
+    if (!hasPaths && !hasStitches) {
+        QMessageBox::information(this, windowTitle(), QStringLiteral("Zuerst ein Motiv erzeugen oder laden."));
+        return;
+    }
+
+    double minX = 0, minY = 0, maxX = 0, maxY = 0;
+    if (hasPaths) {
+        m_editor->pathsBounds(minX, minY, maxX, maxY);
+    } else {
+        m_current.bounds(minX, minY, maxX, maxY);
+    }
+    const double origW = std::max(1.0, maxX - minX);
+    const double origH = std::max(1.0, maxY - minY);
+    const QPointF center(0.5 * (minX + maxX), 0.5 * (minY + maxY));
+
+    const auto hoop = m_view->hoop();
+    const double hoopW = hoop.widthMm;
+    const double hoopH = hoop.heightMm;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("Motiv skalieren & Stiche neu berechnen"));
+    dlg.setMinimumWidth(400);
+
+    auto* lay = new QVBoxLayout(&dlg);
+    lay->addWidget(new QLabel(QStringLiteral("<b>Größe anpassen & Stichmuster neu berechnen</b>"), &dlg));
+    auto* subLbl = new QLabel(QStringLiteral("Aktuelle Abmessung: %1 × %2 mm (Rahmen: %3)")
+        .arg(origW, 0, 'f', 1).arg(origH, 0, 'f', 1).arg(hoop.name), &dlg);
+    subLbl->setStyleSheet(QStringLiteral("color: #2dd4bf; font-weight: 600; font-size: 12px;"));
+    lay->addWidget(subLbl);
+
+    auto* form = new QFormLayout;
+    auto* widthSpin = new QDoubleSpinBox(&dlg);
+    widthSpin->setRange(5.0, 400.0);
+    widthSpin->setSingleStep(1.0);
+    widthSpin->setValue(origW);
+    widthSpin->setSuffix(QStringLiteral(" mm"));
+
+    auto* heightSpin = new QDoubleSpinBox(&dlg);
+    heightSpin->setRange(5.0, 400.0);
+    heightSpin->setSingleStep(1.0);
+    heightSpin->setValue(origH);
+    heightSpin->setSuffix(QStringLiteral(" mm"));
+
+    auto* percentSpin = new QDoubleSpinBox(&dlg);
+    percentSpin->setRange(10.0, 500.0);
+    percentSpin->setSingleStep(5.0);
+    percentSpin->setValue(100.0);
+    percentSpin->setSuffix(QStringLiteral(" %"));
+
+    auto* keepAspect = new QCheckBox(QStringLiteral("Seitenverhältnis sperren (proportional)"), &dlg);
+    keepAspect->setChecked(true);
+
+    form->addRow(QStringLiteral("Breite:"), widthSpin);
+    form->addRow(QStringLiteral("Höhe:"), heightSpin);
+    form->addRow(QStringLiteral("Skalierung:"), percentSpin);
+    lay->addLayout(form);
+    lay->addWidget(keepAspect);
+
+    // Presets
+    auto* presetBox = new QHBoxLayout;
+    auto* btnPreset95 = new QPushButton(QStringLiteral("95% Rahmen"), &dlg);
+    auto* btnPreset90 = new QPushButton(QStringLiteral("90% Rahmen"), &dlg);
+    auto* btnPreset80 = new QPushButton(QStringLiteral("80% Rahmen"), &dlg);
+    auto* btnPreset100 = new QPushButton(QStringLiteral("100% Reset"), &dlg);
+    presetBox->addWidget(btnPreset95);
+    presetBox->addWidget(btnPreset90);
+    presetBox->addWidget(btnPreset80);
+    presetBox->addWidget(btnPreset100);
+    lay->addLayout(presetBox);
+
+    auto* recalcInfo = new QLabel(hasPaths 
+        ? QStringLiteral("ℹ Vektorgeometrie aktiv: Stiche werden komplett aus den Konturen mit exakter Dichte neu berechnet.")
+        : QStringLiteral("ℹ Stichmuster aktiv: Stiche werden resampled, überlange Stiche aufgeteilt & Mikrostiche gefiltert."), &dlg);
+    recalcInfo->setWordWrap(true);
+    recalcInfo->setStyleSheet(QStringLiteral("color: #94a3b8; font-size: 11px; margin-top: 4px;"));
+    lay->addWidget(recalcInfo);
+
+    bool updating = false;
+    auto applyPercent = [&](double pct) {
+        if (updating) return;
+        updating = true;
+        const double factor = pct / 100.0;
+        widthSpin->setValue(origW * factor);
+        heightSpin->setValue(origH * factor);
+        percentSpin->setValue(pct);
+        updating = false;
+    };
+
+    connect(percentSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), &dlg, applyPercent);
+
+    connect(widthSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), &dlg, [&](double val) {
+        if (updating) return;
+        updating = true;
+        const double pct = (val / origW) * 100.0;
+        percentSpin->setValue(pct);
+        if (keepAspect->isChecked()) {
+            heightSpin->setValue(origH * (val / origW));
+        }
+        updating = false;
+    });
+
+    connect(heightSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), &dlg, [&](double val) {
+        if (updating) return;
+        updating = true;
+        const double pct = (val / origH) * 100.0;
+        percentSpin->setValue(pct);
+        if (keepAspect->isChecked()) {
+            widthSpin->setValue(origW * (val / origH));
+        }
+        updating = false;
+    });
+
+    auto fitPreset = [&](double targetFraction) {
+        const double maxW = (hoopW - 10.0) * targetFraction;
+        const double maxH = (hoopH - 10.0) * targetFraction;
+        const double f = std::min(maxW / origW, maxH / origH);
+        applyPercent(f * 100.0);
+    };
+
+    connect(btnPreset95, &QPushButton::clicked, &dlg, [&]{ fitPreset(0.95); });
+    connect(btnPreset90, &QPushButton::clicked, &dlg, [&]{ fitPreset(0.90); });
+    connect(btnPreset80, &QPushButton::clicked, &dlg, [&]{ fitPreset(0.80); });
+    connect(btnPreset100, &QPushButton::clicked, &dlg, [&]{ applyPercent(100.0); });
+
+    auto* btnBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    connect(btnBox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(btnBox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    lay->addWidget(btnBox);
+
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    const double targetW = widthSpin->value();
+    const double factor = targetW / origW;
+    if (std::abs(factor - 1.0) < 1e-4) return;
+
+    if (hasPaths) {
+        m_editor->scalePaths(factor, center);
+        generate();
+        statusBar()->showMessage(
+            QStringLiteral("Motiv auf %1 × %2 mm skaliert & Stiche (%3 Stiche) neu berechnet.")
+                .arg(targetW, 0, 'f', 1).arg(heightSpin->value(), 0, 'f', 1)
+                .arg(m_current.realStitchCount()), 8000);
+    } else {
+        const double maxStitch = m_maxStitch ? m_maxStitch->value() : 4.0;
+        m_current = m_current.scaled(factor, center, maxStitch, 0.35);
+        setCurrentSequence(m_current, QStringLiteral("Skaliert"));
+        m_editor->setSequence(m_current);
+        m_view->setSequence(m_current);
+        m_view->showAll();
+        updateInfoPanel();
+        statusBar()->showMessage(
+            QStringLiteral("Motiv auf %1 × %2 mm skaliert & Stiche mit Dichteerhalt resampled (%3 Stiche).")
+                .arg(targetW, 0, 'f', 1).arg(heightSpin->value(), 0, 'f', 1)
+                .arg(m_current.realStitchCount()), 8000);
+    }
 }
 
 // ---------------------------------------------------------------------------
