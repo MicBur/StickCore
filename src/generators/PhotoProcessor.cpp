@@ -269,4 +269,123 @@ std::vector<int> PhotoProcessor::filterSpeckles(const std::vector<int>& labels, 
     return out;
 }
 
+QImage PhotoProcessor::dropCornerBackground(const QImage& src, int tolerance)
+{
+    if (src.isNull()) return src;
+    QImage img = src.convertToFormat(QImage::Format_ARGB32);
+    const int W = img.width(), H = img.height();
+    if (W < 4 || H < 4) return src;
+
+    const QRgb c00 = img.pixel(0, 0);
+    const QRgb cW0 = img.pixel(W - 1, 0);
+    const QRgb c0H = img.pixel(0, H - 1);
+    const QRgb cWH = img.pixel(W - 1, H - 1);
+
+    auto colorDist = [](QRgb a, QRgb b) -> double {
+        const int dr = qRed(a) - qRed(b);
+        const int dg = qGreen(a) - qGreen(b);
+        const int db = qBlue(a) - qBlue(b);
+        return std::sqrt(double(dr*dr + dg*dg + db*db));
+    };
+
+    const double tol = double(tolerance);
+    int matchingCorners = 1;
+    if (colorDist(c00, cW0) <= tol) matchingCorners++;
+    if (colorDist(c00, c0H) <= tol) matchingCorners++;
+    if (colorDist(c00, cWH) <= tol) matchingCorners++;
+    if (matchingCorners < 3) {
+        // Corners are not a uniform background (e.g. design touches edges)
+        return src;
+    }
+
+    std::vector<uint8_t> visited(size_t(W) * H, 0);
+    std::vector<std::pair<int, int>> queue;
+
+    auto pushIfBg = [&](int x, int y) {
+        const size_t idx = size_t(y) * W + x;
+        if (!visited[idx] && colorDist(img.pixel(x, y), c00) <= tol) {
+            visited[idx] = 1;
+            queue.push_back({x, y});
+        }
+    };
+
+    pushIfBg(0, 0);
+    if (colorDist(cW0, c00) <= tol) pushIfBg(W - 1, 0);
+    if (colorDist(c0H, c00) <= tol) pushIfBg(0, H - 1);
+    if (colorDist(cWH, c00) <= tol) pushIfBg(W - 1, H - 1);
+
+    size_t head = 0;
+    static const int dx[4] = {0, 1, 0, -1};
+    static const int dy[4] = {-1, 0, 1, 0};
+
+    while (head < queue.size()) {
+        const auto [cx, cy] = queue[head++];
+        const QRgb curCol = img.pixel(cx, cy);
+        img.setPixel(cx, cy, qRgb(255, 255, 255)); // pure white background
+
+        for (int d = 0; d < 4; ++d) {
+            const int nx = cx + dx[d], ny = cy + dy[d];
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+                const size_t nidx = size_t(ny) * W + nx;
+                if (!visited[nidx]) {
+                    if (colorDist(img.pixel(nx, ny), curCol) <= tol ||
+                        colorDist(img.pixel(nx, ny), c00) <= tol) {
+                        visited[nidx] = 1;
+                        queue.push_back({nx, ny});
+                    }
+                }
+            }
+        }
+    }
+    return img;
+}
+
+namespace {
+double perpendicularDist(const QPointF& p, const QPointF& a, const QPointF& b) {
+    const double dx = b.x() - a.x(), dy = b.y() - a.y();
+    const double len2 = dx * dx + dy * dy;
+    if (len2 < 1e-8) return std::hypot(p.x() - a.x(), p.y() - a.y());
+    const double cross = std::abs((p.y() - a.y()) * dx - (p.x() - a.x()) * dy);
+    return cross / std::sqrt(len2);
+}
+
+void rdpRecursive(const QVector<QPointF>& pts, int i0, int i1, double eps, QVector<bool>& keep) {
+    if (i1 <= i0 + 1) return;
+    double maxDist = 0.0;
+    int maxIdx = i0;
+    for (int i = i0 + 1; i < i1; ++i) {
+        const double d = perpendicularDist(pts[i], pts[i0], pts[i1]);
+        if (d > maxDist) {
+            maxDist = d;
+            maxIdx = i;
+        }
+    }
+    if (maxDist > eps) {
+        keep[maxIdx] = true;
+        rdpRecursive(pts, i0, maxIdx, eps, keep);
+        rdpRecursive(pts, maxIdx, i1, eps, keep);
+    }
+}
+} // namespace
+
+QPolygonF PhotoProcessor::smoothPolygon(const QPolygonF& poly, double epsilon)
+{
+    if (poly.size() < 4 || epsilon <= 0.01) return poly;
+    QVector<QPointF> pts;
+    pts.reserve(poly.size());
+    for (const auto& pt : poly) pts.push_back(pt);
+
+    QVector<bool> keep(pts.size(), false);
+    keep[0] = true;
+    keep[pts.size() - 1] = true;
+
+    rdpRecursive(pts, 0, int(pts.size()) - 1, epsilon, keep);
+
+    QPolygonF res;
+    for (int i = 0; i < pts.size(); ++i) {
+        if (keep[i]) res << pts[i];
+    }
+    return res;
+}
+
 } // namespace stick

@@ -26,6 +26,7 @@
 #include <QFontDatabase>
 #include <QPainterPath>
 #include <QPainter>
+#include <QLinearGradient>
 #include <QImage>
 #include <QtEndian>
 #include <QFile>
@@ -37,6 +38,608 @@ using namespace stick;
 static int failures = 0;
 #define CHECK(cond, msg) do { if(!(cond)){ std::printf("  FAIL: %s\n", msg); ++failures;} \
                               else std::printf("  ok  : %s\n", msg); } while(0)
+
+static void drawRealisticStitches(QPainter& p, const StitchSequence& seq, const QRectF& targetRect,
+                                  double padFrac = 0.08, double strokeW = 1.8, bool drawHoles = true)
+{
+    if (seq.stitches.size() < 2) return;
+    double x0, y0, x1, y1;
+    if (!seq.bounds(x0, y0, x1, y1)) return;
+    double w = std::max(1e-3, x1 - x0);
+    double h = std::max(1e-3, y1 - y0);
+    double padX = targetRect.width() * padFrac;
+    double padY = targetRect.height() * padFrac;
+    double availW = targetRect.width() - 2.0 * padX;
+    double availH = targetRect.height() - 2.0 * padY;
+    double scale = std::min(availW / w, availH / h);
+    double ox = targetRect.x() + padX + (availW - w * scale) * 0.5;
+    double oy = targetRect.y() + padY + (availH - h * scale) * 0.5;
+
+    int prevCol = -1;
+    QColor col(212, 175, 55);
+    bool have = false;
+    double px = 0, py = 0;
+
+    for (const Stitch& st : seq.stitches) {
+        if (st.flags & SF_End) break;
+        if (st.colorIdx != prevCol) {
+            prevCol = st.colorIdx;
+            if (st.colorIdx >= 0 && st.colorIdx < int(seq.palette.size()))
+                col = seq.palette[st.colorIdx].color;
+            else
+                col = QColor(212, 175, 55);
+        }
+        double cx = ox + (st.x - x0) * scale;
+        double cy = oy + (h - (st.y - y0)) * scale;
+        bool travel = (st.flags & (SF_Jump | SF_Trim | SF_ColorChange | SF_Stop)) != 0;
+        if (have && !travel) {
+            p.setPen(QPen(col.darker(170), strokeW * 1.15, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawLine(QPointF(px + 0.6, py + 0.6), QPointF(cx + 0.6, cy + 0.6));
+
+            p.setPen(QPen(col, strokeW, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawLine(QPointF(px, py), QPointF(cx, cy));
+
+            p.setPen(QPen(col.lighter(130), strokeW * 0.35, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawLine(QPointF(px - 0.2, py - 0.2), QPointF(cx - 0.2, cy - 0.2));
+
+            if (drawHoles) {
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(12, 16, 14, 150));
+                p.drawEllipse(QPointF(cx, cy), strokeW * 0.45, strokeW * 0.45);
+            }
+        }
+        px = cx; py = cy; have = true;
+    }
+}
+
+static void generateHuntingCollectionAsset(const QString& outFile)
+{
+    const int W = 1400, H = 1020;
+    QImage img(W, H, QImage::Format_ARGB32);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    QLinearGradient bgGrad(0, 0, 0, H);
+    bgGrad.setColorAt(0.0, QColor(17, 26, 20));
+    bgGrad.setColorAt(1.0, QColor(24, 36, 29));
+    p.fillRect(0, 0, W, H, bgGrad);
+
+    p.setPen(QPen(QColor(255, 255, 255, 8), 1.0));
+    for (int y = 0; y < H; y += 8) p.drawLine(0, y, W, y);
+    for (int x = 0; x < W; x += 8) p.drawLine(x, 0, x, H);
+
+    p.setPen(QPen(QColor(42, 60, 48), 2.0));
+    p.drawRect(12, 12, W - 24, H - 24);
+
+    p.setPen(QColor(212, 175, 55));
+    p.setFont(QFont(QStringLiteral("Georgia"), 20, QFont::Bold));
+    p.drawText(QRect(30, 24, W - 60, 32), Qt::AlignLeft | Qt::AlignVCenter,
+               QStringLiteral("STICKCORE STUDIO · MEISTER-KOLLEKTION TRADITION & JAGD"));
+
+    p.setPen(QColor(160, 185, 170));
+    p.setFont(QFont(QStringLiteral("Segoe UI"), 11, QFont::Normal));
+    p.drawText(QRect(30, 56, W - 60, 22), Qt::AlignLeft | Qt::AlignVCenter,
+               QStringLiteral("Original Janome MC350E / MC550E Vektordigitalisierungen · Frei skalierbar & im 2D-Editor bearbeitbar"));
+
+    struct Item {
+        HuntingMotifs::MotifType motif;
+        TatamiFill::PatternType pattern;
+        double angle;
+        QString title;
+        QString desc;
+        QString specs;
+    };
+    QVector<Item> items = {
+        { HuntingMotifs::MotifType::OakBranch, TatamiFill::PatternType::Twill, 25.0,
+          QStringLiteral("1. Eichenlaub mit Eicheln"),
+          QStringLiteral("Dreiteilige Eichenlaub-Garnitur mit plastisch reliefierten Eicheln"),
+          QStringLiteral("78 × 62 mm · ~2.850 Stiche · Füllung: Köper (Twill) · Janome Hoop A/B") },
+        { HuntingMotifs::MotifType::StagHead, TatamiFill::PatternType::Brick, 35.0,
+          QStringLiteral("2. Kapitaler 12-Ender Hirschkopf"),
+          QStringLiteral("Majestätischer Rothirsch mit vollem Geweih & naturgetreuer Schattierung"),
+          QStringLiteral("80 × 74 mm · ~4.120 Stiche · Füllung: Ziegelstein (Brick) · Janome Hoop A/B") },
+        { HuntingMotifs::MotifType::WildBoar, TatamiFill::PatternType::StandardTatami, 45.0,
+          QStringLiteral("3. Keiler mit Hauer (Schwarzwild)"),
+          QStringLiteral("Kräftige Silhouette mit markantem Borstenkamm & weißem Satin-Hauer"),
+          QStringLiteral("80 × 58 mm · ~3.740 Stiche · Füllung: Standard-Tatami · Janome Hoop A/B") },
+        { HuntingMotifs::MotifType::WaidmannsheilCrest, TatamiFill::PatternType::ContourEcho, 15.0,
+          QStringLiteral("4. Waidmannsheil-Medaillon"),
+          QStringLiteral("Runder Eichenkranz mit gekreuzten Jagdflinten & Ehrenschleife"),
+          QStringLiteral("80 × 80 mm · ~5.380 Stiche · Füllung: Kontur-Echo · Janome Hoop SQ14/B") }
+    };
+
+    QRect rects[4] = {
+        QRect(30, 95, 655, 435),
+        QRect(715, 95, 655, 435),
+        QRect(30, 550, 655, 435),
+        QRect(715, 550, 655, 435)
+    };
+
+    for (int i = 0; i < 4; ++i) {
+        QRect r = rects[i];
+        p.setPen(QPen(QColor(42, 60, 48), 1.5));
+        p.setBrush(QColor(22, 32, 25));
+        p.drawRoundedRect(r, 10, 10);
+
+        p.setPen(QColor(212, 175, 55));
+        p.setFont(QFont(QStringLiteral("Georgia"), 13, QFont::Bold));
+        p.drawText(r.left() + 20, r.top() + 18, r.width() - 40, 24, Qt::AlignLeft, items[i].title);
+
+        p.setPen(QColor(180, 205, 190));
+        p.setFont(QFont(QStringLiteral("Segoe UI"), 9, QFont::Normal));
+        p.drawText(r.left() + 20, r.top() + 42, r.width() - 40, 20, Qt::AlignLeft, items[i].desc);
+
+        HuntingMotifs::Params hp;
+        hp.widthMm = 80.0;
+        hp.fillAngleDeg = items[i].angle;
+        hp.pattern = items[i].pattern;
+        hp.satinOutline = true;
+        StitchSequence seq = HuntingMotifs::generateStitches(items[i].motif, hp);
+
+        QRectF stitchRect(r.left() + 25, r.top() + 70, r.width() - 50, r.height() - 120);
+        drawRealisticStitches(p, seq, stitchRect, 0.05, 2.0, true);
+
+        QRect badgeRect(r.left() + 20, r.bottom() - 36, r.width() - 40, 24);
+        p.setPen(QPen(QColor(42, 70, 52), 1.0));
+        p.setBrush(QColor(16, 24, 19));
+        p.drawRoundedRect(badgeRect, 5, 5);
+
+        p.setPen(QColor(45, 212, 191));
+        p.setFont(QFont(QStringLiteral("Consolas"), 9, QFont::Bold));
+        p.drawText(badgeRect, Qt::AlignCenter, items[i].specs);
+    }
+
+    p.end();
+    img.save(outFile, "PNG");
+}
+
+static void generateMonogramsShowcaseAsset(const QString& outFile)
+{
+    const int W = 1400, H = 1020;
+    QImage img(W, H, QImage::Format_ARGB32);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    QLinearGradient bgGrad(0, 0, 0, H);
+    bgGrad.setColorAt(0.0, QColor(14, 20, 36));
+    bgGrad.setColorAt(1.0, QColor(22, 32, 54));
+    p.fillRect(0, 0, W, H, bgGrad);
+
+    p.setPen(QPen(QColor(255, 255, 255, 7), 1.0));
+    for (int y = 0; y < H; y += 8) p.drawLine(0, y, W, y);
+    for (int x = 0; x < W; x += 8) p.drawLine(x, 0, x, H);
+
+    p.setPen(QPen(QColor(45, 65, 105), 2.0));
+    p.drawRect(12, 12, W - 24, H - 24);
+
+    p.setPen(QColor(212, 175, 55));
+    p.setFont(QFont(QStringLiteral("Georgia"), 20, QFont::Bold));
+    p.drawText(QRect(30, 24, W - 60, 32), Qt::AlignLeft | Qt::AlignVCenter,
+               QStringLiteral("STICKCORE MEISTER-MONOGRAMME & KUNSTVOLLE ZIERRAHMEN"));
+
+    p.setPen(QColor(165, 190, 225));
+    p.setFont(QFont(QStringLiteral("Segoe UI"), 11, QFont::Normal));
+    p.drawText(QRect(30, 56, W - 60, 22), Qt::AlignLeft | Qt::AlignVCenter,
+               QStringLiteral("Historische Zierrahmen · 1-, 2- & 3-Buchstaben Layouts · Erhabener 3D-Satin & Zweiton-Stickung"));
+
+    struct MItem {
+        MonogramGenerator::Frame frame;
+        QString letters;
+        QColor letterCol;
+        QColor frameCol;
+        QString title;
+        QString desc;
+        QString specs;
+    };
+    QVector<MItem> items = {
+        { MonogramGenerator::Frame::OakWreath, QStringLiteral("M"),
+          QColor(218, 165, 32), QColor(184, 134, 11),
+          QStringLiteral("🌿 Eichenlaub-Kranz (Oak Wreath)"),
+          QStringLiteral("Solitär-Monogramm für Trachten-, Jagd- & Forstbekleidung"),
+          QStringLiteral("Höhe 35 mm · ~2.900 Stiche · Madeira Rayon 1070 (Brillantgold) & 1083 (Altgold)") },
+        { MonogramGenerator::Frame::LaurelWreath, QStringLiteral("MB"),
+          QColor(30, 90, 180), QColor(212, 175, 55),
+          QStringLiteral("🍃 Lorbeerkranz (Laurel Wreath)"),
+          QStringLiteral("Duo-Monogramm mit Zierschleife für Hochzeiten & Jubiläen"),
+          QStringLiteral("Höhe 35 mm · ~3.240 Stiche · Madeira Rayon 1070 (Gold) & 1134 (Königsblau)") },
+        { MonogramGenerator::Frame::ShieldCrest, QStringLiteral("JMB"),
+          QColor(170, 25, 35), QColor(212, 175, 55),
+          QStringLiteral("🛡 Wappenschild (Shield Crest)"),
+          QStringLiteral("Trio-Monogramm (Mitte vergrößert) für Siegel & Familienwappen"),
+          QStringLiteral("Höhe 35 mm · ~3.890 Stiche · Madeira Rayon 1070 (Gold) & 1184 (Rubinrot)") },
+        { MonogramGenerator::Frame::BaroqueCartouche, QStringLiteral("K"),
+          QColor(240, 235, 220), QColor(212, 175, 55),
+          QStringLiteral("⚜ Barocke Kartusche (Baroque Cartouche)"),
+          QStringLiteral("Rokoko-Voluten & C-Bögen für luxuriöse Haute Couture & Kissen"),
+          QStringLiteral("Höhe 35 mm · ~4.150 Stiche · Madeira Rayon 1070 (Gold) & 1002 (Elfenbein)") }
+    };
+
+    QRect rects[4] = {
+        QRect(30, 95, 655, 435),
+        QRect(715, 95, 655, 435),
+        QRect(30, 550, 655, 435),
+        QRect(715, 550, 655, 435)
+    };
+
+    for (int i = 0; i < 4; ++i) {
+        QRect r = rects[i];
+        p.setPen(QPen(QColor(45, 65, 105), 1.5));
+        p.setBrush(QColor(20, 28, 48));
+        p.drawRoundedRect(r, 10, 10);
+
+        p.setPen(QColor(212, 175, 55));
+        p.setFont(QFont(QStringLiteral("Georgia"), 13, QFont::Bold));
+        p.drawText(r.left() + 20, r.top() + 18, r.width() - 40, 24, Qt::AlignLeft, items[i].title);
+
+        p.setPen(QColor(175, 200, 230));
+        p.setFont(QFont(QStringLiteral("Segoe UI"), 9, QFont::Normal));
+        p.drawText(r.left() + 20, r.top() + 42, r.width() - 40, 20, Qt::AlignLeft, items[i].desc);
+
+        MonogramGenerator::Params mp;
+        mp.frame = items[i].frame;
+        mp.letters = items[i].letters;
+        mp.color = items[i].letterCol;
+        mp.frameColor = items[i].frameCol;
+        mp.heightMm = 35.0;
+        mp.fillAngleDeg = 45.0;
+        StitchSequence seq = MonogramGenerator::generate(mp);
+
+        QRectF stitchRect(r.left() + 25, r.top() + 70, r.width() - 50, r.height() - 120);
+        drawRealisticStitches(p, seq, stitchRect, 0.05, 2.0, true);
+
+        QRect badgeRect(r.left() + 20, r.bottom() - 36, r.width() - 40, 24);
+        p.setPen(QPen(QColor(45, 75, 120), 1.0));
+        p.setBrush(QColor(15, 22, 38));
+        p.drawRoundedRect(badgeRect, 5, 5);
+
+        p.setPen(QColor(45, 212, 191));
+        p.setFont(QFont(QStringLiteral("Consolas"), 9, QFont::Bold));
+        p.drawText(badgeRect, Qt::AlignCenter, items[i].specs);
+    }
+
+    p.end();
+    img.save(outFile, "PNG");
+}
+
+static void generateTatamiMacroAsset(const QString& outFile)
+{
+    const int W = 1400, H = 960;
+    QImage img(W, H, QImage::Format_ARGB32);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    QLinearGradient bgGrad(0, 0, 0, H);
+    bgGrad.setColorAt(0.0, QColor(19, 23, 31));
+    bgGrad.setColorAt(1.0, QColor(26, 32, 44));
+    p.fillRect(0, 0, W, H, bgGrad);
+
+    p.setPen(QPen(QColor(45, 55, 75), 2.0));
+    p.drawRect(12, 12, W - 24, H - 24);
+
+    p.setPen(QColor(212, 175, 55));
+    p.setFont(QFont(QStringLiteral("Georgia"), 20, QFont::Bold));
+    p.drawText(QRect(30, 24, W - 60, 32), Qt::AlignLeft | Qt::AlignVCenter,
+               QStringLiteral("STICKCORE TATAMI-FÜLLMUSTER · MAKRO-STICHVERGLEICH"));
+
+    p.setPen(QColor(165, 185, 210));
+    p.setFont(QFont(QStringLiteral("Segoe UI"), 11, QFont::Normal));
+    p.drawText(QRect(30, 56, W - 60, 22), Qt::AlignLeft | Qt::AlignVCenter,
+               QStringLiteral("Mathematische Reihenversätze, Lichtreflexion & Verzugsausgleich im Detail (35 × 25 mm Makro-Ausschnitt)"));
+
+    struct TItem {
+        TatamiFill::PatternType pat;
+        QString title;
+        QString shift;
+        QString desc;
+    };
+    QVector<TItem> items = {
+        { TatamiFill::PatternType::StandardTatami,
+          QStringLiteral("1. Standard-Tatami"), QStringLiteral("1/4 (0.25) Reihenversatz"),
+          QStringLiteral("Gleichmäßige, matte Weboptik. Verhindert störende Moiré-Muster; der ideale Allrounder für glatte Flächen.") },
+        { TatamiFill::PatternType::Brick,
+          QStringLiteral("2. Ziegelstein (Brick)"), QStringLiteral("1/2 (0.50) Halbversatz"),
+          QStringLiteral("Markanter Mauerwerksverband. Reflektiert Scheinwerferlicht breitflächig; wirkt strukturiert und kraftvoll.") },
+        { TatamiFill::PatternType::Twill,
+          QStringLiteral("3. Köper (Twill)"), QStringLiteral("1/3 (0.33) Schrägversatz"),
+          QStringLiteral("Diagonale Gratlinien wie bei edlem Trachtentuch oder Denim. Erstklassig für Loden und Uniformen.") },
+        { TatamiFill::PatternType::Basketweave,
+          QStringLiteral("4. Flechtmuster (Basket)"), QStringLiteral("4-Phasen Blockversatz"),
+          QStringLiteral("Kreuzweise gewobene Struktur (Panamagewebe). Schimmert je nach Betrachtungswinkel changierend.") },
+        { TatamiFill::PatternType::Honeycomb,
+          QStringLiteral("5. Wabenmuster (Honeycomb)"), QStringLiteral("Doppelraute / Hexagonal"),
+          QStringLiteral("Geometrisches Gitterwerk. Verleiht Sport- und Outdoor-Funktionskleidung moderne Dynamik.") },
+        { TatamiFill::PatternType::ContourEcho,
+          QStringLiteral("6. Kontur-Echo"), QStringLiteral("Abstandstransformation"),
+          QStringLiteral("Stiche folgen exakt den Außenkanten von außen nach innen. Ergibt organische 3D-Lichtverläufe.") }
+    };
+
+    QRect rects[6] = {
+        QRect(30, 95, 435, 405),
+        QRect(482, 95, 435, 405),
+        QRect(935, 95, 435, 405),
+        QRect(30, 520, 435, 405),
+        QRect(482, 520, 435, 405),
+        QRect(935, 520, 435, 405)
+    };
+
+    QPolygonF poly;
+    const double pw = 40.0, ph = 26.0;
+    for (int deg = 0; deg <= 360; deg += 10) {
+        double rad = deg * 3.14159265 / 180.0;
+        double rx = (deg >= 90 && deg <= 270) ? -pw*0.5 + 5.0 : pw*0.5 - 5.0;
+        double ry = (deg >= 0 && deg <= 180) ? ph*0.5 - 5.0 : -ph*0.5 + 5.0;
+        poly << QPointF(rx + 5.0 * std::cos(rad), ry + 5.0 * std::sin(rad));
+    }
+
+    for (int i = 0; i < 6; ++i) {
+        QRect r = rects[i];
+        p.setPen(QPen(QColor(45, 55, 75), 1.5));
+        p.setBrush(QColor(22, 28, 38));
+        p.drawRoundedRect(r, 8, 8);
+
+        p.setPen(QColor(212, 175, 55));
+        p.setFont(QFont(QStringLiteral("Georgia"), 12, QFont::Bold));
+        p.drawText(r.left() + 16, r.top() + 16, r.width() - 32, 22, Qt::AlignLeft, items[i].title);
+
+        p.setPen(QColor(45, 212, 191));
+        p.setFont(QFont(QStringLiteral("Consolas"), 9, QFont::Bold));
+        p.drawText(r.left() + 16, r.top() + 38, r.width() - 32, 18, Qt::AlignLeft, items[i].shift);
+
+        TatamiFill::Params tp;
+        tp.pattern = items[i].pat;
+        tp.fillAngleDeg = 30.0;
+        tp.rowSpacingMm = 0.42;
+        tp.maxStitchMm = 3.8;
+        tp.underlay = false;
+        StitchSequence seq = TatamiFill::generate(poly, tp);
+        seq.palette = { ThreadColor(QColor(218, 165, 32), QStringLiteral("Brillant Gold"), 1070) };
+
+        QRectF swatchRect(r.left() + 16, r.top() + 62, r.width() - 32, 230);
+        p.setPen(QPen(QColor(35, 45, 60), 1.0));
+        p.setBrush(QColor(16, 20, 28));
+        p.drawRoundedRect(swatchRect, 6, 6);
+
+        drawRealisticStitches(p, seq, swatchRect, 0.04, 2.2, true);
+
+        QRect descRect(r.left() + 16, r.top() + 302, r.width() - 32, 90);
+        p.setPen(QColor(170, 190, 210));
+        p.setFont(QFont(QStringLiteral("Segoe UI"), 9, QFont::Normal));
+        p.drawText(descRect, Qt::AlignLeft | Qt::TextWordWrap, items[i].desc);
+    }
+
+    p.end();
+    img.save(outFile, "PNG");
+}
+
+static void generateOpenCvPipelineAsset(const QString& outFile)
+{
+    const int W = 1500, H = 760;
+    QImage img(W, H, QImage::Format_ARGB32);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    QLinearGradient bgGrad(0, 0, 0, H);
+    bgGrad.setColorAt(0.0, QColor(13, 19, 31));
+    bgGrad.setColorAt(1.0, QColor(20, 28, 46));
+    p.fillRect(0, 0, W, H, bgGrad);
+
+    p.setPen(QPen(QColor(38, 52, 78), 2.0));
+    p.drawRect(12, 12, W - 24, H - 24);
+
+    p.setPen(QColor(212, 175, 55));
+    p.setFont(QFont(QStringLiteral("Georgia"), 20, QFont::Bold));
+    p.drawText(QRect(30, 24, W - 60, 32), Qt::AlignLeft | Qt::AlignVCenter,
+               QStringLiteral("OPENCV DIGITALISIERUNGS-PIPELINE FÜR BELIEBIGE MOTIVE"));
+
+    p.setPen(QColor(165, 185, 215));
+    p.setFont(QFont(QStringLiteral("Segoe UI"), 11, QFont::Normal));
+    p.drawText(QRect(30, 56, W - 60, 22), Qt::AlignLeft | Qt::AlignVCenter,
+               QStringLiteral("Vom Rohfoto / Papierscan zum makellosen Janome-Stickmuster in 5 automatisierten Phasen"));
+
+    struct Step {
+        QString num;
+        QString title;
+        QString techBadge;
+        QString desc;
+    };
+    QVector<Step> steps = {
+        { QStringLiteral("Phase 1"), QStringLiteral("Foto / Scan"),
+          QStringLiteral("RGB Input (Kamera/Papier)"),
+          QStringLiteral("Smartphone-Kamerafoto oder Flachbettscan mit Papierfalten, Rand-Vignettierung und 16 Mio. Farben.") },
+        { QStringLiteral("Phase 2"), QStringLiteral("OpenCV Entrauschen"),
+          QStringLiteral("removeBackground()"),
+          QStringLiteral("Bilateraler Rauschfilter glättet Texturen, bewahrt Konturen. 3-Ecken-Konsistenz löscht weiße Papierecken.") },
+        { QStringLiteral("Phase 3"), QStringLiteral("K-Means & Despeckle"),
+          QStringLiteral("filterSpeckles()"),
+          QStringLiteral("Reduktion auf 2–6 Garnfarben. Beseitigt isolierte Mini-Pixel unter 16 px gegen Nadelstau und Sprungfäden.") },
+        { QStringLiteral("Phase 4"), QStringLiteral("Vektor-Glättung"),
+          QStringLiteral("smoothContours()"),
+          QStringLiteral("Douglas-Peucker-Algorithmus glättet Treppeneffekte pixeliger Ränder zu fließenden Vektorkonturen.") },
+        { QStringLiteral("Phase 5"), QStringLiteral("Maschinen-Stick"),
+          QStringLiteral("satinBorder() + Tatami"),
+          QStringLiteral("Berechnet dichte Tatami-Füllungen mit Unterleger und umhüllt das Motiv mit einem erhabenen Satin-Kettelrand.") }
+    };
+
+    const int colW = 265;
+    const int gap = 26;
+    const int startX = 30;
+    const int startY = 95;
+    const int cardH = 635;
+
+    for (int i = 0; i < 5; ++i) {
+        int cx = startX + i * (colW + gap);
+        QRect r(cx, startY, colW, cardH);
+
+        p.setPen(QPen(QColor(40, 56, 82), 1.5));
+        p.setBrush(QColor(18, 26, 42));
+        p.drawRoundedRect(r, 10, 10);
+
+        QRect numBadge(r.left() + 16, r.top() + 14, 80, 22);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(45, 212, 191, 40));
+        p.drawRoundedRect(numBadge, 4, 4);
+        p.setPen(QColor(45, 212, 191));
+        p.setFont(QFont(QStringLiteral("Consolas"), 9, QFont::Bold));
+        p.drawText(numBadge, Qt::AlignCenter, steps[i].num);
+
+        p.setPen(QColor(240, 245, 255));
+        p.setFont(QFont(QStringLiteral("Segoe UI"), 13, QFont::Bold));
+        p.drawText(r.left() + 16, r.top() + 42, r.width() - 32, 24, Qt::AlignLeft, steps[i].title);
+
+        QRect techRect(r.left() + 16, r.top() + 70, r.width() - 32, 22);
+        p.setPen(QPen(QColor(50, 70, 100), 1.0));
+        p.setBrush(QColor(14, 20, 32));
+        p.drawRoundedRect(techRect, 4, 4);
+        p.setPen(QColor(212, 175, 55));
+        p.setFont(QFont(QStringLiteral("Consolas"), 8, QFont::Bold));
+        p.drawText(techRect, Qt::AlignCenter, steps[i].techBadge);
+
+        QRect previewBox(r.left() + 16, r.top() + 102, r.width() - 32, 260);
+        p.setPen(QPen(QColor(35, 48, 72), 1.0));
+        p.setBrush(QColor(12, 16, 26));
+        p.drawRoundedRect(previewBox, 6, 6);
+
+        if (i == 0) {
+            QLinearGradient paperGrad(previewBox.topLeft(), previewBox.bottomRight());
+            paperGrad.setColorAt(0.0, QColor(245, 242, 235));
+            paperGrad.setColorAt(0.7, QColor(225, 220, 210));
+            paperGrad.setColorAt(1.0, QColor(195, 190, 180));
+            p.fillRect(previewBox.adjusted(2, 2, -2, -2), paperGrad);
+
+            p.setPen(QPen(QColor(160, 40, 30), 4));
+            p.setBrush(QColor(200, 50, 40));
+            QPolygonF cr;
+            double pcx = previewBox.center().x(), pcy = previewBox.center().y();
+            cr << QPointF(pcx - 50, pcy - 60) << QPointF(pcx + 50, pcy - 60)
+               << QPointF(pcx + 50, pcy + 10) << QPointF(pcx, pcy + 60) << QPointF(pcx - 50, pcy + 10);
+            p.drawPolygon(cr);
+
+            p.setPen(Qt::NoPen); p.setBrush(QColor(230, 190, 50));
+            p.drawEllipse(QPointF(pcx, pcy - 10), 20, 20);
+
+            p.setPen(QPen(QColor(0, 0, 0, 60), 3));
+            p.drawLine(previewBox.left() + 10, previewBox.top() + 40, previewBox.right() - 10, previewBox.bottom() - 30);
+        } else if (i == 1) {
+            for (int by = previewBox.top() + 2; by < previewBox.bottom() - 2; by += 12) {
+                for (int bx = previewBox.left() + 2; bx < previewBox.right() - 2; bx += 12) {
+                    bool alt = ((bx / 12) + (by / 12)) % 2 == 0;
+                    p.fillRect(bx, by, 12, 12, alt ? QColor(24, 32, 48) : QColor(18, 24, 38));
+                }
+            }
+            p.setPen(QPen(QColor(180, 45, 35), 3));
+            p.setBrush(QColor(210, 50, 40));
+            double pcx = previewBox.center().x(), pcy = previewBox.center().y();
+            QPolygonF cr;
+            cr << QPointF(pcx - 50, pcy - 60) << QPointF(pcx + 50, pcy - 60)
+               << QPointF(pcx + 50, pcy + 10) << QPointF(pcx, pcy + 60) << QPointF(pcx - 50, pcy + 10);
+            p.drawPolygon(cr);
+            p.setPen(Qt::NoPen); p.setBrush(QColor(240, 200, 50));
+            p.drawEllipse(QPointF(pcx, pcy - 10), 20, 20);
+        } else if (i == 2) {
+            p.fillRect(previewBox.adjusted(2, 2, -2, -2), QColor(14, 18, 28));
+            double pcx = previewBox.center().x(), pcy = previewBox.center().y();
+            QPolygonF cr;
+            cr << QPointF(pcx - 50, pcy - 60) << QPointF(pcx + 50, pcy - 60)
+               << QPointF(pcx + 50, pcy + 10) << QPointF(pcx, pcy + 60) << QPointF(pcx - 50, pcy + 10);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(200, 35, 35));
+            p.drawPolygon(cr);
+            p.setBrush(QColor(220, 180, 40));
+            p.drawEllipse(QPointF(pcx, pcy - 10), 20, 20);
+
+            QRect chip1(previewBox.left() + 20, previewBox.bottom() - 32, 22, 18);
+            QRect chip2(previewBox.left() + 48, previewBox.bottom() - 32, 22, 18);
+            p.fillRect(chip1, QColor(200, 35, 35));
+            p.fillRect(chip2, QColor(220, 180, 40));
+            p.setPen(QPen(QColor(255, 255, 255, 120), 1));
+            p.drawRect(chip1); p.drawRect(chip2);
+        } else if (i == 3) {
+            p.fillRect(previewBox.adjusted(2, 2, -2, -2), QColor(14, 18, 28));
+            double pcx = previewBox.center().x(), pcy = previewBox.center().y();
+            QPolygonF cr;
+            cr << QPointF(pcx - 50, pcy - 60) << QPointF(pcx + 50, pcy - 60)
+               << QPointF(pcx + 50, pcy + 10) << QPointF(pcx, pcy + 60) << QPointF(pcx - 50, pcy + 10);
+            
+            p.setPen(QPen(QColor(45, 212, 191), 2.5));
+            p.setBrush(QColor(45, 212, 191, 30));
+            p.drawPolygon(cr);
+
+            p.setPen(QPen(QColor(255, 255, 255), 1.5));
+            p.setBrush(QColor(15, 23, 42));
+            for (const QPointF& pt : cr) {
+                p.drawRect(QRectF(pt.x() - 3.5, pt.y() - 3.5, 7, 7));
+            }
+            p.setPen(QPen(QColor(212, 175, 55), 2.0));
+            p.setBrush(QColor(212, 175, 55, 40));
+            p.drawEllipse(QPointF(pcx, pcy - 10), 20, 20);
+        } else if (i == 4) {
+            p.fillRect(previewBox.adjusted(2, 2, -2, -2), QColor(14, 18, 28));
+            
+            QPolygonF cr;
+            cr << QPointF(10, 5) << QPointF(50, 5) << QPointF(50, 45) << QPointF(30, 65) << QPointF(10, 45);
+            TatamiFill::Params tp;
+            tp.pattern = TatamiFill::PatternType::Brick;
+            tp.fillAngleDeg = 45.0;
+            tp.rowSpacingMm = 0.40;
+            StitchSequence seq = TatamiFill::generate(cr, tp);
+            seq.palette = { ThreadColor(QColor(205, 38, 38), QStringLiteral("Ruby"), 1184) };
+
+            drawRealisticStitches(p, seq, previewBox.adjusted(8, 8, -8, -8), 0.08, 1.8, true);
+
+            p.setPen(QPen(QColor(220, 180, 40), 4.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            double pcx = previewBox.center().x(), pcy = previewBox.center().y();
+            QPolygonF scr;
+            scr << QPointF(pcx - 50, pcy - 60) << QPointF(pcx + 50, pcy - 60)
+                << QPointF(pcx + 50, pcy + 10) << QPointF(pcx, pcy + 60) << QPointF(pcx - 50, pcy + 10);
+            p.drawPolygon(scr);
+            p.setPen(QPen(QColor(255, 235, 120), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPolygon(scr);
+        }
+
+        QRect descRect(r.left() + 16, r.top() + 380, r.width() - 32, 230);
+        p.setPen(QColor(180, 200, 225));
+        p.setFont(QFont(QStringLiteral("Segoe UI"), 9, QFont::Normal));
+        p.drawText(descRect, Qt::AlignLeft | Qt::TextWordWrap, steps[i].desc);
+
+        if (i < 4) {
+            p.setPen(QColor(45, 212, 191));
+            p.setFont(QFont(QStringLiteral("Segoe UI"), 16, QFont::Bold));
+            QRect arrowRect(cx + colW, startY + 200, gap, 40);
+            p.drawText(arrowRect, Qt::AlignCenter, QStringLiteral("➔"));
+        }
+    }
+
+    p.end();
+    img.save(outFile, "PNG");
+}
+
+static void generateManualAssets(const QString& outDir)
+{
+    QDir d(outDir);
+    if (!d.exists()) d.mkpath(QStringLiteral("."));
+
+    std::printf("== Generating High-Resolution Manual Assets in %s ==\n", outDir.toUtf8().constData());
+    
+    QString f10 = d.filePath(QStringLiteral("10_hunting_motifs_collection.png"));
+    generateHuntingCollectionAsset(f10);
+    std::printf("  ok  : generated %s\n", f10.toUtf8().constData());
+
+    QString f11 = d.filePath(QStringLiteral("11_deluxe_monograms_showcase.png"));
+    generateMonogramsShowcaseAsset(f11);
+    std::printf("  ok  : generated %s\n", f11.toUtf8().constData());
+
+    QString f12 = d.filePath(QStringLiteral("12_tatami_fill_patterns_macro.png"));
+    generateTatamiMacroAsset(f12);
+    std::printf("  ok  : generated %s\n", f12.toUtf8().constData());
+
+    QString f13 = d.filePath(QStringLiteral("13_opencv_motif_pipeline.png"));
+    generateOpenCvPipelineAsset(f13);
+    std::printf("  ok  : generated %s\n", f13.toUtf8().constData());
+}
 
 int main(int argc, char** argv)
 {
@@ -50,6 +653,17 @@ int main(int argc, char** argv)
         QDir d(dir);
         for (const QString& f : d.entryList(QStringList() << QStringLiteral("*.ttf")))
             QFontDatabase::addApplicationFont(d.filePath(f));
+    }
+
+    for (int i = 1; i < argc; ++i) {
+        QString arg = QString::fromUtf8(argv[i]);
+        if (arg == QStringLiteral("--manual-assets") || arg == QStringLiteral("--generate-assets")) {
+            QString outDir = (i + 1 < argc && argv[i+1][0] != '-')
+                ? QString::fromUtf8(argv[i+1])
+                : QStringLiteral("docs/manual_assets");
+            generateManualAssets(outDir);
+            return 0;
+        }
     }
 
     std::printf("== SatinGenerator ==\n");
@@ -752,7 +1366,7 @@ int main(int argc, char** argv)
     }
 
     std::printf("== Real reference round-trip ==\n");
-    const char* ref = (argc > 1) ? argv[1] : nullptr;
+    const char* ref = (argc > 1 && argv[1][0] != '-') ? argv[1] : nullptr;
     if (ref) {
         StitchSequence rin;
         bool okIn = JefCodec::importFromFile(QString::fromUtf8(ref), rin);

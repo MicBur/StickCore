@@ -65,6 +65,14 @@ public:
     /// external contours as pixel-space polylines, dropping any shorter than
     /// minLenPx of perimeter.
     static QVector<QPolygonF> findContours(const QImage& mask, double minLenPx);
+
+    /// Removes background around logos, motifs and clipart based on corner colors
+    /// (e.g. white paper or solid backdrop), returning an image where background is made pure white.
+    static QImage removeBackground(const QImage& src, double tolerance = 28.0);
+
+    /// Smooths raw raster contours using Douglas-Peucker polygon approximation,
+    /// turning pixel staircases into clean vectors for embroidery.
+    static QVector<QPolygonF> smoothContours(const QVector<QPolygonF>& contours, double epsilonPx = 1.2);
 };
 
 } // namespace stick

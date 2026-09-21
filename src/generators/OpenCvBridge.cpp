@@ -2,6 +2,7 @@
 //  StickCore  –  OpenCvBridge.cpp
 // ---------------------------------------------------------------------------
 #include "generators/OpenCvBridge.h"
+#include "generators/PhotoProcessor.h"
 
 #ifdef STICK_HAVE_OPENCV
 
@@ -302,6 +303,75 @@ QVector<QPolygonF> OpenCvBridge::findContours(const QImage& mask, double minLenP
     return result;
 }
 
+QImage OpenCvBridge::removeBackground(const QImage& src, double tolerance)
+{
+    if (src.isNull()) return src;
+    cv::Mat bgr = toBgr(src);
+    const int W = bgr.cols, H = bgr.rows;
+    if (W < 4 || H < 4) return src;
+
+    // Sample 4 corner regions and check consistency
+    auto colDist = [](const cv::Vec3b& a, const cv::Vec3b& b) {
+        int dr = int(a[0]) - int(b[0]);
+        int dg = int(a[1]) - int(b[1]);
+        int db = int(a[2]) - int(b[2]);
+        return std::sqrt(double(dr*dr + dg*dg + db*db));
+    };
+    cv::Vec3b c00 = bgr.at<cv::Vec3b>(0, 0);
+    cv::Vec3b cW0 = bgr.at<cv::Vec3b>(0, W - 1);
+    cv::Vec3b c0H = bgr.at<cv::Vec3b>(H - 1, 0);
+    cv::Vec3b cWH = bgr.at<cv::Vec3b>(H - 1, W - 1);
+
+    int matching = 1;
+    if (colDist(c00, cW0) <= tolerance) matching++;
+    if (colDist(c00, c0H) <= tolerance) matching++;
+    if (colDist(c00, cWH) <= tolerance) matching++;
+    if (matching < 3) return src; // Not a uniform background!
+
+    cv::Vec3f avgCorner = (cv::Vec3f(c00) + cv::Vec3f(cW0) + cv::Vec3f(c0H) + cv::Vec3f(cWH)) * 0.25f;
+
+    cv::Mat diff;
+    cv::absdiff(bgr, cv::Scalar(avgCorner[0], avgCorner[1], avgCorner[2]), diff);
+    std::vector<cv::Mat> channels;
+    cv::split(diff, channels);
+    cv::Mat dist = channels[0] + channels[1] + channels[2];
+
+    cv::Mat mask;
+    cv::threshold(dist, mask, tolerance * 3.0, 255, cv::THRESH_BINARY);
+
+    // Flood fill from corners
+    cv::Mat flood = mask.clone();
+    cv::bitwise_not(flood, flood);
+    cv::floodFill(flood, cv::Point(0, 0), cv::Scalar(128));
+    cv::floodFill(flood, cv::Point(W - 1, 0), cv::Scalar(128));
+    cv::floodFill(flood, cv::Point(0, H - 1), cv::Scalar(128));
+    cv::floodFill(flood, cv::Point(W - 1, H - 1), cv::Scalar(128));
+
+    cv::Mat out = bgr.clone();
+    out.setTo(cv::Scalar(255, 255, 255), flood == 128);
+    return bgrToQImage(out);
+}
+
+QVector<QPolygonF> OpenCvBridge::smoothContours(const QVector<QPolygonF>& contours, double epsilonPx)
+{
+    QVector<QPolygonF> result;
+    result.reserve(contours.size());
+    for (const auto& poly : contours) {
+        if (poly.size() < 3) continue;
+        std::vector<cv::Point2f> pts;
+        pts.reserve(poly.size());
+        for (const auto& pt : poly) pts.emplace_back(float(pt.x()), float(pt.y()));
+        std::vector<cv::Point2f> approx;
+        cv::approxPolyDP(pts, approx, epsilonPx, true);
+        if (approx.size() >= 3) {
+            QPolygonF sp;
+            for (const auto& p : approx) sp << QPointF(p.x, p.y);
+            result.push_back(std::move(sp));
+        }
+    }
+    return result;
+}
+
 } // namespace stick
 
 #else   // ---------------- no OpenCV: safe fallbacks --------------------------
@@ -320,6 +390,12 @@ QImage  OpenCvBridge::sketch(const QImage& gray, bool) { return gray; }
 QImage  OpenCvBridge::detailed(const QImage& gray, bool) { return gray; }
 QImage  OpenCvBridge::stylizedMask(const QImage& src, bool) { return src; }
 QVector<QPolygonF> OpenCvBridge::findContours(const QImage&, double) { return {}; }
+QImage  OpenCvBridge::removeBackground(const QImage& src, double) { return PhotoProcessor::dropCornerBackground(src); }
+QVector<QPolygonF> OpenCvBridge::smoothContours(const QVector<QPolygonF>& contours, double epsilonPx) {
+    QVector<QPolygonF> res;
+    for (const auto& poly : contours) res.push_back(PhotoProcessor::smoothPolygon(poly, epsilonPx));
+    return res;
+}
 
 } // namespace stick
 

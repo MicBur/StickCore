@@ -39,6 +39,13 @@ public:
     /// Cleans isolated small pixel clusters (< minArea) by reassigning them to
     /// their most frequent neighboring color label, preventing micro-stitches.
     static std::vector<int> filterSpeckles(const std::vector<int>& labels, int W, int H, int minArea = 16);
+
+    /// Removes uniform background (e.g. paper or photo backdrop) starting from corners
+    /// by turning connected background pixels into pure white.
+    static QImage dropCornerBackground(const QImage& src, int tolerance = 32);
+
+    /// Douglas-Peucker polygon simplification to smooth raster staircases into vector paths.
+    static QPolygonF smoothPolygon(const QPolygonF& poly, double epsilon = 1.0);
 };
 
 } // namespace stick

@@ -4,8 +4,10 @@
 #include "generators/ImageDigitizer.h"
 #include "generators/PhotoProcessor.h"
 #include "generators/OpenCvBridge.h"
+#include "generators/SatinGenerator.h"
 #include "core/ThreadCatalog.h"
 
+#include <QPainterPath>
 #include <QPoint>
 #include <QVector>
 #include <algorithm>
@@ -157,6 +159,9 @@ static StitchSequence generateColors(const QImage& src, const ImageDigitizer::Pa
 {
     StitchSequence seq;
     QImage img = analysisScaled(src, p.maxProcessPx);
+    if (p.dropBackground) {
+        img = OpenCvBridge::removeBackground(img, 28.0);
+    }
     if (OpenCvBridge::available()) {
         img = OpenCvBridge::bilateralDenoise(img, 7, 60.0, 60.0);
     }
@@ -228,6 +233,30 @@ static StitchSequence generateColors(const QImage& src, const ImageDigitizer::Pa
         const QColor c(int(std::round(cen[k].r)), int(std::round(cen[k].g)), int(std::round(cen[k].b)));
         seq.palette.push_back(ThreadCatalog::snap(c, p.brand));
     }
+
+    // Optional raised satin border around the motif boundary (patch edge)
+    if (p.satinBorder && background >= 0) {
+        std::vector<quint8> fgMask(size_t(W) * H, 0);
+        for (size_t i = 0; i < label.size(); ++i) {
+            if (label[i] != background) fgMask[i] = 255;
+        }
+        auto rawContours = traceContours(fgMask, W, H);
+        for (const auto& c : rawContours) {
+            if (c.size() < 6) continue;
+            QPolygonF poly;
+            for (const auto& pt : c) poly << QPointF(X(pt.x()), Y(pt.y()));
+            poly = PhotoProcessor::smoothPolygon(poly, 0.8);
+            if (poly.size() >= 3) {
+                QPainterPath cPath;
+                cPath.addPolygon(poly);
+                cPath.closeSubpath();
+                StitchSequence border = SatinGenerator::fromCenterline(cPath, p.borderWidthMm, 0.40, int(order.size()));
+                seq.stitches.insert(seq.stitches.end(), border.stitches.begin(), border.stitches.end());
+            }
+        }
+        seq.palette.push_back(ThreadCatalog::snap(QColor(25, 25, 30), p.brand));
+    }
+
     return seq;
 }
 

@@ -49,6 +49,9 @@ private:
     QSpinBox*       m_colors     = nullptr;
     QDoubleSpinBox* m_fillAngle  = nullptr;
     QCheckBox*      m_multiAngle = nullptr;
+    QCheckBox*      m_dropBg     = nullptr;
+    QCheckBox*      m_satinBorder = nullptr;
+    QDoubleSpinBox* m_borderWidth = nullptr;
     // Portrait page
     QComboBox* m_portraitStyle = nullptr;
     QLabel*    m_tonesLabel = nullptr;

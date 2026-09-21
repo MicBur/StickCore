@@ -93,6 +93,21 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
         m_multiAngle->setChecked(true);
         f->addRow(m_multiAngle);
 
+        m_dropBg = new QCheckBox(QStringLiteral("Hintergrund entfernen (Papier/Foto-Ecken)"));
+        m_dropBg->setChecked(true);
+        f->addRow(m_dropBg);
+
+        m_satinBorder = new QCheckBox(QStringLiteral("Erhabener Satin-Kettelrand um Motiv"));
+        m_satinBorder->setChecked(false);
+        f->addRow(m_satinBorder);
+
+        m_borderWidth = new QDoubleSpinBox;
+        m_borderWidth->setRange(0.8, 4.0);
+        m_borderWidth->setValue(1.5);
+        m_borderWidth->setSingleStep(0.2);
+        m_borderWidth->setSuffix(QStringLiteral(" mm"));
+        f->addRow(QStringLiteral("Kettelrand-Breite:"), m_borderWidth);
+
         auto* hint = caption(QStringLiteral("Garnfarben mit wechselndem Stichwinkel gegen Stoffverzug."));
         hint->setAlignment(Qt::AlignLeft);
         f->addRow(hint);
@@ -216,6 +231,9 @@ ImageDialog::ImageDialog(const QImage& source, QWidget* parent)
     connect(m_colors,   QOverload<int>::of(&QSpinBox::valueChanged), this, [kick](int){ kick(); });
     connect(m_fillAngle, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [kick](double){ kick(); });
     connect(m_multiAngle, &QCheckBox::toggled, this, [kick](bool){ kick(); });
+    connect(m_dropBg,   &QCheckBox::toggled, this, [kick](bool){ kick(); });
+    connect(m_satinBorder, &QCheckBox::toggled, this, [kick](bool){ kick(); });
+    connect(m_borderWidth, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [kick](double){ kick(); });
     connect(m_tones,    QOverload<int>::of(&QSpinBox::valueChanged), this, [kick](int){ kick(); });
     connect(m_invert,   &QCheckBox::toggled, this, [kick](bool){ kick(); });
     connect(m_faceCrop, &QCheckBox::toggled, this, [kick](bool){ kick(); });
@@ -240,6 +258,9 @@ void ImageDialog::collectParams()
     p.colors    = m_colors->value();
     p.fillAngleDeg = m_fillAngle ? m_fillAngle->value() : 45.0;
     p.multiAngle   = m_multiAngle ? m_multiAngle->isChecked() : true;
+    p.dropBackground = m_dropBg ? m_dropBg->isChecked() : true;
+    p.satinBorder    = m_satinBorder ? m_satinBorder->isChecked() : false;
+    p.borderWidthMm  = m_borderWidth ? m_borderWidth->value() : 1.5;
     p.portraitStyle = ImageDigitizer::PortraitStyle(m_portraitStyle->currentData().toInt());
     p.tones     = m_tones->value();
     p.contrast  = m_contrast->value() / 100.0;

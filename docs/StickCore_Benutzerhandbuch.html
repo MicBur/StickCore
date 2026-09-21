@@ -765,6 +765,11 @@
     </tr>
   </table>
 
+  <div class="figure" style="margin: 18px 0;">
+    <img src="manual_assets/11_deluxe_monograms_showcase.png" alt="StickCore Meister-Monogramme & Kunstvolle Zierrahmen">
+    <div class="figure-caption">Abb. 8.1: StickCore Meister-Monogramme & Zierrahmen im Makro-Vergleich (Eichenlaub-Kranz, Lorbeerkranz, Wappenschild & Barocke Kartusche).</div>
+  </div>
+
   <h3>Zweifarbiges Garnkonzept & Füllwinkel:</h3>
   <p>
     Im Einstellungsdialog wählen Sie für Buchstaben und Zierrahmen unabhängige Farben aus (z. B. Buchstabe in <i>Königsblau</i>, Eichenkranz in <i>Altgold</i>). Ein automatischer Farbwechsel (<kbd>SF_ColorChange</kbd>) stoppt Ihre Janome-Maschine nach dem Rahmen für den Garnwechsel.
@@ -772,6 +777,13 @@
   <div class="callout callout-tip">
     <b>Meister-Tipp für Füllwinkel:</b> Wählen Sie für die Buchstabenfüllung einen Winkel von <b>60°</b> und für die Rahmenflächen <b>0°</b>. Durch den unterschiedlichen Fadenlauf bricht sich das Saallicht in verschiedenen Winkeln und das Monogramm hebt sich dreidimensional vom Rahmen ab!
   </div>
+
+  <h3>Praxis-Tipp: Monogramm-Platzierung & Textil-Veredelung:</h3>
+  <ul>
+    <li><b>Herrenhemd (Brust links):</b> Platziert ca. 18–20 cm unterhalb der linken Schulternaht, mittig zwischen Knopfleiste und Seitennaht (Höhe des 2. bis 3. Hemdenknopfs). Bei Hemden mit Brusttasche mittig auf der oberen Saumblende der Tasche.</li>
+    <li><b>Hemdenmanschette:</b> Zentriert auf der linken Manschette (Uhrenarm), ca. 12–15 mm von der Manschettenkante entfernt. Initiale zeigt beim Tragen lesbar nach außen.</li>
+    <li><b>Vlies & Nadel:</b> Für feine Baumwoll-Popeline empfiehlt sich ein ausreißbares Reißvlies (Tear-Away 40 g/m²) sowie eine feine Sticknadel <i>Schmetz Embroidery 75/11</i>. Für hochelastische Piqué-Polos zusätzlich eine Lage wasserlösliche Folie auflegen.</li>
+  </ul>
 </div>
 
 <!-- CHAPTER 9 -->
@@ -824,6 +836,11 @@
     </tr>
   </table>
 
+  <div class="figure" style="margin: 18px 0;">
+    <img src="manual_assets/12_tatami_fill_patterns_macro.png" alt="StickCore Tatami-Füllmuster Makro-Stichvergleich">
+    <div class="figure-caption">Abb. 9.1: Makro-Stichvergleich aller 6 mathematischen Tatami-Muster (Reihenversätze, Nadel-Einstichstellen & Lichtbrechung).</div>
+  </div>
+
   <h3>Füllwinkel (0°–360°), Glanzgarn & Verzugsausgleich:</h3>
   <p>
     Stickgarn (Viskose wie <i>Madeira Rayon</i> oder Polyester wie <i>Madeira Polyneon</i>) ist zylindrisch verzwirnt. Es reflektiert das Licht <b>quer zur Stichrichtung</b>. Wenn Sie zwei nebeneinanderliegende Flächen mit identischem Garn, aber unterschiedlichen Winkeln (z. B. 30° und 75°) füllen, erscheint die eine hell und glänzend, die andere matt und tief – ein spektakulärer Hell-Dunkel-Effekt!
@@ -833,14 +850,43 @@
     <li><b>Multi-Winkel-Schutz (+45°):</b> Im Bild-Digitalisierer wechselt der Füllwinkel automatisch um +45° je Garnfarbe. Dadurch heben sich die Verzugskräfte der einzelnen Farbfelder gegenseitig auf und der Stoff bleibt plan im Rahmen!</li>
   </ul>
 
-  <h3>Foto-KI mit OpenCV:</h3>
+  <h3>OpenCV Bildverarbeitung & KI-Digitalisierer:</h3>
   <p>
-    Für die Digitalisierung von Kundenfotos nutzt StickCore die Bildverarbeitungsbibliothek <b>OpenCV</b> (mit nahtlosem nativem C++ Fallback):
+    Für die Digitalisierung beliebiger Motive (Logos, Vereinsabzeichen, Clipart, Fotos) nutzt StickCore die Bildverarbeitungsbibliothek <b>OpenCV</b> (mit nahtlosem nativem C++ Fallback für autonome Installationen):
   </p>
   <ul>
-    <li><b>Haar-Cascade Gesichtserkennung:</b> Erkennt frontal aufgenommene Gesichter automatisch und wählt den optimalen Bildausschnitt für Kopf und Schultern.</li>
-    <li><b>Bilateral Denoising:</b> Glättet Hautunreinheiten und JPEG-Rauschen, bewahrt jedoch Augen, Brauen und Lippenlinien gestochen scharf.</li>
-    <li><b>Despeckle-Specklefilter:</b> Erkennt isolierte Mini-Pixel unter 16 Pixeln und verschmilzt sie mit der umgebenden Garnfarbe. Verhindert hässliche Einzelstiche und unnötige Nadelsprünge.</li>
+    <li><b>Smarte Hintergrund-Entfernung (<code>removeBackground</code>):</b> Erkennt gleichmäßige Papier- und Foto-Hintergründe über eine 3-Ecken-Konsistenzprüfung und stellt das Hauptmotiv automatisch frei. Weiße Bildelemente im Motivzentrum bleiben dabei vollständig erhalten.</li>
+    <li><b>Bilateral Denoising:</b> Glättet Papierfalten, Scannerflecken und JPEG-Artefakte, bewahrt Kanten und feine Linien jedoch messerscharf.</li>
+    <li><b>Despeckle-Specklefilter (<code>filterSpeckles</code>):</b> Verschmilzt isolierte Bildpunkte unter 16 Pixeln mit der Nachbarfarbe. Verhindert Nadelstau, Fadenknäuel und unnötige Sprungstiche.</li>
+    <li><b>Douglas-Peucker Kontur-Glättung (<code>smoothContours</code>):</b> Eliminiert pixelige Treppenstufen und wandelt Kanten in fließende, elegante Bézier-Vektorkonturen um.</li>
+    <li><b>Erhabener Satin-Kettelrand (<code>satinBorder</code>):</b> Umhüllt das digitalisierte Motiv auf Wunsch automatisch mit einer maschinengestickten Kettelkante (1,5 bis 4,0 mm) – ideal für Aufnäher und Embleme.</li>
+  </ul>
+
+  <div class="figure" style="margin: 18px 0;">
+    <img src="manual_assets/13_opencv_motif_pipeline.png" alt="OpenCV Digitalisierungs-Pipeline für beliebige Motive">
+    <div class="figure-caption">Abb. 9.2: Die 5 Phasen der OpenCV Motiv-Digitalisierung (vom Kundenfoto über OpenCV Freistellung & Vektor-Glättung zum fertigen Janome-Stick).</div>
+  </div>
+
+  <h3>Praxis-Leitfaden A: Vereinswappen & Aufnäher vom Smartphone-Foto</h3>
+  <p>
+    Ein Kunde bringt ein Vereinswappen auf einer Visitenkarte oder fotografiert es mit dem Handy ab:
+  </p>
+  <ol>
+    <li><b>Foto empfangen (<kbd>Strg</kbd> + <kbd>U</kbd>):</b> QR-Code mit dem Handy scannen, Foto schießen und kabellos an StickCore senden.</li>
+    <li><b>Hintergrund entfernen aktivieren:</b> Setzen Sie im Dialog den Haken bei <i>„Hintergrund entfernen“</i>. Der unruhige Papiertisch wird automatisch freigestellt.</li>
+    <li><b>Farbpalette begrenzen:</b> Stellen Sie <i>Garnfarben</i> auf <b>3–4</b>. Der K-Means-Cluster ordnet alle Farbnuancen exakt den Madeira-Garnen zu.</li>
+    <li><b>Kettelrand zuschalten:</b> Aktivieren Sie <i>„Erhabener Satin-Kettelrand“</i> mit <b>2,5 mm</b> Breite. Damit erhält der Patch einen professionellen Abschluss.</li>
+    <li><b>Als JEF speichern:</b> Motiv in den Rahmen <b>SQ14 (140 × 140 mm)</b> einpassen und direkt auf den USB-Stick für die Janome MC350E exportieren.</li>
+  </ol>
+
+  <h3>Praxis-Leitfaden B: Handzeichnungen & Kinder-Skizzen als LineArt</h3>
+  <p>
+    Feine Strichzeichnungen oder Kinderbilder lassen sich als filigraner Konturstick verewigen:
+  </p>
+  <ul>
+    <li>Wählen Sie im Bilddialog den Modus <b>LineArt / Konturzeichnung</b>.</li>
+    <li>OpenCV extrahiert die Linienachsen und erzeugt kontinuierliche Doppelstich-Laufnähte (2,0 mm Stichlänge).</li>
+    <li>Perfekt für Stoffbeutel, Geschirrtücher, Kissenbezüge oder Schürzenecken mit persönlicher Note.</li>
   </ul>
 </div>
 
@@ -855,31 +901,41 @@
     Für Schützenvereine, Jäger, Forsthäuser und bayerisch-österreichische Trachtenmode bietet StickCore Studio im Menü <b>🌿 Jagd, Natur & Tradition</b> vier meisterhaft digitalisierte Vektormotive:
   </p>
 
+  <div class="figure" style="margin: 18px 0;">
+    <img src="manual_assets/10_hunting_motifs_collection.png" alt="StickCore Meister-Kollektion Tradition & Jagd">
+    <div class="figure-caption">Abb. 10.1: Meister-Kollektion Tradition & Jagd (Eichenlaub mit Eicheln, 12-Ender Hirsch, Keiler & Waidmannsheil-Medaillon) mit realen Janome-Stichen.</div>
+  </div>
+
   <div class="grid-2">
-    <div class="figure">
-      <div style="background: #0f172a; padding: 20px; border-radius: 8px; color: #2dd4bf; font-family: monospace; font-size: 24pt; text-align: center;">
-        🌿 🦌 🐗 🎯
-      </div>
-      <div class="figure-caption">Traditionsmotive: Eichenlaub, 12-Ender Hirsch, Keiler & Waidmannsheil-Medaillon.</div>
-    </div>
-    <div style="padding-top: 10px;">
+    <div>
       <h3>Die vier Traditionsmotive:</h3>
       <ol style="padding-left: 16px; line-height: 1.6;">
-        <li><b>Eichenlaub mit Stiel & Eicheln:</b> Dreiteilige geschwungene Eichenblätter mit zwei reliefierten Eicheln.</li>
+        <li><b>Eichenlaub mit Stiel & Eicheln:</b> Dreiteilige geschwungene Eichenblätter mit zwei reliefierten Eicheln in Waldgrün und Kastanie.</li>
         <li><b>Kapitaler 12-Ender Hirschkopf:</b> Majestätischer Rothirschkopf mit vollem Geweih (Augsprosse, Eissprosse, Mittelsprosse und Krone).</li>
         <li><b>Keiler mit Hauer (Schwarzwild):</b> Markante Keilersilhouette mit Borstenkamm und weißem Hauer.</li>
         <li><b>Waidmannsheil-Medaillon:</b> Runder Eichenkranz mit gekreuzten Jagdflinten und Ehrenschleife.</li>
       </ol>
     </div>
+    <div>
+      <h3>Der duale Workflow:</h3>
+      <p style="line-height: 1.6;">
+        <b>Variante 1: Fertig sticken:</b> Sofort maschinenfertig mit optimierter Tatami-Füllung, Unterleger und solidem Satin-Rand.<br><br>
+        <b>Variante 2: Im 2D-Editor anpassen:</b> Als Bézier-Pfad mit Kontrollpunkten laden, Blätter krümmen, Größe anpassen oder mit Vereinsnamen kombinieren!
+      </p>
+    </div>
   </div>
 
-  <h3>Der duale Workflow: Fertig sticken oder im 2D-Editor anpassen:</h3>
+  <h3>Praxis-Leitfaden C: Traditionswappen auf Loden-Jagdweste</h3>
   <p>
-    Jedes Motiv kann in zwei Varianten geöffnet werden:
+    Loden und Trachtenwalkstoffe sind hochwertige, dichte Wollgewebe mit samtiger Oberfläche. Um ein Einsinken der Stiche zu verhindern:
   </p>
   <ul>
-    <li><b>Variante 1: Direkt als fertige Stickdatei laden:</b> Berechnet sofort alle Tatami-Füllungen mit Unterleger, Verzugsausgleich, gewünschtem Füllmuster und solidem Satin-Rand. Die Datei ist ohne weiteren Zwischenschritt maschinenbereit.</li>
-    <li><b>Variante 2: Als editierbare Vektorpfade im 2D-Editor öffnen:</b> Das Motiv wird als Vektorkurve mit Bézier-Stützpunkten und Tangentenhebeln auf die Arbeitsfläche gelegt. Sie können Knotenpunkte verschieben, Konturen krümmen, Blätter vergrößern oder mit Ihren eigenen Initialen und Vereinsnamen kombinieren!</li>
+    <li><b>Die 2-Lagen-Vliesmethode (Sandwich-Verfahren):</b>
+      <br>• <b>Unten (Rückseite):</b> Festes Schneidvlies (Cut-Away 80 g/m²), fest mit dem Loden eingespannt.
+      <br>• <b>Oben (Vorderseite):</b> Eine Lage wasserlösliche Stickfolie (Madeira Avalon / Solvy) auflegen. Die Folie hält den Wollflor nieder; die Satinstiche liegen spiegelglatt auf der Oberfläche! Nach dem Sticken wird die Folie einfach mit einem feuchten Tuch abgetupft.
+    </li>
+    <li><b>Nadel- & Garnempfehlung:</b> <i>Schmetz Embroidery 75/11 SES</i> (mit leichter Kugelspitze, schont die Wollfasern) und <i>Madeira Polyneon 40</i> (witterungs- und reißfest für Jagdeinsätze).</li>
+    <li><b>Füllmuster-Tipp:</b> Verwenden Sie für Lodenbekleidung das <b>Köper-Muster (Twill, 1/3 Versatz)</b> oder das <b>Ziegelstein-Muster (Brick, 1/2 Versatz)</b>. Der Fadenverlauf erzeugt einen rustikalen, seidenmatten Glanz, der hervorragend mit Naturtuch harmoniert.</li>
   </ul>
 
   <div class="callout callout-info" style="margin-top: 24px; text-align: center;">
