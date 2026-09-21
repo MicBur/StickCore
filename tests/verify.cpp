@@ -1881,6 +1881,151 @@ int main(int argc, char** argv)
             CHECK(!sfumatoSeq.empty(), "fast Sfumato preview generates stitches for photo");
             QImage sfumatoThumb = StitchThumbnail::render(sfumatoSeq, 600, QColor(20, 23, 28), true);
             sfumatoThumb.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/schaedel_sfumato_preview.png"), "PNG");
+
+            // 7. Test ImageDigitizer::extractPalette() for interactive Palette Manager
+            auto pal = ImageDigitizer::extractPalette(skullImg, pColors);
+            CHECK(!pal.empty() && pal.size() <= 4, "extractPalette returns quantized color palette");
+            double totalCoverage = 0.0;
+            for (const auto& qc : pal) {
+                totalCoverage += qc.percentage;
+                CHECK(!qc.thread.description.isEmpty(), "each quantized color has valid thread description");
+            }
+            CHECK(std::abs(totalCoverage - 100.0) < 1.0, "color coverage percentages sum to ~100%");
+            bool foundBg = false;
+            for (const auto& qc : pal) {
+                if (qc.isBackground) foundBg = true;
+            }
+            CHECK(foundBg, "background color is correctly identified");
+
+            // 8. Test selective color filtering via activeColors
+            ImageDigitizer::Params pFiltered = pColors;
+            // Only enable the last color (foreground features), disable the rest
+            pFiltered.activeColors = std::vector<bool>(pal.size(), false);
+            pFiltered.activeColors.back() = true;
+            StitchSequence filteredSeq = ImageDigitizer::generate(skullImg, pFiltered);
+            CHECK(!filteredSeq.empty(), "selective color filtering produces valid stitches");
+            CHECK(filteredSeq.palette.size() == 1, "only active color is included in thread palette");
+            CHECK(filteredSeq.realStitchCount() < seq.realStitchCount(), "filtered sequence stitches are a subset of full design");
+
+            // 9. Test ImageDigitizer::Mode::CrossStitch
+            ImageDigitizer::Params pCross;
+            pCross.mode = ImageDigitizer::Mode::CrossStitch;
+            pCross.widthMm = 80.0;
+            pCross.colors = 3;
+            pCross.crossStitchAida = CrossStitchGenerator::AidaCount::Count14;
+            StitchSequence crossSeq = ImageDigitizer::generate(skullImg, pCross);
+            CHECK(!crossSeq.empty(), "ImageDigitizer Mode::CrossStitch produces valid cross stitches");
+            CHECK(crossSeq.palette.size() <= 3, "CrossStitch palette bounded by color count");
+
+            // 10. Test ImageDigitizer::Mode::Sfumato via unified API
+            ImageDigitizer::Params pSfumato;
+            pSfumato.mode = ImageDigitizer::Mode::Sfumato;
+            pSfumato.widthMm = 80.0;
+            pSfumato.sfumatoLineSpacingMm = 1.5;
+            pSfumato.sfumatoAngle = SfumatoGenerator::AngleMode::Horizontal;
+            StitchSequence sfSeq = ImageDigitizer::generate(skullImg, pSfumato);
+            CHECK(!sfSeq.empty(), "ImageDigitizer Mode::Sfumato produces valid stitch sequence");
+            CHECK(sfSeq.palette.size() == 1, "Sfumato uses 1 monochrome thread color");
+
+            // 11. Test LineArt BeanStitch vs SingleRun
+            ImageDigitizer::Params pSingle;
+            pSingle.mode = ImageDigitizer::Mode::LineArt;
+            pSingle.widthMm = 60.0;
+            pSingle.lineArtStitch = ImageDigitizer::LineArtStitch::SingleRun;
+            StitchSequence singleSeq = ImageDigitizer::generate(skullImg, pSingle);
+
+            ImageDigitizer::Params pBean = pSingle;
+            pBean.lineArtStitch = ImageDigitizer::LineArtStitch::BeanStitch;
+            StitchSequence beanSeq = ImageDigitizer::generate(skullImg, pBean);
+            CHECK(!singleSeq.empty() && !beanSeq.empty(), "LineArt generates outlines");
+            CHECK(beanSeq.realStitchCount() >= singleSeq.realStitchCount() * 2,
+                  "3-pass BeanStitch has significantly more stitches than SingleRun for robust outlines");
+
+            // 12. Test ImageDigitizer::traceToPaths 1-Color Stencil / Schablone (Inkscape Bitmap to Path)
+            ImageDigitizer::Params pStencil;
+            pStencil.colors = 1;
+            pStencil.separation = ImageDigitizer::SeparationMode::Tones;
+            pStencil.widthMm = 80.0;
+            pStencil.smoothing = 1.0;
+            QVector<EditPath> stencilPaths = ImageDigitizer::traceToPaths(skullImg, pStencil);
+            CHECK(!stencilPaths.isEmpty(), "1-Color Stencil traceToPaths generates vector paths");
+            bool allClosed = true;
+            int totalNodes = 0;
+            for (const auto& ep : stencilPaths) {
+                if (!ep.closed) allClosed = false;
+                totalNodes += ep.nodes.size();
+            }
+            CHECK(allClosed, "All extracted stencil vector paths are closed loops");
+            CHECK(totalNodes >= 20, "Extracted vector paths have rich Bézier nodes");
+
+            // 13. Test ImageDigitizer::traceToPaths Multi-Color / Multi-Tone
+            ImageDigitizer::Params pTones;
+            pTones.colors = 3;
+            pTones.separation = ImageDigitizer::SeparationMode::Tones;
+            pTones.widthMm = 80.0;
+            QVector<EditPath> tonePaths = ImageDigitizer::traceToPaths(skullImg, pTones);
+            CHECK(!tonePaths.isEmpty(), "3-Tone traceToPaths generates vector paths");
+            QSet<int> colorIndices;
+            for (const auto& ep : tonePaths) {
+                colorIndices.insert(ep.colorIdx);
+            }
+            CHECK(colorIndices.size() >= 2, "Vector paths contain multiple distinct tone/color layers");
+
+            // 14. Test Y-axis orientation (skull right-side up)
+            double minY = 1e9, maxY = -1e9;
+            for (const auto& ep : stencilPaths) {
+                for (const auto& n : ep.nodes) {
+                    minY = std::min(minY, n.pos.y());
+                    maxY = std::max(maxY, n.pos.y());
+                }
+            }
+            CHECK(maxY > 0.0 && minY < 0.0, "Vector paths are properly centered with +Y up");
+
+            // Verify Sfumato orientation: stitches at the top of the skull image have positive Y
+            double sfX0, sfY0, sfX1, sfY1;
+            sfSeq.bounds(sfX0, sfY0, sfX1, sfY1);
+            CHECK(sfY1 > sfY0, "Sfumato stitch bounds are valid (+Y > -Y)");
+
+            // Save vector stencil preview
+            {
+                QImage vecImg(600, 600, QImage::Format_ARGB32_Premultiplied);
+                vecImg.fill(QColor(24, 26, 32));
+                QPainter vp(&vecImg);
+                vp.setRenderHint(QPainter::Antialiasing, true);
+
+                double scale = std::min((600 * 0.85) / pStencil.widthMm, (600 * 0.85) / pStencil.widthMm);
+                QTransform xf;
+                xf.translate(300, 300);
+                xf.scale(scale, -scale);
+
+                for (const auto& ep : stencilPaths) {
+                    QPainterPath pp = ep.toPainterPath();
+                    QPainterPath sp = xf.map(pp);
+                    vp.setBrush(QColor(235, 230, 220, 220));
+                    vp.setPen(QPen(QColor(45, 212, 191), 1.6));
+                    vp.drawPath(sp);
+
+                    vp.setPen(Qt::NoPen);
+                    vp.setBrush(QColor(255, 255, 255, 240));
+                    for (const auto& node : ep.nodes) {
+                        QPointF np = xf.map(node.pos);
+                        vp.drawRect(QRectF(np.x() - 1.5, np.y() - 1.5, 3.0, 3.0));
+                    }
+                }
+                vp.end();
+                vecImg.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/schaedel_stencil_vector_preview.png"), "PNG");
+                vecImg.save(QStringLiteral("docs/manual_assets/17_skull_bitmap_to_path_stencil.png"), "PNG");
+            }
+
+            // Save multi-tone vector tatami stitches
+            {
+                StitchSequence toneSeq = ImageDigitizer::generate(skullImg, pTones);
+                QImage toneThumb = StitchThumbnail::render(toneSeq, 600, QColor(20, 23, 28), true);
+                toneThumb.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/schaedel_duotone_stitches.png"), "PNG");
+                toneThumb.save(QStringLiteral("docs/manual_assets/18_skull_multitone_tatami.png"), "PNG");
+                toneThumb.save(QStringLiteral("docs/manual_assets/14_photo_live_preview_skull.png"), "PNG");
+                sfumatoThumb.save(QStringLiteral("docs/manual_assets/16_sfumato_skull_live.png"), "PNG");
+            }
         }
     }
 

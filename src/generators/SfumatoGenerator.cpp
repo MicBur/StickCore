@@ -113,7 +113,7 @@ static void sweepHorizontal(const QImage& prep, const SfumatoGenerator::Params& 
             const double dy = amp * std::sin(omega * xCurr + phi);
 
             const double worldX = xOffsetMm + xCurr;
-            const double worldY = yOffsetMm + yBase + dy;
+            const double worldY = yOffsetMm + (p.heightMm - yBase) + dy;
 
             if (firstStitch) {
                 seq.add(worldX, worldY, SF_Jump, p.colorIdx);
@@ -170,7 +170,7 @@ static void sweepVertical(const QImage& prep, const SfumatoGenerator::Params& p,
             const double dx = amp * std::sin(omega * yCurr + phi);
 
             const double worldX = xOffsetMm + xBase + dx;
-            const double worldY = yOffsetMm + yCurr;
+            const double worldY = yOffsetMm + (p.heightMm - yCurr);
 
             if (firstStitch) {
                 seq.add(worldX, worldY, SF_Jump, p.colorIdx);

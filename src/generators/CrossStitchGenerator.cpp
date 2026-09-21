@@ -212,7 +212,7 @@ StitchSequence CrossStitchGenerator::generate(const QImage& source, const Params
         // Stitch each cross in standard uniform direction
         for (const Cell& cell : orderedCells) {
             const double cx = x0 + cell.col * pitch;
-            const double cy = y0 + cell.row * pitch;
+            const double cy = y0 + (gridH - 1 - cell.row) * pitch;
 
             const QPointF BL(cx, cy + pitch);
             const QPointF TR(cx + pitch, cy);

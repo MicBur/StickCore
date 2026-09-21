@@ -610,9 +610,18 @@ void Canvas2DWidget::drawPath(QPainter& g, int pathIndex, bool active)
 
     QColor line = (m_bezierMode == PathEditorWidget::Mode::TatamiPolygon) ? QColor(90, 150, 240)
                                                                           : QColor(230, 80, 80);
-    if (!active) line = line.darker(150);
+    if (ep.color.isValid()) {
+        line = ep.color;
+    }
+    if (!active) line = line.darker(130);
     g.setPen(QPen(line, active ? 2.2 : 1.6));
-    g.setBrush(Qt::NoBrush);
+    if (ep.closed) {
+        QColor fillCol = line;
+        fillCol.setAlpha(active ? 65 : 40);
+        g.setBrush(fillCol);
+    } else {
+        g.setBrush(Qt::NoBrush);
+    }
     g.drawPath(T.map(ep.toPainterPath()));
 
     // Tangent handles for active path

@@ -353,7 +353,7 @@
       <span class="toc-page-num">Kapitel 8</span>
     </li>
     <li class="toc-item">
-      <span><b>9. Digitalisierungs-Meisterschule: 6 Füllmuster, Füllwinkel, Echtzeit-Foto-Vorschau & OpenCV Foto-KI</b></span>
+      <span><b>9. Digitalisierungs-Meisterschule: 5 Modi, Vektor-Tatami, Sfumato, Kreuzstich, Paletten-Manager & Zugkompensation</b></span>
       <span class="toc-page-num">Kapitel 9</span>
     </li>
     <li class="toc-item">
@@ -367,6 +367,10 @@
     <li class="toc-item">
       <span><b>12. High-End Meister-Füllungen & Spezialstiche: Farbverlauf (Ombré), Bean Stitch, Mäander-Quilt & Florentiner Wellen</b></span>
       <span class="toc-page-num">Kapitel 12</span>
+    </li>
+    <li class="toc-item">
+      <span><b>13. Foto- & Motiv-Digitalisierung: Inkscape Bitmap-to-Path, Mehrfarb-Zerlegung & Stencil</b></span>
+      <span class="toc-page-num">Kapitel 13</span>
     </li>
   </ul>
 
@@ -860,137 +864,134 @@
 <div class="chapter">
   <div class="chapter-header">
     <div class="chapter-num">09</div>
-    <h1 class="chapter-title">Digitalisierungs-Meisterschule: 6 Füllmuster, Füllwinkel, Echtzeit-Foto-Vorschau & OpenCV Foto-KI</h1>
+    <h1 class="chapter-title">Digitalisierungs-Meisterschule: 5 Digitalisier-Modi, Vektor-Tatami, Sfumato, Kreuzstich &amp; Paletten-Manager</h1>
   </div>
 
   <p>
-    Das Digitalisieren (Punchen) ist die Kunst, eine zweidimensionale Grafik in einen lebendigen, dreidimensionalen Fadenkörper zu übersetzen. StickCore stellt Ihnen dafür Werkzeuge auf Industrieniveau zur Verfügung.
+    Das Digitalisieren (Punchen) ist die hohe Kunst, eine zweidimensionale Bildvorlage in einen lebendigen, dreidimensionalen Fadenkörper zu übersetzen. StickCore Studio hebt das Digitalisieren auf echtes Atelier- und Industrieniveau: Statt naiver Scanlinien nutzt die Software echte <b>Polygon-Vektorisierung mit Dual-Grid-Loop-Erkennung</b>, mathematisch phasenverschobene <b>Tatami-Füllmuster</b>, automatische <b>Fadenbett-Unterleger (Underlay)</b>, <b>physikalische Zugkompensation</b> und einen <b>interaktiven Paletten-Manager</b>.
   </p>
 
-  <h3>Die 6 mathematischen Füllmuster (Tatami Patterns):</h3>
+  <h3>Die 5 spezialisierten Digitalisierungs-Modi:</h3>
   <table>
     <tr>
-      <th>Muster</th>
-      <th>Mathematischer Versatz</th>
-      <th>Optische Wirkung & Einsatzgebiet</th>
+      <th style="width: 28%;">Digitalisier-Modus</th>
+      <th style="width: 28%;">Technischer Algorithmus</th>
+      <th>Einsatzgebiet &amp; Textilwirkung</th>
     </tr>
     <tr>
-      <td><b>Standard-Tatami</b></td>
-      <td>1/4 (0.25) Reihenversatz</td>
-      <td>Gleichmäßige, matte Weboptik. Verhindert störende Moiré-Muster; der Allrounder für alle Flächen.</td>
+      <td><b>🎨 Vektor-Tatami</b><br><small style="color: #64748b;">(K-Means &amp; Vektorfelder)</small></td>
+      <td>Dual-Grid Konturverfolgung, Douglas-Peucker Glättung, K-Means Farbreduktion, Unterleger &amp; Zugkompensation.</td>
+      <td>Der Standard für Firmenlogos, Embleme, Vereinswappen und Farbflächen. Keine vertikalen Einstichrillen, perfekte Kanten.</td>
     </tr>
     <tr>
-      <td><b>Ziegelstein (Brick)</b></td>
-      <td>1/2 (0.50) Halbversatz</td>
-      <td>Geometrischer Mauerwerksverband. Reflektiert Scheinwerferlicht großflächig; wirkt strukturiert und kräftig.</td>
+      <td><b>🌫️ Sfumato Photo-Stitch</b><br><small style="color: #64748b;">(Wellenlinien-Modulation)</small></td>
+      <td>Sinus- und Mäander-Wellen mit kontinuierlicher Frequenz- und Amplitudenmodulation nach Helligkeitswerten.</td>
+      <td>Fotorealistische Porträts, Tierbilder und Landschaften. Gestickt mit nur 1–2 Garnfarben, fast ohne Sprungstiche!</td>
     </tr>
     <tr>
-      <td><b>Köper (Twill)</b></td>
-      <td>1/3 (0.33) Schrägversatz</td>
-      <td>Markante diagonale Gratlinien wie bei feinem Denim oder Gabardine-Tuch. Hervorragend für Trachtenstoffe.</td>
+      <td><b>✖️ Traditioneller Kreuzstich</b><br><small style="color: #64748b;">(Aida-Zählraster)</small></td>
+      <td>Quantisierung auf Aida-Gitter (11ct, 14ct, 16ct, 18ct) mit Vollkreuz (Full Cross) oder plastischem Doppelkreuz.</td>
+      <td>Klassische Trachtenmotive, Folklore-Mustertücher, historische Bordüren und Handarbeits-Optik.</td>
     </tr>
     <tr>
-      <td><b>Flechtmuster (Basket)</b></td>
-      <td>4-Phasen Blockversatz</td>
-      <td>Kreuzweise gewobene Struktur, die wie ein Weidenkorb oder Panamagewebe changiert.</td>
+      <td><b>✏️ LineArt &amp; Konturen</b><br><small style="color: #64748b;">(Lauf- &amp; Dreifachstich)</small></td>
+      <td>Canny-Kantendetektion, Achsenskelettierung, Single Run, 3-Pass Bean Stitch oder 5-Pass Triple Run.</td>
+      <td>Filigrane Skizzen, Comic-Outlines, Kinderzeichnungen und Monolinien auf Stofftaschen oder Servietten.</td>
     </tr>
     <tr>
-      <td><b>Wabenmuster (Honeycomb)</b></td>
-      <td>Doppelraute / Hexagonal</td>
-      <td>Geometrisches Gitter, das besonders bei Sport- und Outdoor-Funktionskleidung modern wirkt.</td>
-    </tr>
-    <tr>
-      <td><b>Kontur-Echo</b></td>
-      <td>Abstandstransformation</td>
-      <td>Stiche folgen exakt den Außenkanten von außen nach innen. Ergibt schillernde, organische Lichteffekte.</td>
+      <td><b>👤 Konterfei &amp; Silhouette</b><br><small style="color: #64748b;">(Comic, Silhouette &amp; Poster)</small></td>
+      <td>Otsu-Schwellenwertbildung, adaptive Detailerkennung, 1-Ton Silhouette oder 2–6 Tonwertplakate.</td>
+      <td>Schattenrisse, Hochzeits-Silhouetten, plakative Pop-Art-Grafiken und kontrastreiche Holzschnitt-Motive.</td>
     </tr>
   </table>
 
   <div class="figure" style="margin: 18px 0;">
     <img src="manual_assets/12_tatami_fill_patterns_macro.png" alt="StickCore Tatami-Füllmuster Makro-Stichvergleich">
-    <div class="figure-caption">Abb. 9.1: Makro-Stichvergleich aller 6 mathematischen Tatami-Muster (Reihenversätze, Nadel-Einstichstellen & Lichtbrechung).</div>
+    <div class="figure-caption">Abb. 9.1: Makro-Stichvergleich der mathematischen Tatami-Muster (Reihenversätze, Nadel-Einstichstellen &amp; Lichtbrechung ohne vertikale Rillen).</div>
   </div>
 
-  <h3>Füllwinkel (0°–360°), Glanzgarn & Verzugsausgleich:</h3>
+  <h3>Der interaktive Paletten-Manager (Farbtabelle &amp; Madeira-Zuordnung):</h3>
   <p>
-    Stickgarn (Viskose wie <i>Madeira Rayon</i> oder Polyester wie <i>Madeira Polyneon</i>) ist zylindrisch verzwirnt. Es reflektiert das Licht <b>quer zur Stichrichtung</b>. Wenn Sie zwei nebeneinanderliegende Flächen mit identischem Garn, aber unterschiedlichen Winkeln (z. B. 30° und 75°) füllen, erscheint die eine hell und glänzend, die andere matt und tief – ein spektakulärer Hell-Dunkel-Effekt!
+    Im neuen <b>Paletten-Manager</b> analysiert StickCore jede Farbnuance Ihrer Vorlage und schlägt automatisch die passendste Garnfarbe aus der <b>Madeira Rayon / Polyneon</b> Farbkarte vor:
   </p>
   <ul>
-    <li><b>Push-Pull-Phänomen:</b> Fäden ziehen sich beim Einstechen zusammen (Pull) und dehnen den Stoff in Stichrichtung aus (Push). Richten Sie Stiche niemals parallel zur Maschenrichtung dehnbarer Stoffe aus, sondern stets in 30°–45° Neigung.</li>
-    <li><b>Multi-Winkel-Schutz (+45°):</b> Im Bild-Digitalisierer wechselt der Füllwinkel automatisch um +45° je Garnfarbe. Dadurch heben sich die Verzugskräfte der einzelnen Farbfelder gegenseitig auf und der Stoff bleibt plan im Rahmen!</li>
+    <li><b>Farb-Icon &amp; Madeira-Code:</b> Zu jeder Farbe sehen Sie das RGB-Muster, die exakte Garnnummer (z. B. <i>Madeira Rayon #1000 Schwarz</i>) und die offizielle Farbbezeichnung.</li>
+    <li><b>Flächenanteil in Prozent (%):</b> Sie sehen sofort, wie viel Prozent der Gesamtfläche von der jeweiligen Farbe eingenommen wird.</li>
+    <li><b>Gezieltes Ein-/Ausschalten:</b> Über die Kontrollkästchen <code>[x] Sticken</code> / <code>[ ] Verwerfen</code> können Sie einzelne Farben abwählen. So lassen sich störende Reflexe oder Schattierungen mühelos eliminieren.</li>
+    <li><b>Hintergrund-Schnelltasten:</b> Mit <b>[Hintergrund abwählen]</b> erkennt StickCore automatisch die dominanten Randfarben und schaltet sie stumm. Mit <b>[Alle an]</b> aktivieren Sie die gesamte Farbpalette wieder.</li>
   </ul>
 
-  <h3>OpenCV Bildverarbeitung & KI-Digitalisierer:</h3>
-  <p>
-    Für die Digitalisierung beliebiger Motive (Logos, Vereinsabzeichen, Clipart, Fotos) nutzt StickCore die Bildverarbeitungsbibliothek <b>OpenCV</b> (mit nahtlosem nativem C++ Fallback für autonome Installationen):
-  </p>
-  <ul>
-    <li><b>Smarte Hintergrund-Entfernung (<code>removeBackground</code>):</b> Erkennt gleichmäßige Papier- und Foto-Hintergründe über eine 3-Ecken-Konsistenzprüfung und stellt das Hauptmotiv automatisch frei. Weiße Bildelemente im Motivzentrum bleiben dabei vollständig erhalten.</li>
-    <li><b>Bilateral Denoising:</b> Glättet Papierfalten, Scannerflecken und JPEG-Artefakte, bewahrt Kanten und feine Linien jedoch messerscharf.</li>
-    <li><b>Despeckle-Specklefilter (<code>filterSpeckles</code>):</b> Verschmilzt isolierte Bildpunkte unter 16 Pixeln mit der Nachbarfarbe. Verhindert Nadelstau, Fadenknäuel und unnötige Sprungstiche.</li>
-    <li><b>Douglas-Peucker Kontur-Glättung (<code>smoothContours</code>):</b> Eliminiert pixelige Treppenstufen und wandelt Kanten in fließende, elegante Bézier-Vektorkonturen um.</li>
-    <li><b>Erhabener Satin-Kettelrand (<code>satinBorder</code>):</b> Umhüllt das digitalisierte Motiv auf Wunsch automatisch mit einer maschinengestickten Kettelkante (1,5 bis 4,0 mm) – ideal für Aufnäher und Embleme.</li>
-  </ul>
-
-  <div class="figure" style="margin: 18px 0;">
-    <img src="manual_assets/13_opencv_motif_pipeline.png" alt="OpenCV Digitalisierungs-Pipeline für beliebige Motive">
-    <div class="figure-caption">Abb. 9.2: Die 5 Phasen der OpenCV Motiv-Digitalisierung (vom Kundenfoto über OpenCV Freistellung & Vektor-Glättung zum fertigen Janome-Stick).</div>
+  <h3>Atelier-Qualitätskontrolle: Unterleger, Zugkompensation &amp; Füllwinkel:</h3>
+  <div class="grid-2">
+    <div>
+      <h4>1. Unterleger (Underlay) — Das textile Fundament</h4>
+      <p>
+        Wird direkt auf den nackten Stoff gestickt, sinken die Deckstiche in die Maschen oder den Flor ein. StickCore erzeugt bei aktivem Unterleger ein zweistufiges Gitter:
+      </p>
+      <ul>
+        <li><b>Kantenlaufstich (Edge Run):</b> Umfährt die Kontur 0,8 mm innerhalb des Randes und versteift die Kanten.</li>
+        <li><b>90°-Kreuzgitter:</b> Legt ein weitmaschiges Gitter quer zur späteren Füllrichtung auf den Stoff, das den Faden flor-oben hält.</li>
+      </ul>
+    </div>
+    <div>
+      <h4>2. Zugkompensation (Pull Compensation 0,0–0,8 mm)</h4>
+      <p>
+        Die Fadenspannung zieht den Stoff entlang der Stiche zusammen. Ohne Kompensation entstehen an den Grenzen zweier Farbflächen unschöne Stoffspalten (Lücken).
+      </p>
+      <ul>
+        <li>StickCore dehnt die Vektorumrisse mathematisch exakt <b>entlang der Flächennormalen</b> um den eingestellten Betrag (Standard 0,25 mm) vor.</li>
+        <li>Die Farben überlappen sich mikroskopisch – auf dem fertigen Textil stoßen sie perfekt nahtlos aneinander!</li>
+      </ul>
+    </div>
   </div>
 
   <h3>Echtzeit-Live-Vorschau (Real-Time Stitch Preview) &amp; WebP-Fotodigitalisierung</h3>
   <p>
-    Beim Digitalisieren von Fotos und Grafiken (unterstützt moderne <b>WebP</b>-Bilder, PNG, JPG, BMP und TIFF) müssen oft mehrere Parameter wie Farbanzahl, Kontrast, Kantenunschärfe und Skalierung feinjustiert werden. In StickCore Studio geschieht dies in echter Echtzeit (&lt; 20 ms Reaktionszeit) – Sie sehen das Resultat schon während des Ziehens am Schieberegler:
+    Beim Digitalisieren von Fotos und Grafiken (unterstützt moderne <b>WebP</b>-Bilder, PNG, JPG, BMP und TIFF) reagiert StickCore Studio in echter Echtzeit (&lt; 20 ms) – Sie sehen das Resultat schon während des Ziehens an den Schiebereglern:
   </p>
 
   <div class="grid-2">
     <div class="figure">
       <img src="manual_assets/14_photo_live_preview_skull.png" alt="Echtzeit-Fadensimulation Fotomotiv">
-      <div class="figure-caption">Abb. 9.3: 3D-Fadensimulation (schädel.webp) mit 3 Madeira-Garnfarben, Nadel-Einstichstellen und Lichtreflexion.</div>
+      <div class="figure-caption">Abb. 9.2: Vektor-Tatami 3D-Simulation (schädel.webp): 13.127 Industriestiche, 3 Madeira-Garnfarben mit Unterleger und Zugkompensation.</div>
     </div>
     <div class="figure">
-      <img src="manual_assets/15_photo_kmeans_analysis.png" alt="Bildanalyse K-Means Maske">
-      <div class="figure-caption">Abb. 9.4: Bildanalyse-Modus: K-Means-Clusterung mit automatischer Freistellung des Hintergrundgewebes.</div>
+      <img src="manual_assets/16_sfumato_skull_live.png" alt="Sfumato Photo-Stitch Vorschau">
+      <div class="figure-caption">Abb. 9.3: Sfumato Photo-Stitch (schädel.webp): Künstlerische Wellenlinien-Gravur mit kontinuierlicher Stichdichte.</div>
     </div>
   </div>
 
   <ul>
-    <li><b>Duale Vorschau-Modi (Umschaltbar):</b>
+    <li><b>Duale Vorschau-Modi:</b>
       <br>• 🧵 <i>Gestickte Fäden:</i> Fotorealistische Fadensimulation mit Schattierung, Lichtglanz, Nadel-Einstichlöchern und fühlbarer Webstoff-Struktur.
       <br>• 🔍 <i>Bildanalyse / Maske:</i> Farbflächen-Clusterung und Freistellungsmaske zur Kontrolle, welche Bildbereiche gestickt und welche als Hintergrund verworfen werden.
     </li>
-    <li><b>Intelligente Stoffuntergrund-Wahl (Fabric Selector):</b> Wählen Sie die Farbe des Trägerstoffs (Schwarz, Anthrazit, Loden/Waldgrün, Marineblau, Naturleinen/Beige, Reinweiß). StickCore analysiert automatisch den Kontrast des Motivs und wählt den optimalen Hintergrund zur Beurteilung.</li>
-    <li><b>Robuste Rand-Freistellung bei strukturierten Textilien:</b> Die Hintergrund-Erkennung analysiert die Clusterverteilung an den Bildrändern. Selbst unruhige Gewebestrukturen oder dunkle Fotohintergründe (wie bei <code>schädel.webp</code>) werden sauber abgetrennt, ohne Details des Motivs zu beschädigen.</li>
+    <li><b>Stoffuntergrund-Wahl (Fabric Selector):</b> Wählen Sie die Farbe des Trägerstoffs (Schwarz, Anthrazit, Loden/Waldgrün, Marineblau, Naturleinen/Beige, Reinweiß) zur perfekten visuellen Beurteilung.</li>
     <li><b>Dynamische Live-Metriken &amp; Rahmen-Passung:</b> Ein Status-Badge im Dialog zeigt Ihnen bei jeder Reglerbewegung live:
-      <br>• Exakte Stichanzahl (z.B. <i>2.059 Stiche</i>)
+      <br>• Exakte Stichanzahl (z. B. <i>13.127 Stiche</i>)
       <br>• Anzahl aktiver Garnfarben
       <br>• Tatsächliche Stickmaße in Millimetern
       <br>• Geschätzte Maschinenlaufzeit
-      <br>• Janome-Rahmenpassung (z.B. <i>⭕ Passt in: Hoop B (140×200), SQ14 (140×140)</i> oder Warnhinweis bei Übergröße)
+      <br>• Janome-Rahmenpassung (z. B. <i>⭕ Passt in: Hoop B (140×200), SQ14 (140×140)</i> oder Warnhinweis bei Übergröße)
     </li>
-    <li><b>Synchronisierte Studio-Leinwand:</b> Die Hauptleinwand hinter dem Dialog aktualisiert sich live mit. Bei Klick auf <i>„Abbrechen“</i> wird der ursprüngliche Zustand des Arbeitsbereichs verlustfrei wiederhergestellt.</li>
   </ul>
 
-  <h3>Praxis-Leitfaden A: Vereinswappen & Aufnäher vom Smartphone-Foto</h3>
-  <p>
-    Ein Kunde bringt ein Vereinswappen auf einer Visitenkarte oder fotografiert es mit dem Handy ab:
-  </p>
+  <h3>Praxis-Leitfaden A: Hochwertiges Firmenwappen &amp; Emblem aus Vorlage</h3>
   <ol>
-    <li><b>Foto empfangen (<kbd>Strg</kbd> + <kbd>U</kbd>):</b> QR-Code mit dem Handy scannen, Foto schießen und kabellos an StickCore senden.</li>
-    <li><b>Hintergrund entfernen aktivieren:</b> Setzen Sie im Dialog den Haken bei <i>„Hintergrund entfernen“</i>. Der unruhige Papiertisch wird automatisch freigestellt.</li>
-    <li><b>Farbpalette begrenzen:</b> Stellen Sie <i>Garnfarben</i> auf <b>3–4</b>. Der K-Means-Cluster ordnet alle Farbnuancen exakt den Madeira-Garnen zu.</li>
-    <li><b>Kettelrand zuschalten:</b> Aktivieren Sie <i>„Erhabener Satin-Kettelrand“</i> mit <b>2,5 mm</b> Breite. Damit erhält der Patch einen professionellen Abschluss.</li>
-    <li><b>Als JEF speichern:</b> Motiv in den Rahmen <b>SQ14 (140 × 140 mm)</b> einpassen und direkt auf den USB-Stick für die Janome MC350E exportieren.</li>
+    <li><b>Bild laden (<kbd>Strg</kbd> + <kbd>I</kbd> oder <kbd>Strg</kbd> + <kbd>U</kbd>):</b> Bilddatei öffnen oder Handy-Foto über den QR-Code kabellos empfangen.</li>
+    <li><b>Modus wählen:</b> <i>🎨 Vektor-Tatami</i> auswählen.</li>
+    <li><b>Farbanzahl &amp; Palette:</b> Farbanzahl auf <b>3–5 Farben</b> einstellen. Im <b>Paletten-Manager</b> prüfen, ob die Hintergrundfarbe korrekt abgewählt ist.</li>
+    <li><b>Atelier-Einstellungen setzen:</b> Tatami-Muster auf <i>Köper (Twill)</i> oder <i>Standard-Tatami</i>, <i>Unterleger</i> aktivieren und <i>Zugkompensation</i> auf <b>0,25 mm</b> stellen.</li>
+    <li><b>Kettelrand zuschalten (optional):</b> Bei Aufnähern <i>„Erhabener Satin-Kettelrand“</i> mit <b>2,5 mm</b> aktivieren.</li>
+    <li><b>Exportieren:</b> Mit <b>[Übernehmen]</b> in das Studio einfügen, Rahmenkontrolle prüfen und direkt als <b>JEF</b> für die Janome-Maschine exportieren.</li>
   </ol>
 
-  <h3>Praxis-Leitfaden B: Handzeichnungen & Kinder-Skizzen als LineArt</h3>
-  <p>
-    Feine Strichzeichnungen oder Kinderbilder lassen sich als filigraner Konturstick verewigen:
-  </p>
-  <ul>
-    <li>Wählen Sie im Bilddialog den Modus <b>LineArt / Konturzeichnung</b>.</li>
-    <li>OpenCV extrahiert die Linienachsen und erzeugt kontinuierliche Doppelstich-Laufnähte (2,0 mm Stichlänge).</li>
-    <li>Perfekt für Stoffbeutel, Geschirrtücher, Kissenbezüge oder Schürzenecken mit persönlicher Note.</li>
-  </ul>
+  <h3>Praxis-Leitfaden B: Fotos als Sfumato-Wellenstich für Kissen &amp; Jacken</h3>
+  <ol>
+    <li><b>Modus wählen:</b> Im Dialog <i>🌫️ Sfumato Photo-Stitch</i> wählen.</li>
+    <li><b>Linienabstand einstellen:</b> <b>1,2 bis 1,5 mm</b> Zeilenabstand für ein ausgewogenes Verhältnis von Stickdichte und Maschinentempo.</li>
+    <li><b>Stil &amp; Fadenfarbe:</b> <i>Horizontal</i> für sanfte Farbverläufe oder <i>Kreuzstich-Schraffur (Crosshatch)</i> für tiefe Kontraste. Als Fadenfarbe ein edles Dunkelanthrazit oder Schwarz auf hellem Leinen wählen.</li>
+  </ol>
 </div>
 
 <!-- CHAPTER 10 -->
@@ -1273,6 +1274,108 @@
       <td>Festes Reißvlies, straff im Hoop B eingespannt</td>
     </tr>
   </table>
+
+</div>
+
+<!-- CHAPTER 13 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">13</div>
+    <h1 class="chapter-title">Foto- & Motiv-Digitalisierung: Inkscape Bitmap-to-Path, Mehrfarb-Zerlegung & Stencil</h1>
+  </div>
+
+  <p>
+    Eine der größten Hürden in der computergestützten Stickerei ist das direkte Sticken von Fotos und rasterbasierten Grafiken: Rohe Pixelbilder besitzen Millionen Farbnuancen und weiche Verläufe. Versucht man, diese direkt Stich für Stich abzubilden, entstehen unsaubere Nadelnester, endlose Fadenwechsel und ein unruhiges, unansehnliches Stickbild.
+  </p>
+  <p>
+    StickCore Studio löst dieses Problem durch eine hochpräzise <b>Vektor- und Tonwert-Digitalisierungs-Pipeline (Parität zu Inkscapes renommierter "Bitmap zu Pfad" Funktion)</b>. Fotos werden wahlweise in markante 1-Farben-Schablonen (Stencils), dramatische 2–3-Ton-Posterisierungen oder farbreine K-Means-Flächen zerlegt und in mathematisch glatte, bearbeitbare Bézier-Splines umgerechnet.
+  </p>
+
+  <div class="figure">
+    <img src="manual_assets/14_photo_live_preview_skull.png" alt="Bild-Digitalisierer Dialog mit Live-Vorschau" style="max-height: 340px;">
+    <div class="figure-caption">Abbildung 13.1: Der erweiterte Bild-Digitalisierer mit Live-Vorschau, Tonwert-Trennung und interaktivem Schwellenwert-Regler.</div>
+  </div>
+
+  <h3>13.1 Die drei intelligenten Zerlegungs-Strategien</h3>
+  <table>
+    <tr>
+      <th style="width: 25%;">Modus</th>
+      <th style="width: 22%;">Farben / Stufen</th>
+      <th>Einsatzgebiet & Algorithmus</th>
+    </tr>
+    <tr>
+      <td><b>1 Farbe: Schablone (Stencil)</b></td>
+      <td>1 Garnfarbe</td>
+      <td>
+        <b>Perfekt für Porträts, Totenköpfe, Scherenschnitte & Wappen:</b><br>
+        Der Algorithmus analysiert die 4 Bildränder auf durchschnittliche Helligkeit (Hintergrund-Luminanz). Liegt ein dunkles Motiv auf hellem Grund oder ein helles Motiv auf dunklem Grund vor, erkennt StickCore dies vollautomatisch.
+        <br><b>Der entscheidende Vorteil:</b> Es entsteht <i>kein störender äußerer Kastenrahmen</i>! Über den interaktiven Schwellenwert-Schieberegler (0–255) steuern Sie die Schärfe der Details in Echtzeit.
+      </td>
+    </tr>
+    <tr>
+      <td><b>2–3 Farben: Tonwerte (Posterisierung)</b></td>
+      <td>2 bis 3 Tonwert-Stufen</td>
+      <td>
+        <b>Dramatische plastische Schattierung:</b><br>
+        Teilt Graustufen- und Farbfotos in <i>Tiefschatten</i> (Schattenkontur), <i>Mitteltöne</i> (Körper / Struktur) und <i>Glanzlichter</i> (Highlight-Akzente). Ideal z.B. für Totenköpfe mit Knochenweiß und Schattengrau auf dunklem Stoff.
+      </td>
+    </tr>
+    <tr>
+      <td><b>Farben (K-Means Clustering)</b></td>
+      <td>4 bis 8 Garnfarben</td>
+      <td>
+        <b>Bunte Grafiken, Vereinslogos & Cartoons:</b><br>
+        Clusterbasierte Farbreduktion im Farbraum mit Kantenerhaltung. Findet automatisch die dominantesten Garnfarben und fasst Farbnuancen zu klaren, stickbaren Flächen zusammen.
+      </td>
+    </tr>
+  </table>
+
+  <h3>13.2 Vektor-Tracing: Aus Pixeln werden geschlossene Bézier-Splines</h3>
+  <p>
+    Anstatt zackige Pixelkanten abzusticken, wandelt der <code>traceToPaths</code>-Algorithmus jede Farb- und Tonwertregion in mathematisch glatte Bézier-Kurven um:
+  </p>
+  <ul>
+    <li><b>Konturverfolgung nach Suzuki-Abe:</b> Erkennt Außenkonturen und Aussparungen (z.B. Augen- und Nasenhöhlen beim Schädel) mit korrekter Hierarchie.</li>
+    <li><b>Douglas-Peucker-Glättung:</b> Reduziert Pixelrauschen und glättet Kanten ohne Detailverlust.</li>
+    <li><b>Automatische Eckenerkennung:</b> Winkel über 63° werden als scharfe Eckpunkte (Cusp Nodes) beibehalten, während weiche Kurven mit fließenden Catmull-Rom-Tangenten geglättet werden.</li>
+  </ul>
+
+  <div class="grid-2">
+    <div class="figure">
+      <img src="manual_assets/17_skull_bitmap_to_path_stencil.png" alt="Vektor-Pfade wie Inkscape">
+      <div class="figure-caption">Abb. 13.2: Vektor-Pfade (Bitmap to Path): Geschlossene Bézier-Splines mit Ankerpunkten und Griffen.</div>
+    </div>
+    <div class="figure">
+      <img src="manual_assets/18_skull_multitone_tatami.png" alt="2-Ton Tatami Stickbild">
+      <div class="figure-caption">Abb. 13.3: 2-Ton Tatami-Stickbild: Knochenweiß & Schattengrau mit Zugkompensation und Schichtversatz.</div>
+    </div>
+  </div>
+
+  <h3>13.3 Der duale Übernahme-Workflow: Vektor-Editor vs. Sofort-Stickmuster</h3>
+  <p>
+    Im Fußbereich des Digitalisierungs-Dialogs stehen Ihnen zwei spezialisierte Aktionen zur Verfügung:
+  </p>
+  <ul>
+    <li>
+      <span class="badge badge-teal">✏️ Als Vektorpfade in Editor (Bitmap to Path)</span>
+      <p style="margin-top: 4px;">
+        Lädt alle generierten Bézier-Pfade direkt in den <b>2D-Vektoreditor (PathEditorWidget)</b>. Dort können Sie Ankerpunkte mit der Maus verschieben, Griffe anpassen, Stützpunkte hinzufügen oder fehlerhafte Bilddetails vor dem Sticken manuell retuschieren.
+      </p>
+    </li>
+    <li>
+      <span class="badge badge-blue">🧵 Als Stickmuster übernehmen ▶</span>
+      <p style="margin-top: 4px;">
+        Generiert sofort produktionsfertige <b>Tatami-Füllungen</b> mit vollautomatischem Schichtaufbau:
+        <br>• <b>Garnfarben-Zuordnung:</b> Jede Farb-/Tonwertschicht erhält einen eigenen Farbstopp in der Maschinenpalette.
+        <br>• <b>Winkelversatz (+30° pro Farbe):</b> Um Stoffverzug und Fadenverdrängung zu verhindern, werden die Stichwinkel aufeinanderfolgender Schichten gegeneinander verdreht.
+        <br>• <b>Integrierter Unterleger (Underlay) & Zugkompensation:</b> Stabilisiert das Stickgut bereits vor dem Deckstich.
+      </p>
+    </li>
+  </ul>
+
+  <div class="callout callout-info">
+    <b>Garantierte Orientierungs-Präzision:</b> Alle Digitalisierungs-Assistenten (inkl. Sfumato-Photo-Stitch und Kreuzstich) arbeiten mit streng korrigierter Y-Achsen-Orientierung. Motive werden exakt so gestickt, wie sie auf dem Bildschirm erscheinen – kein unbeabsichtigter Kopfstand mehr!
+  </div>
 
   <div class="callout callout-info" style="margin-top: 32px; text-align: center;">
     <b>StickCore Studio — Perfektion bis zum letzten Stich.</b><br>

@@ -12,6 +12,7 @@
 #include <QPointF>
 #include <QPolygonF>
 #include <QVector>
+#include <QColor>
 
 namespace stick {
 
@@ -37,6 +38,8 @@ struct BezierNode {
 struct EditPath {
     QVector<BezierNode> nodes;
     bool closed = false;
+    int colorIdx = 0;
+    QColor color = QColor(100, 160, 240);
 
     int  count() const { return nodes.size(); }
     bool empty() const { return nodes.isEmpty(); }

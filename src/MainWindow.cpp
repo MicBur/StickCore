@@ -1363,23 +1363,55 @@ void MainWindow::generate()
         m_current.palette.clear();
         m_current.palette.push_back(ThreadCatalog::snap(QColor(210, 40, 50)));
     } else {
-        int outer = -1;
-        for (int i = 0; i < paths.size(); ++i) if (paths[i].count() >= 3) { outer = i; break; }
-        if (outer < 0) {
+        int validCount = 0;
+        for (const auto& p : paths) {
+            if (p.count() >= 3) validCount++;
+        }
+        if (validCount == 0) {
             statusBar()->showMessage(QStringLiteral("Tatami braucht ein Polygon mit ≥3 Punkten."), 6000);
             return;
         }
-        QVector<QPolygonF> region;
-        region.push_back(paths[outer].toPolygon());
-        for (int i = 0; i < paths.size(); ++i)
-            if (i != outer && paths[i].count() >= 3) region.push_back(paths[i].toPolygon());
-        TatamiFill::Params tp; tp.rowSpacingMm = density;
-        tp.maxStitchMm = maxStit; tp.underlay = underlay;
-        tp.fillAngleDeg = m_fillAngleSpin ? m_fillAngleSpin->value() : 45.0;
-        tp.pattern = m_patternCombo ? TatamiFill::PatternType(m_patternCombo->currentData().toInt()) : TatamiFill::PatternType::StandardTatami;
-        m_current = TatamiFill::generate(region, tp);
-        m_current.palette.clear();
-        m_current.palette.push_back(ThreadCatalog::snap(QColor(40, 90, 200)));
+
+        // Group paths by colorIdx
+        QMap<int, QVector<QPolygonF>> colorRegions;
+        QMap<int, QColor> colorMap;
+        for (int i = 0; i < paths.size(); ++i) {
+            if (paths[i].count() >= 3) {
+                int cIdx = paths[i].colorIdx;
+                colorRegions[cIdx].push_back(paths[i].toPolygon());
+                if (!colorMap.contains(cIdx)) {
+                    colorMap[cIdx] = paths[i].color;
+                }
+            }
+        }
+
+        m_current = StitchSequence();
+        int layer = 0;
+        for (auto it = colorRegions.begin(); it != colorRegions.end(); ++it, ++layer) {
+            const int cIdx = it.key();
+            const QVector<QPolygonF>& region = it.value();
+
+            TatamiFill::Params tp;
+            tp.rowSpacingMm = density;
+            tp.maxStitchMm  = maxStit;
+            tp.underlay     = underlay;
+            tp.fillAngleDeg = (m_fillAngleSpin ? m_fillAngleSpin->value() : 45.0) + (layer * 30.0);
+            tp.pattern      = m_patternCombo ? TatamiFill::PatternType(m_patternCombo->currentData().toInt())
+                                             : TatamiFill::PatternType::StandardTatami;
+            tp.colorIdx     = layer;
+
+            StitchSequence layerSeq = TatamiFill::generate(region, tp);
+            if (!layerSeq.empty()) {
+                if (layer > 0 && !layerSeq.stitches.empty()) {
+                    layerSeq.stitches.front().flags = SF_ColorChange;
+                }
+                m_current.stitches.insert(m_current.stitches.end(),
+                                          layerSeq.stitches.begin(),
+                                          layerSeq.stitches.end());
+                QColor col = colorMap.value(cIdx, QColor(40, 90, 200));
+                m_current.palette.push_back(ThreadCatalog::snap(col));
+            }
+        }
     }
 
     setCurrentSequence(m_current, QStringLiteral("Erzeugt"));
@@ -2058,6 +2090,24 @@ void MainWindow::digitizeWithDialog(const QImage& img, const QString& label)
         m_editor->setSequence(backupSeq);
         if (m_view) m_view->setSequence(backupSeq);
         return;
+    }
+
+    if (dlg.applyMode() == ImageDialog::ApplyMode::VectorPaths) {
+        QVector<EditPath> paths = dlg.extractedPaths();
+        if (paths.isEmpty()) {
+            paths = ImageDigitizer::traceToPaths(img, dlg.params());
+        }
+        if (!paths.isEmpty()) {
+            m_editor->loadPaths(paths);
+            m_editor->setMode(PathEditorWidget::Mode::TatamiPolygon);
+            m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Combined);
+            m_editor->setBackgroundImage(img);
+            generate();
+            statusBar()->showMessage(
+                QStringLiteral("Vektorpfade erfolgreich importiert (%1 Pfade). Bearbeite Knoten frei im Canvas (F5 zum Neuberechnen).")
+                .arg(paths.size()), 7000);
+            return;
+        }
     }
 
     ImageDigitizer::Params ip = dlg.params();
