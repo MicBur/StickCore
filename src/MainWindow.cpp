@@ -374,6 +374,14 @@ void MainWindow::setupMenus()
 
     // --- Bearbeiten ---
     QMenu* editMenu = menuBar()->addMenu(QStringLiteral("&Bearbeiten"));
+    editMenu->addAction(QStringLiteral("↩ &Rückgängig"), m_editor, &PathEditorWidget::undo, QKeySequence::Undo);
+    editMenu->addAction(QStringLiteral("↪ &Wiederholen"), m_editor, &PathEditorWidget::redo, QKeySequence::Redo);
+    editMenu->addSeparator();
+    editMenu->addAction(QStringLiteral("🗑 Ausgewählte Pfade &löschen"), m_editor, &PathEditorWidget::deleteSelected, QKeySequence::Delete);
+    editMenu->addAction(QStringLiteral("&Alle Pfade markieren"), m_editor, &PathEditorWidget::selectAllPaths, QKeySequence::SelectAll);
+    editMenu->addAction(QStringLiteral("Auswahl &aufheben"), m_editor, &PathEditorWidget::clearSelection, QKeySequence(Qt::Key_Escape));
+    editMenu->addAction(QStringLiteral("🧹 Kleine Inseln / Splitter &filtern…"), this, [this]{ m_editor->filterSmallIslands(4.0); });
+    editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("📐 An aktuellen Rahmen &einpassen & neu berechnen"), this, &MainWindow::fitDesignToHoop, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
     editMenu->addAction(QStringLiteral("&Größe ändern & neu berechnen…"), this, &MainWindow::resizeDesign, QKeySequence(Qt::CTRL | Qt::Key_R));
     editMenu->addAction(QStringLiteral("Im &Rahmen platzieren…"), this, &MainWindow::placeDesign);
@@ -1233,69 +1241,73 @@ void MainWindow::setCurrentSequence(const StitchSequence& s, const QString& labe
 // ---------------------------------------------------------------------------
 void MainWindow::mirrorHorizontal()
 {
-    if (m_current.empty()) return;
-    double minX, minY, maxX, maxY;
-    if (!m_current.bounds(minX, minY, maxX, maxY)) return;
-    const double cx = 0.5 * (minX + maxX);
-    for (Stitch& s : m_current.stitches) {
-        s.x = 2.0 * cx - s.x;
+    if (m_editor->canvasMode() == PathEditorWidget::CanvasMode::BezierPaths ||
+        m_editor->canvasMode() == PathEditorWidget::CanvasMode::Combined) {
+        m_editor->flipHorizontalSelected();
     }
-    for (EditPath& p : m_editor->paths()) {
-        for (BezierNode& n : p.nodes) {
-            n.pos.setX(2.0 * cx - n.pos.x());
-            n.ctrlIn.setX(2.0 * cx - n.ctrlIn.x());
-            n.ctrlOut.setX(2.0 * cx - n.ctrlOut.x());
+    if (!m_current.empty()) {
+        double minX, minY, maxX, maxY;
+        if (m_current.bounds(minX, minY, maxX, maxY)) {
+            const double cx = 0.5 * (minX + maxX);
+            for (Stitch& s : m_current.stitches) {
+                s.x = 2.0 * cx - s.x;
+            }
+            m_editor->setSequence(m_current);
+            m_view->setSequence(m_current);
+            updateInfoPanel();
         }
     }
-    m_editor->setSequence(m_current);
-    m_view->setSequence(m_current);
-    updateInfoPanel();
     statusBar()->showMessage(QStringLiteral("Motiv horizontal gespiegelt (↔)."), 3000);
 }
 
 void MainWindow::mirrorVertical()
 {
-    if (m_current.empty()) return;
-    double minX, minY, maxX, maxY;
-    if (!m_current.bounds(minX, minY, maxX, maxY)) return;
-    const double cy = 0.5 * (minY + maxY);
-    for (Stitch& s : m_current.stitches) {
-        s.y = 2.0 * cy - s.y;
+    if (m_editor->canvasMode() == PathEditorWidget::CanvasMode::BezierPaths ||
+        m_editor->canvasMode() == PathEditorWidget::CanvasMode::Combined) {
+        m_editor->flipVerticalSelected();
     }
-    for (EditPath& p : m_editor->paths()) {
-        for (BezierNode& n : p.nodes) {
-            n.pos.setY(2.0 * cy - n.pos.y());
-            n.ctrlIn.setY(2.0 * cy - n.ctrlIn.y());
-            n.ctrlOut.setY(2.0 * cy - n.ctrlOut.y());
+    if (!m_current.empty()) {
+        double minX, minY, maxX, maxY;
+        if (m_current.bounds(minX, minY, maxX, maxY)) {
+            const double cy = 0.5 * (minY + maxY);
+            for (Stitch& s : m_current.stitches) {
+                s.y = 2.0 * cy - s.y;
+            }
+            m_editor->setSequence(m_current);
+            m_view->setSequence(m_current);
+            updateInfoPanel();
         }
     }
-    m_editor->setSequence(m_current);
-    m_view->setSequence(m_current);
-    updateInfoPanel();
     statusBar()->showMessage(QStringLiteral("Motiv vertikal gespiegelt (↕)."), 3000);
 }
 
 void MainWindow::rotate90(bool clockwise)
 {
-    if (m_current.empty()) return;
-    double minX, minY, maxX, maxY;
-    if (!m_current.bounds(minX, minY, maxX, maxY)) return;
-    const double cx = 0.5 * (minX + maxX);
-    const double cy = 0.5 * (minY + maxY);
-    for (Stitch& s : m_current.stitches) {
-        const double dx = s.x - cx;
-        const double dy = s.y - cy;
-        if (clockwise) {
-            s.x = cx + dy;
-            s.y = cy - dx;
-        } else {
-            s.x = cx - dy;
-            s.y = cy + dx;
+    if (m_editor->canvasMode() == PathEditorWidget::CanvasMode::BezierPaths ||
+        m_editor->canvasMode() == PathEditorWidget::CanvasMode::Combined) {
+        m_editor->rotateSelected(clockwise ? 90.0 : -90.0);
+    }
+    if (!m_current.empty()) {
+        double minX, minY, maxX, maxY;
+        if (m_current.bounds(minX, minY, maxX, maxY)) {
+            const double cx = 0.5 * (minX + maxX);
+            const double cy = 0.5 * (minY + maxY);
+            for (Stitch& s : m_current.stitches) {
+                const double dx = s.x - cx;
+                const double dy = s.y - cy;
+                if (clockwise) {
+                    s.x = cx + dy;
+                    s.y = cy - dx;
+                } else {
+                    s.x = cx - dy;
+                    s.y = cy + dx;
+                }
+            }
+            m_editor->setSequence(m_current);
+            m_view->setSequence(m_current);
+            updateInfoPanel();
         }
     }
-    m_editor->setSequence(m_current);
-    m_view->setSequence(m_current);
-    updateInfoPanel();
     statusBar()->showMessage(clockwise
         ? QStringLiteral("Motiv 90° im Uhrzeigersinn gedreht (↻).")
         : QStringLiteral("Motiv 90° gegen den Uhrzeigersinn gedreht (↺)."), 3000);

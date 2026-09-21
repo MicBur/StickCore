@@ -1376,6 +1376,93 @@
   <div class="callout callout-info">
     <b>Garantierte Orientierungs-Präzision:</b> Alle Digitalisierungs-Assistenten (inkl. Sfumato-Photo-Stitch und Kreuzstich) arbeiten mit streng korrigierter Y-Achsen-Orientierung. Motive werden exakt so gestickt, wie sie auf dem Bildschirm erscheinen – kein unbeabsichtigter Kopfstand mehr!
   </div>
+</div>
+
+<!-- CHAPTER 14 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">14</div>
+    <h1 class="chapter-title">Interaktiver 2D-Vektoreditor: Auswahlwerkzeuge, Pfadlöschung, Bounding-Box, Kurvenbiegen &amp; Insel-Filter</h1>
+  </div>
+
+  <p>
+    Beim Vektor-Tracing von Fotovorlagen oder Logos entstehen gelegentlich unerwünschte Bildfragmente wie Wasserzeichen-Tags (z.&nbsp;B. Urheberrechtshinweise oder Textlogos in den Bildecken) sowie kleine isolierte Splitter. Mit dem erweiterten <b>2D-Vektoreditor</b> von StickCore Studio bearbeiten Sie Vektorpfade mit dem gewohnten Komfort professioneller Grafiksuiten (Illustrator, Inkscape) direkt vor der Sticherzeugung.
+  </p>
+
+  <h3>14.1 Die vier Vector-Editing-Werkzeuge</h3>
+  <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
+    <tr>
+      <th style="width: 25%;">Werkzeug</th>
+      <th style="width: 15%;">Tastenkürzel</th>
+      <th>Funktion &amp; Workflow</th>
+    </tr>
+    <tr>
+      <td><b>🖱 Auswahl &amp; Transformieren</b></td>
+      <td><kbd>V</kbd></td>
+      <td>
+        <b>Das zentrale Standardwerkzeug:</b> Klick auf einen Pfad wählt ihn aus (goldene Hervorhebung). <kbd>Shift</kbd> oder <kbd>Strg</kbd> ermöglicht additive Mehrfachauswahl. Zeigt eine <b>8-Punkt-Transformations-Bounding-Box</b> zum Skalieren und erlaubt direktes Verschieben per Drag &amp; Drop. Klick auf leere Leinwandfläche zieht automatisch einen Auswahlrahmen auf.
+      </td>
+    </tr>
+    <tr>
+      <td><b>⬚ Rechteck-Auswahl (Marquee)</b></td>
+      <td><kbd>R</kbd></td>
+      <td>
+        Rahmen mit der Maus über die Leinwand aufziehen. Alle Pfade und Punkte, die das Rechteck berühren oder darin liegen, werden auf einen Schlag markiert. Ideal zum schnellen Einkreisen von Schriftzügen in den Bildecken.
+      </td>
+    </tr>
+    <tr>
+      <td><b>➰ Lasso-Auswahl (Lasso)</b></td>
+      <td><kbd>L</kbd></td>
+      <td>
+        Freihand-Schlinge mit gedrückter linker Maustaste um unregelmäßige Motivteile oder Wasserzeichen ziehen. Beim Loslassen schließt sich die Schlinge und selektiert alle umschlossenen Pfade.
+      </td>
+    </tr>
+    <tr>
+      <td><b>✏ Bézier-Stift (Pen)</b></td>
+      <td><kbd>P</kbd></td>
+      <td>
+        Klicken setzt Ankerpunkte; Ziehen erzeugt glatte kubische Bézier-Kurven mit Tangentengriffen. Klick auf den Startpunkt schließt den Pfad für Tatami-Flächenfüllungen.
+      </td>
+    </tr>
+  </table>
+
+  <h3>14.2 Gezieltes Löschen von Wasserzeichen &amp; Störpfaden</h3>
+  <p>
+    Im Gegensatz zu früherem Löschen des gesamten Vektorpuffers arbeitet die Löschfunktion in StickCore Studio jetzt absolut <b>selektiv</b>:
+  </p>
+  <ul>
+    <li><b>Taste <kbd>Entf</kbd> / <kbd>Backspace</kbd> oder Button <code>🗑 Löschen</code>:</b> Löscht ausschließlich die aktuell markierten Pfade bzw. den selektierten Ankerpunkt. Das Hauptmotiv (z.&nbsp;B. der Totenkopf oder das Vereinswappen) bleibt zu 100% erhalten!</li>
+    <li><b>Schnell-Bereinigung mit <code>🧹 Inseln filtern</code> (1 Klick):</b> Entfernt vollautomatisch alle winzigen Rauschpunkte und Splitter mit einer Fläche unter <b>4&nbsp;mm²</b>. Wasserzeichen-Pünktchen und Pixelartefakte verschwinden sofort, ohne dass Sie jeden Pfad einzeln anklicken müssen.</li>
+  </ul>
+
+  <h3>14.3 Bounding-Box-Transformationen &amp; direktes Kurvenbiegen</h3>
+  <div class="grid-2">
+    <div>
+      <h4>Transformations-Bounding-Box &amp; Spiegeln:</h4>
+      <ul>
+        <li><b>Interaktive Skalierung:</b> 8 Haltegriffe an den Ecken und Kanten der Auswahl erlauben stufenloses Vergrößern und Verkleinern mit der Maus.</li>
+        <li><b>Schnell-Skalierung:</b> Buttons <code>⤢ +10%</code> und <code>⤡ -10%</code> für proportionale Größenkorrektur.</li>
+        <li><b>Spiegeln &amp; Drehen:</b> <code>↔ Spieg. H</code> spiegelt horizontal, <code>↕ Spieg. V</code> spiegelt vertikal und <code>↻ 90°</code> rotiert im Uhrzeigersinn um das Zentrum der Auswahl.</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Direktes Kurvenbiegen (Segment Bending):</h4>
+      <ul>
+        <li>Fahren Sie im Auswahlmodus (<kbd>V</kbd>) mit der Maus über ein beliebiges Kurvensegment – der Mauszeiger verwandelt sich in die zeigende Hand (<code>Pointing Hand</code>).</li>
+        <li>Klicken und Ziehen biegt die Kurve direkt und organisch in die gewünschte Richtung aus, indem die Tangentengriffe automatisch mitwandern.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>14.4 Vollständige Undo/Redo-Historie</h3>
+  <p>
+    Jede Vektor-Aktion (Löschen, Verschieben, Skalieren, Spiegeln, Drehen, Insel-Filterung) wird auf einem 50-stufigen Historien-Stack abgesichert:
+  </p>
+  <ul>
+    <li><kbd>Strg</kbd> + <kbd>Z</kbd> bzw. Button <code>↩</code> macht die letzte Aktion rückgängig.</li>
+    <li><kbd>Strg</kbd> + <kbd>Y</kbd> bzw. Button <code>↪</code> stellt rückgängig gemachte Schritte wieder her.</li>
+    <li>Ein Status-Badge im Vektor-Werkzeugbalken informiert stets live über die Anzahl der markierten Pfade und deren Abmessungen in Millimetern.</li>
+  </ul>
 
   <div class="callout callout-info" style="margin-top: 32px; text-align: center;">
     <b>StickCore Studio — Perfektion bis zum letzten Stich.</b><br>

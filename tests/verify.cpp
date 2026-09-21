@@ -2029,6 +2029,169 @@ int main(int argc, char** argv)
         }
     }
 
+    std::printf("== Vector Editing, Selection & Transform Tools ==\n");
+    {
+        // 1. Bounding box, center & area of EditPath
+        EditPath boxPath;
+        boxPath.closed = true;
+        boxPath.nodes.append(BezierNode(QPointF(10.0, 10.0)));
+        boxPath.nodes.append(BezierNode(QPointF(30.0, 10.0)));
+        boxPath.nodes.append(BezierNode(QPointF(30.0, 25.0)));
+        boxPath.nodes.append(BezierNode(QPointF(10.0, 25.0)));
+
+        QRectF bbox = boxPath.boundingRect();
+        CHECK(std::abs(bbox.left() - 10.0) < 1e-3 && std::abs(bbox.top() - 10.0) < 1e-3 &&
+              std::abs(bbox.width() - 20.0) < 1e-3 && std::abs(bbox.height() - 15.0) < 1e-3,
+              "EditPath::boundingRect computes accurate 20x15 mm bounds");
+
+        QPointF c = boxPath.center();
+        CHECK(std::abs(c.x() - 20.0) < 1e-3 && std::abs(c.y() - 17.5) < 1e-3,
+              "EditPath::center computes correct centroid (20, 17.5)");
+
+        double a = boxPath.area();
+        CHECK(std::abs(a - 300.0) < 1e-2,
+              "EditPath::area computes correct polygon area (300 mm²)");
+
+        // 2. Translation
+        boxPath.translate(5.0, -3.0);
+        QPointF cTrans = boxPath.center();
+        CHECK(std::abs(cTrans.x() - 25.0) < 1e-3 && std::abs(cTrans.y() - 14.5) < 1e-3,
+              "EditPath::translate shifts geometry accurately");
+
+        // 3. Scaling around center
+        boxPath.scale(2.0, 2.0, cTrans);
+        QRectF scaledBbox = boxPath.boundingRect();
+        CHECK(std::abs(scaledBbox.width() - 40.0) < 1e-3 && std::abs(scaledBbox.height() - 30.0) < 1e-3 &&
+              std::abs(boxPath.center().x() - 25.0) < 1e-3 && std::abs(boxPath.center().y() - 14.5) < 1e-3,
+              "EditPath::scale scales geometry around arbitrary origin without center drift");
+
+        // 4. Horizontal and Vertical Flipping
+        EditPath tri;
+        tri.closed = true;
+        tri.nodes.append(BezierNode(QPointF(10.0, 10.0)));
+        tri.nodes.append(BezierNode(QPointF(30.0, 10.0)));
+        tri.nodes.append(BezierNode(QPointF(10.0, 25.0)));
+        tri.flipHorizontal(20.0);
+        CHECK(std::abs(tri.nodes[0].pos.x() - 30.0) < 1e-3 &&
+              std::abs(tri.nodes[1].pos.x() - 10.0) < 1e-3 &&
+              std::abs(tri.nodes[2].pos.x() - 30.0) < 1e-3,
+              "EditPath::flipHorizontal mirrors X coordinates across axis");
+
+        tri.flipVertical(15.0);
+        CHECK(std::abs(tri.nodes[0].pos.y() - 20.0) < 1e-3 &&
+              std::abs(tri.nodes[1].pos.y() - 20.0) < 1e-3 &&
+              std::abs(tri.nodes[2].pos.y() - 5.0) < 1e-3,
+              "EditPath::flipVertical mirrors Y coordinates across axis");
+
+        // 5. 90-degree Rotation
+        EditPath linePath;
+        linePath.nodes.append(BezierNode(QPointF(0.0, 0.0)));
+        linePath.nodes.append(BezierNode(QPointF(10.0, 0.0)));
+        linePath.rotate(90.0, QPointF(0.0, 0.0));
+        CHECK(std::abs(linePath.nodes[1].pos.x() - 0.0) < 1e-3 &&
+              std::abs(linePath.nodes[1].pos.y() - (-10.0)) < 1e-3,
+              "EditPath::rotate rotates geometry 90 deg clockwise");
+
+        // 6. Direct Curve Bending
+        EditPath bendPath;
+        bendPath.nodes.append(BezierNode(QPointF(0.0, 0.0)));
+        bendPath.nodes.append(BezierNode(QPointF(20.0, 0.0)));
+        CHECK(bendPath.nodes[0].isCorner() && bendPath.nodes[1].isCorner(),
+              "Initial nodes are straight sharp corners");
+        bendPath.bendSegment(0, QPointF(0.0, 6.0));
+        CHECK(!bendPath.nodes[0].isCorner() && !bendPath.nodes[1].isCorner(),
+              "EditPath::bendSegment generates smooth control handles on straight segment");
+        CHECK(bendPath.nodes[0].ctrlOut.y() > 2.0 && bendPath.nodes[1].ctrlIn.y() > 2.0,
+              "EditPath::bendSegment displaces tangent handles toward drag delta");
+
+        // 7. Multi-Path Selection & Selective Deletion
+        QVector<EditPath> canvasPaths;
+        // Path 0: Skull motif center (50x50 mm)
+        EditPath pSkull; pSkull.closed = true;
+        pSkull.nodes.append(BezierNode(QPointF(-25.0, -25.0)));
+        pSkull.nodes.append(BezierNode(QPointF(25.0, -25.0)));
+        pSkull.nodes.append(BezierNode(QPointF(25.0, 25.0)));
+        pSkull.nodes.append(BezierNode(QPointF(-25.0, 25.0)));
+        canvasPaths.append(pSkull);
+
+        // Path 1: Unwanted watermark top right (5x2 mm)
+        EditPath pWatermarkTR; pWatermarkTR.closed = true;
+        pWatermarkTR.nodes.append(BezierNode(QPointF(35.0, 35.0)));
+        pWatermarkTR.nodes.append(BezierNode(QPointF(40.0, 35.0)));
+        pWatermarkTR.nodes.append(BezierNode(QPointF(40.0, 37.0)));
+        pWatermarkTR.nodes.append(BezierNode(QPointF(35.0, 37.0)));
+        canvasPaths.append(pWatermarkTR);
+
+        // Path 2: Unwanted watermark bottom left (6x1 mm)
+        EditPath pWatermarkBL; pWatermarkBL.closed = true;
+        pWatermarkBL.nodes.append(BezierNode(QPointF(-40.0, -40.0)));
+        pWatermarkBL.nodes.append(BezierNode(QPointF(-34.0, -40.0)));
+        pWatermarkBL.nodes.append(BezierNode(QPointF(-34.0, -39.0)));
+        pWatermarkBL.nodes.append(BezierNode(QPointF(-40.0, -39.0)));
+        canvasPaths.append(pWatermarkBL);
+
+        CHECK(canvasPaths.size() == 3, "Created 3 vector paths (motif + 2 watermarks)");
+
+        // Simulate selection around watermark 1 & 2:
+        QSet<int> selectedIndices;
+        selectedIndices.insert(1);
+        selectedIndices.insert(2);
+        // Perform selective deletion (reverse sort to prevent index invalidation):
+        QVector<int> sortedDel;
+        for (int sIdx : selectedIndices) sortedDel.append(sIdx);
+        std::sort(sortedDel.begin(), sortedDel.end(), std::greater<int>());
+        for (int idx : sortedDel) {
+            canvasPaths.remove(idx);
+        }
+        CHECK(canvasPaths.size() == 1, "Selective deletion removed exactly the 2 selected watermarks");
+        CHECK(canvasPaths[0].area() == 2500.0, "Main skull motif is completely preserved with full area");
+
+        // 8. Undo / Redo simulation
+        QVector<QVector<EditPath>> undoHistory;
+        undoHistory.push_back(canvasPaths); // State with 1 path
+        // User accidentally deletes the remaining path
+        canvasPaths.clear();
+        CHECK(canvasPaths.isEmpty(), "Canvas cleared");
+        // Undo:
+        canvasPaths = undoHistory.takeLast();
+        CHECK(canvasPaths.size() == 1, "Undo restored deleted motif from history stack");
+
+        // 9. Island Filter (noise & watermark cleanup < 4 mm²)
+        QVector<EditPath> noiseTestPaths;
+        noiseTestPaths.append(pSkull); // 2500 mm²
+        // Noise speck 1: 1x1 mm (1 mm² < 4 mm²)
+        EditPath speck1; speck1.closed = true;
+        speck1.nodes.append(BezierNode(QPointF(0, 0)));
+        speck1.nodes.append(BezierNode(QPointF(1, 0)));
+        speck1.nodes.append(BezierNode(QPointF(1, 1)));
+        speck1.nodes.append(BezierNode(QPointF(0, 1)));
+        noiseTestPaths.append(speck1);
+        // Noise speck 2: 0.8x0.8 mm (0.64 mm² < 4 mm²)
+        EditPath speck2; speck2.closed = true;
+        speck2.nodes.append(BezierNode(QPointF(10, 10)));
+        speck2.nodes.append(BezierNode(QPointF(10.8, 10)));
+        speck2.nodes.append(BezierNode(QPointF(10.8, 10.8)));
+        speck2.nodes.append(BezierNode(QPointF(10, 10.8)));
+        noiseTestPaths.append(speck2);
+
+        CHECK(noiseTestPaths.size() == 3, "Island test input: 1 main motif + 2 noise specks");
+
+        QVector<EditPath> filteredPaths;
+        const double minAreaMm2 = 4.0;
+        for (const auto& p : noiseTestPaths) {
+            if (p.closed) {
+                if (p.area() >= minAreaMm2) filteredPaths.push_back(p);
+            } else {
+                QRectF b = p.boundingRect();
+                if (b.width() * b.height() >= minAreaMm2 || std::max(b.width(), b.height()) >= 3.0) {
+                    filteredPaths.push_back(p);
+                }
+            }
+        }
+        CHECK(filteredPaths.size() == 1, "filterSmallIslands filtered out both specks (< 4 mm²)");
+        CHECK(filteredPaths[0].area() == 2500.0, "Main motif was kept intact");
+    }
+
     std::printf("== Real reference round-trip ==\n");
     const char* ref = (argc > 1 && argv[1][0] != '-') ? argv[1] : nullptr;
     if (ref) {

@@ -12,6 +12,7 @@
 #include "core/StitchTypes.h"
 #include <QWidget>
 #include <QVector>
+#include <QSet>
 #include <QImage>
 
 class QToolButton;
@@ -20,6 +21,13 @@ class QLabel;
 class QComboBox;
 
 namespace stick {
+
+enum class VectorTool {
+    Select,   ///< Pointer / Transform: select, move, scale via bbox handles, bend curves
+    Marquee,  ///< Rectangle box selection
+    Lasso,    ///< Freehand lasso selection
+    Pen       ///< Bézier pen tool (add points, drag tangent handles, close path)
+};
 
 class Canvas2DWidget;
 
@@ -48,6 +56,31 @@ public:
     bool pathsBounds(double& minX, double& minY, double& maxX, double& maxY) const;
     void scalePaths(double factor, const QPointF& center);
     void fitPathsToHoop(double marginMm = 5.0);
+
+    // Vector Tool & Selection API
+    void setVectorTool(VectorTool tool);
+    VectorTool vectorTool() const;
+
+    void selectAllPaths();
+    void clearSelection();
+    void selectPath(int index, bool additive = false);
+    void selectPathsInRect(const QRectF& rectMm, bool additive = false);
+    void selectPathsInPolygon(const QPolygonF& lassoMm, bool additive = false);
+    int  selectedPathCount() const;
+    QSet<int> selectedPaths() const;
+
+    void deleteSelected();
+    void filterSmallIslands(double minAreaMm2 = 4.0);
+
+    void flipHorizontalSelected();
+    void flipVerticalSelected();
+    void rotateSelected(double angleDeg = 90.0);
+    void scaleSelected(double factor);
+
+    void undo();
+    void redo();
+    bool canUndo() const;
+    bool canRedo() const;
 
     // Stitches API
     void setSequence(const StitchSequence& seq);
@@ -80,6 +113,8 @@ signals:
     void canvasModeChanged(CanvasMode mode);
     void hoopSelected(HoopType type);
     void fitToHoopRequested();
+    void selectionChanged(int count);
+    void undoStackChanged();
 
 private:
     void setupUi();
@@ -100,6 +135,22 @@ private:
     QToolButton* m_btnZoom100  = nullptr;
     QLabel*      m_dimLabel    = nullptr;
     QSlider*     m_dimSlider   = nullptr;
+
+    // Vector editing toolbar controls
+    QWidget*     m_vectorBar      = nullptr;
+    QToolButton* m_btnToolSelect  = nullptr;
+    QToolButton* m_btnToolMarquee = nullptr;
+    QToolButton* m_btnToolLasso   = nullptr;
+    QToolButton* m_btnToolPen     = nullptr;
+    QToolButton* m_btnDeleteSel   = nullptr;
+    QToolButton* m_btnFlipH       = nullptr;
+    QToolButton* m_btnFlipV       = nullptr;
+    QToolButton* m_btnRotate90    = nullptr;
+    QToolButton* m_btnScale       = nullptr;
+    QToolButton* m_btnFilterNoise = nullptr;
+    QToolButton* m_btnUndo        = nullptr;
+    QToolButton* m_btnRedo        = nullptr;
+    QLabel*      m_lblSelInfo     = nullptr;
 };
 
 } // namespace stick
