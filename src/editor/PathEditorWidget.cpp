@@ -249,7 +249,7 @@ public:
                 if (ep.count() < 3) ep.closed = false;
                 if (ep.empty()) {
                     m_paths.remove(m_sel.path);
-                    m_selectedPaths.remove(m_sel.path);
+                    m_selectedPaths.clear();
                     m_active = m_paths.isEmpty() ? -1 : 0;
                 }
                 m_sel = Hit();
@@ -380,7 +380,8 @@ public:
     void translatePaths(double dxMm, double dyMm)
     {
         const QPointF d(dxMm, dyMm);
-        if (m_sel.part == Part::Anchor && m_sel.path >= 0 && m_sel.path < m_paths.size()) {
+        if (m_sel.part == Part::Anchor && m_sel.path >= 0 && m_sel.path < m_paths.size() &&
+            m_sel.node >= 0 && m_sel.node < m_paths[m_sel.path].count()) {
             BezierNode& nd = m_paths[m_sel.path].nodes[m_sel.node];
             nd.moveTo(nd.pos + d);
         } else {
@@ -1120,7 +1121,7 @@ void Canvas2DWidget::drawPath(QPainter& g, int pathIndex, bool active)
     }
 
     // Rail label
-    if (m_bezierMode == PathEditorWidget::Mode::SatinRails) {
+    if (m_bezierMode == PathEditorWidget::Mode::SatinRails && !ep.nodes.isEmpty()) {
         const QString lbl = (pathIndex == 0) ? QStringLiteral("Rail A")
                           : (pathIndex == 1) ? QStringLiteral("Rail B")
                                              : QString::number(pathIndex);

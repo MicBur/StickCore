@@ -65,6 +65,7 @@ void Underlay::edgeRun(const QPolygonF& poly, double stepMm, int colorIdx,
     if (poly.size() < 2) return;
     const double step = std::max(stepMm, 0.5);
     const QPolygonF work = (poly.size() >= 3 && insetMm > 1e-4) ? insetPolygon(poly, insetMm) : poly;
+    if (work.size() < 2) return;
 
     out.add(work.first().x(), work.first().y(), SF_Jump, colorIdx);
     auto run = [&](const QPointF& a, const QPointF& b) {
@@ -83,9 +84,12 @@ StitchSequence Underlay::forFill(const QVector<QPolygonF>& region,
                                  double fillAngleDeg, int colorIdx, double stepMm, double insetMm)
 {
     StitchSequence out;
-    // 1) Edge run around every ring (outer boundary + holes), inset inward.
-    for (const QPolygonF& ring : region)
-        edgeRun(ring, stepMm, colorIdx, out, insetMm);
+    // 1) Edge run around every valid ring (outer boundary + holes), inset inward.
+    for (const QPolygonF& ring : region) {
+        if (ring.size() >= 3 && ring.boundingRect().width() > 0.01 && ring.boundingRect().height() > 0.01) {
+            edgeRun(ring, stepMm, colorIdx, out, insetMm);
+        }
+    }
 
     // 2) Sparse cross layer ~90° to the top fill, wide row spacing.
     StitchSequence cross = TatamiFill::fillOnly(region, fillAngleDeg + 90.0,

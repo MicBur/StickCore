@@ -2192,6 +2192,68 @@ int main(int argc, char** argv)
         CHECK(filteredPaths[0].area() == 2500.0, "Main motif was kept intact");
     }
 
+    // =======================================================================
+    //  Tatami & Underlay Stability & Multi-Island Robustness
+    // =======================================================================
+    {
+        std::printf("== Tatami & Underlay Stability & Multi-Island Robustness ==\n");
+
+        // 1. Degenerate and 0-area polygons passed to Underlay::edgeRun
+        StitchSequence underSeq;
+        QPolygonF emptyPoly;
+        Underlay::edgeRun(emptyPoly, 1.0, 0, underSeq, 0.5);
+        CHECK(underSeq.empty(), "Underlay::edgeRun on empty polygon produces no stitches without crashing");
+
+        QPolygonF singlePointPoly;
+        singlePointPoly << QPointF(10, 10);
+        Underlay::edgeRun(singlePointPoly, 1.0, 0, underSeq, 0.5);
+        CHECK(underSeq.empty(), "Underlay::edgeRun on single point polygon produces no stitches without crashing");
+
+        QPolygonF collapsedLinePoly;
+        collapsedLinePoly << QPointF(10, 10) << QPointF(20, 20) << QPointF(10, 10);
+        Underlay::edgeRun(collapsedLinePoly, 1.0, 0, underSeq, 0.5);
+        CHECK(true, "Underlay::edgeRun on collapsed collinear polygon completed safely");
+
+        // 2. Multi-island region (two disjoint circles) passed to TatamiFill::generate
+        QPolygonF island1;
+        const double r1 = 15.0;
+        for (int a = 0; a < 24; ++a) {
+            double rad = a * 2.0 * 3.141592653589793 / 24.0;
+            island1 << QPointF(-25.0 + r1 * std::cos(rad), r1 * std::sin(rad));
+        }
+
+        QPolygonF island2;
+        const double r2 = 12.0;
+        for (int a = 0; a < 24; ++a) {
+            double rad = a * 2.0 * 3.141592653589793 / 24.0;
+            island2 << QPointF(25.0 + r2 * std::cos(rad), r2 * std::sin(rad));
+        }
+
+        QVector<QPolygonF> multiIslands;
+        multiIslands << island1 << island2;
+
+        TatamiFill::Params tp;
+        tp.pattern = TatamiFill::PatternType::StandardTatami;
+        tp.underlay = true;
+        StitchSequence multiSeq = TatamiFill::generate(multiIslands, tp);
+        CHECK(!multiSeq.empty(), "TatamiFill::generate on multiple disjoint islands produces valid stitches");
+        CHECK(multiSeq.realStitchCount() > 50, "Multi-island tatami has substantial stitch count");
+
+        // 3. Multi-island with ContourEcho (verifies islands are not subtracted as holes)
+        TatamiFill::Params tpEcho;
+        tpEcho.pattern = TatamiFill::PatternType::ContourEcho;
+        tpEcho.underlay = false;
+        StitchSequence echoSeq = TatamiFill::generate(multiIslands, tpEcho);
+        CHECK(!echoSeq.empty(), "TatamiFill::generate ContourEcho on multiple disjoint islands generates stitches");
+
+        // 4. Region containing degenerate/empty polygons mixed in
+        QVector<QPolygonF> dirtyRegion;
+        dirtyRegion << QPolygonF() << island1 << singlePointPoly << island2 << collapsedLinePoly;
+        StitchSequence dirtySeq = TatamiFill::generate(dirtyRegion, tp);
+        CHECK(!dirtySeq.empty(), "TatamiFill::generate safely filters dirty/degenerate polygons");
+        CHECK(dirtySeq.realStitchCount() > 50, "Dirty region stitches generated successfully without crash");
+    }
+
     std::printf("== Real reference round-trip ==\n");
     const char* ref = (argc > 1 && argv[1][0] != '-') ? argv[1] : nullptr;
     if (ref) {

@@ -798,12 +798,15 @@ void ImageDialog::updatePreviewDisplay()
 
     if (m_previewMode->currentIndex() == 0 && !m_latestPreviewSeq.empty()) {
         // Stitch simulation on chosen fabric
-        QImage thumb = StitchThumbnail::render(m_latestPreviewSeq, m_after->width(), currentFabricColor(), true);
+        const int previewW = std::max(120, m_after->width());
+        QImage thumb = StitchThumbnail::render(m_latestPreviewSeq, previewW, currentFabricColor(), true);
         m_after->setPixmap(QPixmap::fromImage(thumb));
     } else if (m_previewMode->currentIndex() == 1) {
         // Vector Bézier paths (Bitmap to Path wie Inkscape)
         m_extractedPaths = ImageDigitizer::traceToPaths(m_source, m_params);
-        QImage vecImg(m_after->size(), QImage::Format_ARGB32_Premultiplied);
+        const QSize targetSize = (m_after->width() >= 32 && m_after->height() >= 32)
+            ? m_after->size() : QSize(400, 400);
+        QImage vecImg(targetSize, QImage::Format_ARGB32_Premultiplied);
         vecImg.fill(currentFabricColor());
         QPainter p(&vecImg);
         p.setRenderHint(QPainter::Antialiasing, true);

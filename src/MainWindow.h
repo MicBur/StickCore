@@ -5,6 +5,7 @@
 
 #include "core/StitchTypes.h"
 #include <QMainWindow>
+#include <QPointer>
 #include <memory>
 
 class QComboBox;
@@ -15,6 +16,7 @@ class QDoubleSpinBox;
 class QCheckBox;
 class QPushButton;
 class QSlider;
+class QDialog;
 
 namespace stick {
 
@@ -111,7 +113,9 @@ private:
     StitchGLWidget*   m_view   = nullptr;
     QComboBox*        m_mode   = nullptr;
     QrUploadServer*   m_upload = nullptr;
-    QLabel*           m_uploadStatus = nullptr;
+    QPointer<QDialog> m_qrDialog;
+    QPointer<QLabel>  m_uploadStatus;
+    bool              m_isDigitizing = false;
     std::unique_ptr<DesignLibrary> m_library;
 
     // Transport / Player controls

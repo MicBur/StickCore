@@ -37,7 +37,7 @@ namespace {
 void scanPolygon(const QPolygonF& poly, double yScan, QVector<double>& xs)
 {
     const int n = poly.size();
-    if (n < 2) return;
+    if (n < 3) return;
     for (int i = 0; i < n; ++i) {
         const QPointF& a = poly[i];
         const QPointF& b = poly[(i + 1) % n];
@@ -45,6 +45,7 @@ void scanPolygon(const QPolygonF& poly, double yScan, QVector<double>& xs)
         const double yLo = std::min(y0, y1);
         const double yHi = std::max(y0, y1);
         if (yScan < yLo || yScan >= yHi) continue;      // half-open
+        if (std::abs(y1 - y0) < 1e-9) continue;
         const double t = (yScan - y0) / (y1 - y0);
         xs.push_back(a.x() + t * (b.x() - a.x()));
     }
@@ -164,21 +165,40 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
                                     const Params& p)
 {
     StitchSequence seq;
-    if (region.isEmpty() || region.front().size() < 3)
+    QVector<QPolygonF> validPolys;
+    validPolys.reserve(region.size());
+    for (const auto& poly : region) {
+        if (poly.size() >= 3 && poly.boundingRect().width() > 0.01 && poly.boundingRect().height() > 0.01) {
+            validPolys.push_back(poly);
+        }
+    }
+    if (validPolys.isEmpty())
         return seq;
 
     // 1. Contour / Echo Fill (concentric rings following region boundaries)
     if (p.pattern == PatternType::ContourEcho) {
         if (p.underlay) {
-            StitchSequence ul = Underlay::forFill(region, p.fillAngleDeg, p.colorIdx);
+            StitchSequence ul = Underlay::forFill(validPolys, p.fillAngleDeg, p.colorIdx);
             seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
         }
         QPainterPath path;
-        path.addPolygon(region[0]);
-        for (int i = 1; i < region.size(); ++i) {
-            QPainterPath hole;
-            hole.addPolygon(region[i]);
-            path = path.subtracted(hole);
+        path.setFillRule(Qt::WindingFill);
+        for (const auto& poly : validPolys) {
+            double a = 0.0;
+            const int n = poly.size();
+            for (int j = 0; j < n; ++j) {
+                int next = (j + 1) % n;
+                a += (poly[j].x() * poly[next].y() - poly[next].x() * poly[j].y());
+            }
+            if (a >= 0.0) {
+                QPainterPath pIsland;
+                pIsland.addPolygon(poly);
+                path = path.united(pIsland);
+            } else {
+                QPainterPath pHole;
+                pHole.addPolygon(poly);
+                path = path.subtracted(pHole);
+            }
         }
         ContourFill::Params cp;
         cp.spacingMm = std::max(0.3, p.rowSpacingMm * 1.5);
@@ -196,13 +216,13 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
     // 2. Honeycomb / Waben Lattice (two cross-hatching passes at θ - 30° and θ + 30°)
     if (p.pattern == PatternType::Honeycomb) {
         if (p.underlay) {
-            StitchSequence ul = Underlay::forFill(region, p.fillAngleDeg, p.colorIdx);
+            StitchSequence ul = Underlay::forFill(validPolys, p.fillAngleDeg, p.colorIdx);
             seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
         }
         const double latticeSpacing = p.rowSpacingMm * 1.75;
-        StitchSequence pass1 = fillOnly(region, p.fillAngleDeg - 30.0, latticeSpacing,
+        StitchSequence pass1 = fillOnly(validPolys, p.fillAngleDeg - 30.0, latticeSpacing,
                                         p.maxStitchMm, 0.5, p.colorIdx);
-        StitchSequence pass2 = fillOnly(region, p.fillAngleDeg + 30.0, latticeSpacing,
+        StitchSequence pass2 = fillOnly(validPolys, p.fillAngleDeg + 30.0, latticeSpacing,
                                         p.maxStitchMm, 0.5, p.colorIdx);
         seq.stitches.insert(seq.stitches.end(), pass1.stitches.begin(), pass1.stitches.end());
         seq.stitches.insert(seq.stitches.end(), pass2.stitches.begin(), pass2.stitches.end());
@@ -223,19 +243,19 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
         effectivePhase = -1.0; // Sentinel for 4-phase block cycle
 
     if (p.underlay) {
-        StitchSequence ul = Underlay::forFill(region, p.fillAngleDeg, p.colorIdx);
+        StitchSequence ul = Underlay::forFill(validPolys, p.fillAngleDeg, p.colorIdx);
         seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
     }
 
     QPainterPath cPath = p.carvingPath;
     if (cPath.isEmpty() && p.carving != CarvingPattern::Preset::None) {
-        QRectF rBox = region[0].boundingRect();
-        for (int i = 1; i < region.size(); ++i)
-            rBox = rBox.united(region[i].boundingRect());
+        QRectF rBox = validPolys[0].boundingRect();
+        for (int i = 1; i < validPolys.size(); ++i)
+            rBox = rBox.united(validPolys[i].boundingRect());
         cPath = CarvingPattern::createPath(p.carving, p.carvingScaleMm, p.carvingScaleMm, rBox.center());
     }
 
-    StitchSequence cover = fillOnly(region, p.fillAngleDeg, p.rowSpacingMm,
+    StitchSequence cover = fillOnly(validPolys, p.fillAngleDeg, p.rowSpacingMm,
                                     p.maxStitchMm, effectivePhase, p.colorIdx, cPath);
     seq.stitches.insert(seq.stitches.end(), cover.stitches.begin(), cover.stitches.end());
 
@@ -250,7 +270,14 @@ StitchSequence TatamiFill::fillOnly(const QVector<QPolygonF>& region,
                                     const QPainterPath& carvingPath)
 {
     StitchSequence seq;
-    if (region.isEmpty() || region.front().size() < 3)
+    QVector<QPolygonF> validPolys;
+    validPolys.reserve(region.size());
+    for (const auto& p : region) {
+        if (p.size() >= 3 && p.boundingRect().width() > 0.01 && p.boundingRect().height() > 0.01) {
+            validPolys.push_back(p);
+        }
+    }
+    if (validPolys.isEmpty())
         return seq;
 
     const double theta = angleDeg;
@@ -264,10 +291,10 @@ StitchSequence TatamiFill::fillOnly(const QVector<QPolygonF>& region,
 
     // Rotate every ring into the scan frame and find the bounding box.
     QVector<QPolygonF> rr;
-    rr.reserve(region.size());
+    rr.reserve(validPolys.size());
     double minY =  std::numeric_limits<double>::max();
     double maxY = -std::numeric_limits<double>::max();
-    for (const QPolygonF& ring : region) {
+    for (const QPolygonF& ring : validPolys) {
         QPolygonF r = rot.map(ring);
         rr.push_back(r);
         for (const QPointF& pt : r) {

@@ -379,7 +379,7 @@ void MainWindow::setupMenus()
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("🗑 Ausgewählte Pfade &löschen"), m_editor, &PathEditorWidget::deleteSelected, QKeySequence::Delete);
     editMenu->addAction(QStringLiteral("&Alle Pfade markieren"), m_editor, &PathEditorWidget::selectAllPaths, QKeySequence::SelectAll);
-    editMenu->addAction(QStringLiteral("Auswahl &aufheben"), m_editor, &PathEditorWidget::clearSelection, QKeySequence(Qt::Key_Escape));
+    editMenu->addAction(QStringLiteral("Auswahl &aufheben"), m_editor, &PathEditorWidget::clearSelection);
     editMenu->addAction(QStringLiteral("🧹 Kleine Inseln / Splitter &filtern…"), this, [this]{ m_editor->filterSmallIslands(4.0); });
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("📐 An aktuellen Rahmen &einpassen & neu berechnen"), this, &MainWindow::fitDesignToHoop, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
@@ -1389,10 +1389,13 @@ void MainWindow::generate()
         QMap<int, QColor> colorMap;
         for (int i = 0; i < paths.size(); ++i) {
             if (paths[i].count() >= 3) {
-                int cIdx = paths[i].colorIdx;
-                colorRegions[cIdx].push_back(paths[i].toPolygon());
-                if (!colorMap.contains(cIdx)) {
-                    colorMap[cIdx] = paths[i].color;
+                QPolygonF poly = paths[i].toPolygon();
+                if (poly.size() >= 3 && poly.boundingRect().width() > 0.01 && poly.boundingRect().height() > 0.01) {
+                    int cIdx = paths[i].colorIdx;
+                    colorRegions[cIdx].push_back(std::move(poly));
+                    if (!colorMap.contains(cIdx)) {
+                        colorMap[cIdx] = paths[i].color;
+                    }
                 }
             }
         }
@@ -2076,13 +2079,16 @@ void MainWindow::exportSizeVariants()
 // ---------------------------------------------------------------------------
 void MainWindow::digitizeImage()
 {
+    if (m_isDigitizing) return;
     const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Bild digitalisieren"),
         QString(), QStringLiteral("Bilder (*.png *.jpg *.jpeg *.bmp *.gif *.webp)"));
     if (path.isEmpty()) return;
     QImage img(path);
     if (img.isNull()) { QMessageBox::warning(this, windowTitle(), QStringLiteral("Bild konnte nicht geladen werden.")); return; }
     m_editor->setBackgroundImage(img);
+    m_isDigitizing = true;
     digitizeWithDialog(img, QStringLiteral("Bild digitalisiert"));
+    m_isDigitizing = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -2160,13 +2166,17 @@ void MainWindow::phoneUpload()
     if (!m_upload) {
         m_upload = new QrUploadServer(this);
         connect(m_upload, &QrUploadServer::imageReceived, this, [this](const QImage& img){
-            if (m_uploadStatus)
-                m_uploadStatus->setText(QStringLiteral("✓ Bild empfangen – Einstellungen wählen…"));
+            if (m_isDigitizing) {
+                return;
+            }
+            if (m_qrDialog) {
+                m_qrDialog->close();
+                m_qrDialog = nullptr;
+            }
             m_editor->setBackgroundImage(img);
+            m_isDigitizing = true;
             digitizeWithDialog(img, QStringLiteral("Handy-Bild digitalisiert"));
-            if (m_uploadStatus)
-                m_uploadStatus->setText(QStringLiteral("✓ %1 Stiche. Du kannst weitere Bilder senden.")
-                    .arg(m_current.realStitchCount()));
+            m_isDigitizing = false;
         });
     }
     if (!m_upload->isListening() && !m_upload->start(8080)) {
@@ -2176,20 +2186,53 @@ void MainWindow::phoneUpload()
     const QString url = m_upload->url();
     const auto matrix = QrCode::encode(url.toStdString());
 
+    if (m_qrDialog) {
+        m_qrDialog->show();
+        m_qrDialog->raise();
+        m_qrDialog->activateWindow();
+        return;
+    }
+
     auto* d = new QDialog(this);
-    d->setWindowTitle(QStringLiteral("Handy-Upload"));
+    m_qrDialog = d;
+    d->setWindowTitle(QStringLiteral("Handy-Upload (QR-Code)"));
     d->setAttribute(Qt::WA_DeleteOnClose);
+    d->setMinimumWidth(380);
     auto* lay = new QVBoxLayout(d);
-    auto* qr = new QLabel; qr->setPixmap(qrPixmap(matrix, 8, 4)); qr->setAlignment(Qt::AlignCenter);
+    lay->setContentsMargins(20, 20, 20, 20);
+    lay->setSpacing(14);
+
+    auto* qr = new QLabel;
+    qr->setPixmap(qrPixmap(matrix, 8, 4));
+    qr->setAlignment(Qt::AlignCenter);
     lay->addWidget(qr);
-    auto* info = new QLabel(QStringLiteral("Scanne den QR-Code mit dem Handy (gleiches WLAN).\nOder öffne im Browser:  %1").arg(url));
-    info->setAlignment(Qt::AlignCenter); info->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    auto* info = new QLabel(QStringLiteral("<b>1. Scanne den QR-Code</b> mit deiner Handy-Kamera.<br>"
+                                           "<b>2. Wähle ein Foto</b> und tippe auf Senden.<br><br>"
+                                           "<span style='color:#8b93a4;font-size:11px;'>Oder im Handy-Browser aufrufen:</span><br>"
+                                           "<span style='color:#2dd4bf;font-family:monospace;font-size:13px;'>%1</span>").arg(url));
+    info->setAlignment(Qt::AlignCenter);
+    info->setTextInteractionFlags(Qt::TextSelectableByMouse);
     lay->addWidget(info);
-    m_uploadStatus = new QLabel(QStringLiteral("Warte auf Upload…"));
-    m_uploadStatus->setAlignment(Qt::AlignCenter); m_uploadStatus->setStyleSheet(QStringLiteral("color:#2dd4bf"));
+
+    m_uploadStatus = new QLabel(QStringLiteral("⏳ Warte auf Bild-Upload vom Smartphone…"));
+    m_uploadStatus->setAlignment(Qt::AlignCenter);
+    m_uploadStatus->setStyleSheet(QStringLiteral("color:#2dd4bf; font-weight:600; padding:6px; background:#1b1e26; border-radius:6px;"));
     lay->addWidget(m_uploadStatus);
-    connect(d, &QObject::destroyed, this, [this]{ m_uploadStatus = nullptr; });
+
+    auto* btnClose = new QPushButton(QStringLiteral("✕ Dialog schließen"), d);
+    btnClose->setStyleSheet(QStringLiteral("QPushButton { background-color: #232732; border: 1px solid #3b4252; color: #dbe0e9; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; } QPushButton:hover { background-color: #2c313d; border-color: #81a1c1; }"));
+    btnClose->setShortcut(QKeySequence::Cancel);
+    connect(btnClose, &QPushButton::clicked, d, &QDialog::close);
+    lay->addWidget(btnClose);
+
+    connect(d, &QObject::destroyed, this, [this]{
+        m_qrDialog = nullptr;
+        m_uploadStatus = nullptr;
+    });
     d->show();
+    d->raise();
+    d->activateWindow();
 }
 
 // ---------------------------------------------------------------------------
