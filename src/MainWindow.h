@@ -61,6 +61,14 @@ private slots:
     void exportWorksheet();
     void loadHuntingMotif(int typeIdx, bool editable);
 
+    // Embird Flagship Assistants
+    void smartColorSort();
+    void addBastingBox();
+    void digitizeSfumato();
+    void digitizeCrossStitch();
+    void multiHoopSplit();
+    void applyTatamiCarving();
+
     // Janome Digitizer Jr Transformations
     void mirrorHorizontal();
     void mirrorVertical();

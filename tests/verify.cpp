@@ -21,6 +21,12 @@
 #include "library/DesignFactory.h"
 #include "library/DesignLibrary.h"
 #include "editor/BezierPath.h"
+#include "generators/ColorSorter.h"
+#include "generators/BastingGenerator.h"
+#include "generators/CarvingPattern.h"
+#include "generators/SfumatoGenerator.h"
+#include "generators/CrossStitchGenerator.h"
+#include "generators/MultiHoopSplitter.h"
 #include <QDir>
 #include <QGuiApplication>
 #include <QFontDatabase>
@@ -1363,6 +1369,175 @@ int main(int argc, char** argv)
             StitchSequence seq = MonogramGenerator::generate(mp);
             CHECK(!seq.stitches.empty(), "multi-letter initials generated stitches");
         }
+    }
+
+    std::printf("== Embird Flagship 1: Smart Color Sort ==\n");
+    {
+        // 1. Spatially separated blocks: Red -> Blue -> Red -> Blue
+        StitchSequence seq;
+        seq.palette = { ThreadCatalog::snap(QColor(255, 0, 0)), ThreadCatalog::snap(QColor(0, 0, 255)) };
+        // Block 0: Red at (-40, 0)
+        seq.add(-40, 0, SF_Normal, 0); seq.add(-40, 5, SF_Normal, 0);
+        // Block 1: Blue at (-10, 0)
+        seq.add(-10, 0, SF_ColorChange, 1); seq.add(-10, 5, SF_Normal, 1);
+        // Block 2: Red at (20, 0)
+        seq.add(20, 0, SF_ColorChange, 0); seq.add(20, 5, SF_Normal, 0);
+        // Block 3: Blue at (50, 0)
+        seq.add(50, 0, SF_ColorChange, 1); seq.add(50, 5, SF_Normal, 1);
+
+        ColorSorter::Stats stats;
+        StitchSequence sorted = ColorSorter::sort(seq, &stats);
+        CHECK(stats.colorChangesBefore == 3, "initial color changes counted correctly (3)");
+        CHECK(stats.colorChangesAfter == 1, "smart color sort reduced color changes to 1");
+        CHECK(stats.savedPercent > 60.0, "color changes reduced by > 60%");
+        CHECK(sorted.size() == seq.size(), "sort preserves total stitches");
+
+        // 2. Overlapping blocks: Layering safety test
+        StitchSequence seq2;
+        seq2.palette = seq.palette;
+        seq2.add(0, 0, SF_Normal, 0); seq2.add(5, 5, SF_Normal, 0);
+        seq2.add(0, 0, SF_ColorChange, 1); seq2.add(5, 5, SF_Normal, 1); // overlapping!
+        seq2.add(40, 40, SF_ColorChange, 0); seq2.add(45, 45, SF_Normal, 0); // separate
+
+        ColorSorter::Stats stats2;
+        StitchSequence sorted2 = ColorSorter::sort(seq2, &stats2);
+        CHECK(stats2.colorChangesAfter <= 1, "overlapping blocks correctly preserved in layer DAG");
+    }
+
+    std::printf("== Embird Flagship 2: Basting Box / Heftrahmen ==\n");
+    {
+        StitchSequence motif;
+        motif.palette = { ThreadCatalog::snap(QColor(100, 100, 100)) };
+        motif.add(-20, -20, SF_Normal, 0);
+        motif.add(20, 20, SF_Normal, 0);
+
+        BastingGenerator::Params bp;
+        bp.mode = BastingGenerator::Mode::MotifBounds;
+        bp.marginMm = 5.0;
+        bp.stitchLengthMm = 5.0;
+        bp.doublePass = false;
+
+        StitchSequence basting = BastingGenerator::generate(motif, bp);
+        CHECK(!basting.empty(), "basting box generated stitches");
+        const QRectF bb = basting.boundingRect();
+        CHECK(std::abs(bb.width() - 50.0) < 0.5, "basting width matches motif + 2*margin (50mm)");
+        CHECK(std::abs(bb.height() - 50.0) < 0.5, "basting height matches motif + 2*margin (50mm)");
+
+        // Test prependTo
+        StitchSequence combined = BastingGenerator::prependTo(motif, bp, 140, 200);
+        CHECK(combined.palette.size() == motif.palette.size() + 1, "basting color prepended to palette");
+        CHECK(combined.stitches.front().colorIdx == 0, "basting stitches use color 0");
+        CHECK(combined.stitches.back().colorIdx == 1, "original motif stitches shifted to color 1");
+    }
+
+    std::printf("== Embird Flagship 3: Tatami Carving & Texture Embossing ==\n");
+    {
+        // 1. Presets path generation
+        for (auto preset : { CarvingPattern::Preset::Star, CarvingPattern::Preset::Heart,
+                             CarvingPattern::Preset::OakLeaf, CarvingPattern::Preset::DiamondGrid,
+                             CarvingPattern::Preset::WaveLines }) {
+            QPainterPath p = CarvingPattern::createPath(preset, 30.0, 30.0);
+            CHECK(!p.isEmpty(), "carving preset path is non-empty");
+            CHECK(!CarvingPattern::presetName(preset).isEmpty(), "carving preset has descriptive name");
+        }
+
+        // 2. Scanline intersection finding
+        QPainterPath star = CarvingPattern::createPath(CarvingPattern::Preset::Star, 30.0, 30.0);
+        QVector<double> xCross = CarvingPattern::findIntersections(star, 0.0);
+        CHECK(xCross.size() >= 2, "star carving has at least 2 contour crossings along center scanline");
+
+        // 3. Tatami fill with carving pattern
+        QPolygonF patch;
+        patch << QPointF(-25, -25) << QPointF(25, -25) << QPointF(25, 25) << QPointF(-25, 25);
+        TatamiFill::Params tp;
+        tp.carving = CarvingPattern::Preset::OakLeaf;
+        tp.carvingScaleMm = 25.0;
+        tp.rowSpacingMm = 0.5;
+        tp.maxStitchMm = 4.0;
+        tp.underlay = false;
+        StitchSequence carvedTatami = TatamiFill::generate(patch, tp);
+        CHECK(!carvedTatami.empty(), "tatami fill with carving generated stitches");
+        CHECK(carvedTatami.size() > 100, "carved tatami has sufficient puncture density");
+    }
+
+    std::printf("== Embird Flagship 4: Sfumato Photo-Stitch ==\n");
+    {
+        QImage testImg(100, 100, QImage::Format_ARGB32);
+        testImg.fill(Qt::white);
+        QPainter p(&testImg);
+        QRadialGradient grad(50, 50, 45);
+        grad.setColorAt(0.0, Qt::black);
+        grad.setColorAt(1.0, Qt::white);
+        p.fillRect(testImg.rect(), grad);
+        p.end();
+
+        SfumatoGenerator::Params sp;
+        sp.widthMm = 60.0;
+        sp.heightMm = 60.0;
+        sp.lineSpacingMm = 1.5;
+        sp.maxAmplitudeMm = 1.0;
+        sp.angleMode = SfumatoGenerator::AngleMode::Horizontal;
+
+        StitchSequence sfumatoSeq = SfumatoGenerator::generate(testImg, sp);
+        CHECK(!sfumatoSeq.empty(), "horizontal sfumato generated stitches");
+        CHECK(sfumatoSeq.size() > 200, "sfumato produced continuous stipple density");
+
+        sp.angleMode = SfumatoGenerator::AngleMode::CrossHatch;
+        StitchSequence sfumatoCross = SfumatoGenerator::generate(testImg, sp);
+        CHECK(sfumatoCross.size() > sfumatoSeq.size(), "crosshatch sfumato has higher stitch count than single pass");
+    }
+
+    std::printf("== Embird Flagship 5: Traditional Cross-Stitch ==\n");
+    {
+        CHECK(std::abs(CrossStitchGenerator::aidaToPitchMm(CrossStitchGenerator::AidaCount::Count14) - 1.814) < 0.01, "14ct Aida pitch is ~1.81mm");
+        CHECK(std::abs(CrossStitchGenerator::aidaToPitchMm(CrossStitchGenerator::AidaCount::Count11) - 2.309) < 0.01, "11ct Aida pitch is ~2.31mm");
+
+        QImage icon(16, 16, QImage::Format_ARGB32);
+        icon.fill(Qt::transparent);
+        for (int y = 4; y < 12; ++y) {
+            for (int x = 4; x < 12; ++x) {
+                icon.setPixelColor(x, y, QColor(180, 20, 20));
+            }
+        }
+
+        CrossStitchGenerator::Params cp;
+        cp.aida = CrossStitchGenerator::AidaCount::Count14;
+        cp.style = CrossStitchGenerator::StitchStyle::FullCross;
+        cp.skipWhite = true;
+
+        StitchSequence crossSeq = CrossStitchGenerator::generate(icon, cp);
+        CHECK(!crossSeq.empty(), "cross-stitch generated stitches");
+        CHECK(crossSeq.size() >= 250, "counted cross stitch produced correct number of legs");
+
+        cp.style = CrossStitchGenerator::StitchStyle::DoubleCross;
+        StitchSequence dblCrossSeq = CrossStitchGenerator::generate(icon, cp);
+        CHECK(dblCrossSeq.size() > crossSeq.size(), "double cross produced extra structural stitches");
+    }
+
+    std::printf("== Embird Flagship 6: Auto-Split & Multi-Hooping ==\n");
+    {
+        StitchSequence bigSeq;
+        bigSeq.palette = { ThreadCatalog::snap(QColor(50, 80, 160)) };
+        for (double y = -110; y <= 110; y += 10) {
+            bigSeq.add(-80, y, SF_Jump, 0);
+            bigSeq.add(80, y, SF_Normal, 0);
+        }
+
+        CHECK(MultiHoopSplitter::exceedsHoop(bigSeq, 140.0, 200.0), "exceedsHoop correctly flags oversized design");
+
+        MultiHoopSplitter::Params mp;
+        mp.hoopWidthMm = 140.0;
+        mp.hoopHeightMm = 200.0;
+        mp.overlapMm = 10.0;
+        mp.addCrosshairs = true;
+        mp.direction = MultiHoopSplitter::SplitDirection::Horizontal;
+
+        MultiHoopSplitter::Result res = MultiHoopSplitter::split(bigSeq, mp);
+        CHECK(res.success, "multi-hoop split succeeded");
+        CHECK(!res.hoop1.empty(), "hoop 1 has stitches");
+        CHECK(!res.hoop2.empty(), "hoop 2 has stitches");
+        CHECK(res.hoop1.palette.size() > bigSeq.palette.size(), "registration crosshair color added to hoop 1");
+        CHECK(res.hoop2.palette.size() > bigSeq.palette.size(), "registration crosshair color prepended to hoop 2");
     }
 
     std::printf("== Real reference round-trip ==\n");

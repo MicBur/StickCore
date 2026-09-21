@@ -66,12 +66,32 @@ add_executable(StickCore WIN32
     src/generators/AppliqueGenerator.h
     src/codec/DstCodec.cpp
     src/codec/DstCodec.h
+    src/generators/ColorSorter.cpp
+    src/generators/ColorSorter.h
+    src/generators/BastingGenerator.cpp
+    src/generators/BastingGenerator.h
+    src/generators/CarvingPattern.cpp
+    src/generators/CarvingPattern.h
+    src/generators/SfumatoGenerator.cpp
+    src/generators/SfumatoGenerator.h
+    src/generators/CrossStitchGenerator.cpp
+    src/generators/CrossStitchGenerator.h
+    src/generators/MultiHoopSplitter.cpp
+    src/generators/MultiHoopSplitter.h
     src/ui/ThreadPickDialog.cpp
     src/ui/ThreadPickDialog.h
     src/ui/ImageDialog.cpp
     src/ui/ImageDialog.h
     src/ui/PlacementDialog.cpp
     src/ui/PlacementDialog.h
+    src/ui/BastingDialog.cpp
+    src/ui/BastingDialog.h
+    src/ui/SfumatoDialog.cpp
+    src/ui/SfumatoDialog.h
+    src/ui/CrossStitchDialog.cpp
+    src/ui/CrossStitchDialog.h
+    src/ui/MultiHoopDialog.cpp
+    src/ui/MultiHoopDialog.h
     src/codec/JefCodec.cpp
     src/codec/JefCodec.h
     src/library/StitchThumbnail.h
@@ -135,6 +155,12 @@ add_executable(StickCoreTests
     src/generators/ImageDigitizer.cpp
     src/generators/PhotoProcessor.cpp
     src/generators/OpenCvBridge.cpp
+    src/generators/ColorSorter.cpp
+    src/generators/BastingGenerator.cpp
+    src/generators/CarvingPattern.cpp
+    src/generators/SfumatoGenerator.cpp
+    src/generators/CrossStitchGenerator.cpp
+    src/generators/MultiHoopSplitter.cpp
     src/codec/JefCodec.cpp
     src/codec/DstCodec.cpp
     src/library/DesignFactory.cpp

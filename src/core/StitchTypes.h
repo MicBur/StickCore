@@ -10,6 +10,7 @@
 
 #include <QColor>
 #include <QMetaType>
+#include <QRectF>
 #include <QString>
 #include <QVector>
 #include <cmath>
@@ -109,6 +110,14 @@ struct StitchSequence {
             minY = std::min(minY, s.y); maxY = std::max(maxY, s.y);
         }
         return true;
+    }
+
+    /// Convenience helper returning QRectF(x0, y0, width, height)
+    QRectF boundingRect() const
+    {
+        double x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+        if (!bounds(x0, y0, x1, y1)) return QRectF();
+        return QRectF(x0, y0, x1 - x0, y1 - y0);
     }
 };
 

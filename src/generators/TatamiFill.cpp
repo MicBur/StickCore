@@ -56,25 +56,73 @@ struct RunPoint {
 };
 
 // Emit a run from x0 to x1 (x0 < x1) at height y, broken into <= L_max
-// segments, with the interior breakpoints shifted by 'phase'. 'reverse'
-// stitches the run right-to-left. 'isNewSpan' flags the first point as a travel move.
+// segments, with the interior breakpoints shifted by 'phase'.
+// Any carving needle penetrations in rowCarvingXs that fall inside [x0, x1]
+// are enforced as mandatory puncture milestones.
+// 'reverse' stitches the run right-to-left. 'isNewSpan' flags the first point as a travel move.
 void emitRun(double x0, double x1, double y, double maxLen, double phase,
+             const QVector<double>& rowCarvingXs,
              bool reverse, bool isNewSpan, QVector<RunPoint>& out)
 {
     const double span = x1 - x0;
     if (span <= 1e-6) { out.push_back({ QPointF(x0, y), isNewSpan }); return; }
 
+    // Find carving intersections within this span with a safety margin from edges
+    QVector<double> cWithin;
+    for (double cx : rowCarvingXs) {
+        if (cx > x0 + 0.25 && cx < x1 - 0.25) {
+            cWithin.push_back(cx);
+        }
+    }
+    std::sort(cWithin.begin(), cWithin.end());
+
+    // Filter points that are too close to each other (< 0.3mm)
+    QVector<double> filteredCarve;
+    for (double cx : cWithin) {
+        if (filteredCarve.isEmpty() || std::abs(cx - filteredCarve.back()) >= 0.3) {
+            filteredCarve.push_back(cx);
+        }
+    }
+
+    // Build milestones: x0, carve1, carve2, ..., x1
+    QVector<double> milestones;
+    milestones.push_back(x0);
+    for (double cx : filteredCarve) {
+        milestones.push_back(cx);
+    }
+    milestones.push_back(x1);
+
     // Build the list of x break positions left-to-right.
     QVector<double> xb;
     xb.push_back(x0);
-    // First interior break is pulled in by 'phase' so rows do not align.
-    double ph = std::fmod(phase, maxLen);
-    if (ph < 0) ph += maxLen;
-    double first = x0 + (maxLen - ph);
-    if (first <= x0 + 1e-6) first += maxLen;
-    for (double x = first; x < x1 - 1e-6; x += maxLen)
-        xb.push_back(x);
-    xb.push_back(x1);
+
+    for (int m = 0; m < milestones.size() - 1; ++m) {
+        const double segStart = milestones[m];
+        const double segEnd = milestones[m + 1];
+        const double segLen = segEnd - segStart;
+        if (segLen <= 1e-6) continue;
+
+        if (segLen <= maxLen) {
+            xb.push_back(segEnd);
+        } else {
+            if (filteredCarve.isEmpty() && m == 0) {
+                // Classic phase-offset tatami
+                double ph = std::fmod(phase, maxLen);
+                if (ph < 0) ph += maxLen;
+                double first = segStart + (maxLen - ph);
+                if (first <= segStart + 1e-6) first += maxLen;
+                for (double x = first; x < segEnd - 1e-6; x += maxLen)
+                    xb.push_back(x);
+            } else {
+                const int steps = static_cast<int>(std::ceil(segLen / maxLen));
+                const double stepSize = segLen / steps;
+                for (int s = 1; s < steps; ++s) {
+                    xb.push_back(segStart + s * stepSize);
+                }
+            }
+            xb.push_back(segEnd);
+        }
+    }
 
     bool firstPt = true;
     if (reverse) {
@@ -178,8 +226,17 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
         StitchSequence ul = Underlay::forFill(region, p.fillAngleDeg, p.colorIdx);
         seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
     }
+
+    QPainterPath cPath = p.carvingPath;
+    if (cPath.isEmpty() && p.carving != CarvingPattern::Preset::None) {
+        QRectF rBox = region[0].boundingRect();
+        for (int i = 1; i < region.size(); ++i)
+            rBox = rBox.united(region[i].boundingRect());
+        cPath = CarvingPattern::createPath(p.carving, p.carvingScaleMm, p.carvingScaleMm, rBox.center());
+    }
+
     StitchSequence cover = fillOnly(region, p.fillAngleDeg, p.rowSpacingMm,
-                                    p.maxStitchMm, effectivePhase, p.colorIdx);
+                                    p.maxStitchMm, effectivePhase, p.colorIdx, cPath);
     seq.stitches.insert(seq.stitches.end(), cover.stitches.begin(), cover.stitches.end());
 
     if (seq.palette.empty())
@@ -189,7 +246,8 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
 
 StitchSequence TatamiFill::fillOnly(const QVector<QPolygonF>& region,
                                     double angleDeg, double rowSpacingMm,
-                                    double maxStitchMm, double phaseFrac, int colorIdx)
+                                    double maxStitchMm, double phaseFrac, int colorIdx,
+                                    const QPainterPath& carvingPath)
 {
     StitchSequence seq;
     if (region.isEmpty() || region.front().size() < 3)
@@ -198,6 +256,11 @@ StitchSequence TatamiFill::fillOnly(const QVector<QPolygonF>& region,
     const double theta = angleDeg;
     QTransform rot;     rot.rotate(-theta);   // region -> scan frame
     QTransform rotInv;  rotInv.rotate(theta);  // scan frame -> region
+
+    QPainterPath scanCarving;
+    if (!carvingPath.isEmpty()) {
+        scanCarving = rot.map(carvingPath);
+    }
 
     // Rotate every ring into the scan frame and find the bounding box.
     QVector<QPolygonF> rr;
@@ -229,6 +292,11 @@ StitchSequence TatamiFill::fillOnly(const QVector<QPolygonF>& region,
         if (xs.size() < 2) continue;
         std::sort(xs.begin(), xs.end());
 
+        QVector<double> carvingXs;
+        if (!scanCarving.isEmpty()) {
+            carvingXs = CarvingPattern::findIntersections(scanCarving, y);
+        }
+
         double phase = phaseStep * row;
         if (phaseFrac < 0.0) {
             // Basketweave 4-row block shift cycle
@@ -242,12 +310,12 @@ StitchSequence TatamiFill::fillOnly(const QVector<QPolygonF>& region,
         if (!reverse) {
             for (int k = 0; k < pairs; ++k) {
                 const bool isNewSpan = (k > 0) || pts.isEmpty();
-                emitRun(xs[2 * k], xs[2 * k + 1], y, maxLen, phase, false, isNewSpan, pts);
+                emitRun(xs[2 * k], xs[2 * k + 1], y, maxLen, phase, carvingXs, false, isNewSpan, pts);
             }
         } else {
             for (int k = pairs - 1; k >= 0; --k) {
                 const bool isNewSpan = (k < pairs - 1) || pts.isEmpty();
-                emitRun(xs[2 * k], xs[2 * k + 1], y, maxLen, phase, true, isNewSpan, pts);
+                emitRun(xs[2 * k], xs[2 * k + 1], y, maxLen, phase, carvingXs, true, isNewSpan, pts);
             }
         }
         reverse = !reverse;

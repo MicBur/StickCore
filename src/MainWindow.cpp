@@ -31,6 +31,16 @@
 #include "ui/ImageDialog.h"
 #include "ui/PlacementDialog.h"
 #include "ui/ThreadPickDialog.h"
+#include "ui/BastingDialog.h"
+#include "ui/SfumatoDialog.h"
+#include "ui/CrossStitchDialog.h"
+#include "ui/MultiHoopDialog.h"
+#include "generators/ColorSorter.h"
+#include "generators/BastingGenerator.h"
+#include "generators/CarvingPattern.h"
+#include "generators/SfumatoGenerator.h"
+#include "generators/CrossStitchGenerator.h"
+#include "generators/MultiHoopSplitter.h"
 
 #include <QApplication>
 #include <QTimer>
@@ -366,6 +376,10 @@ void MainWindow::setupMenus()
     editMenu->addAction(QStringLiteral("↺ 90° &gegen Uhrzeigersinn"), this, [this]{ rotate90(false); }, QKeySequence(Qt::SHIFT | Qt::Key_F9));
     editMenu->addAction(QStringLiteral("⟳ &Freier Drehwinkel…"), this, &MainWindow::rotateFree, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
     editMenu->addSeparator();
+    editMenu->addAction(QStringLiteral("🎨 Intelligente Farbsortierung (Smart Color Sort)…"), this, &MainWindow::smartColorSort);
+    editMenu->addAction(QStringLiteral("🔲 Heftrahmen hinzufügen (Basting Box)…"), this, &MainWindow::addBastingBox);
+    editMenu->addAction(QStringLiteral("✂ Mehrfach-Rahmung (Auto-Split & Passkreuze)…"), this, &MainWindow::multiHoopSplit);
+    editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("&Alle Pfade löschen"), m_editor, &PathEditorWidget::clearAll);
 
     // --- Motive & Assistenten ---
@@ -375,6 +389,9 @@ void MainWindow::setupMenus()
     motMenu->addAction(QStringLiteral("✂ 3-Stufen-&Applikation (Aufnäher)…"), this, &MainWindow::makeApplique);
     motMenu->addAction(QStringLiteral("&Text sticken…"), this, &MainWindow::makeText, QKeySequence(Qt::CTRL | Qt::Key_T));
     motMenu->addAction(QStringLiteral("✦ Kunstvolles &Monogramm…"), this, &MainWindow::makeMonogram, QKeySequence(Qt::CTRL | Qt::Key_M));
+    motMenu->addAction(QStringLiteral("🌫 Sfumato Photo-Stitch (Fotorealistisch)…"), this, &MainWindow::digitizeSfumato);
+    motMenu->addAction(QStringLiteral("✖ Traditioneller Kreuzstich (Aida Raster)…"), this, &MainWindow::digitizeCrossStitch);
+    motMenu->addAction(QStringLiteral("⚜ Tatami Prägemuster (Carving / Eichenlaub / Stern)…"), this, &MainWindow::applyTatamiCarving);
 
     QMenu* mefMenu = motMenu->addMenu(QStringLiteral("👑 Modewerkstatt Knüppel (Original Vektor-Logo)"));
     mefMenu->addAction(QStringLiteral("👑 Meister-Aufnäher (Foto-Original: Kettelrand & Satinschrift)"), this, [this]{ loadMefOriginal(0); });
@@ -2018,6 +2035,192 @@ void MainWindow::loadHuntingMotif(int typeIdx, bool editable)
         setCurrentSequence(m_current, name);
         statusBar()->showMessage(QStringLiteral("'%1' als fertiges Stickmotiv erzeugt.").arg(name), 5000);
     }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::smartColorSort()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, windowTitle(), QStringLiteral("Kein Motiv geladen zum Sortieren."));
+        return;
+    }
+
+    ColorSorter::Stats stats;
+    StitchSequence sorted = ColorSorter::sort(m_current, &stats);
+
+    if (stats.colorChangesAfter < stats.colorChangesBefore) {
+        m_current = sorted;
+        setCurrentSequence(m_current, QStringLiteral("Farbsortiert"));
+        QMessageBox::information(this, QStringLiteral("Intelligente Farbsortierung (Smart Color Sort)"),
+            QStringLiteral("Farbwechsel erfolgreich reduziert!\n\n"
+                           "• Vorher: %1 Garnwechsel\n"
+                           "• Nachher: %2 Garnwechsel\n"
+                           "• Ersparnis: %3% weniger Umfädeln\n\n"
+                           "Die 2D-Schichtenreihenfolge wurde durch topologische Kollisionsanalyse exakt gewahrt.")
+                .arg(stats.colorChangesBefore)
+                .arg(stats.colorChangesAfter)
+                .arg(stats.savedPercent, 0, 'f', 1));
+    } else {
+        QMessageBox::information(this, QStringLiteral("Intelligente Farbsortierung"),
+            QStringLiteral("Die Farbfolge ist bereits optimal sortiert. Weitere Zusammenfassungen würden die physikalischen Schichten verletzen."));
+    }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::addBastingBox()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, windowTitle(), QStringLiteral("Kein Motiv geladen für Heftrahmen."));
+        return;
+    }
+
+    BastingDialog dlg(this);
+    if (dlg.exec() == QDialog::Accepted) {
+        const auto bp = dlg.params();
+        const auto& hoop = m_view->hoop();
+        m_current = BastingGenerator::prependTo(m_current, bp, hoop.widthMm, hoop.heightMm);
+        setCurrentSequence(m_current, QStringLiteral("Mit Heftrahmen"));
+        statusBar()->showMessage(QStringLiteral("Heftrahmen (Basting Box) erfolgreich vor das Muster gesetzt."), 6000);
+    }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::digitizeSfumato()
+{
+    SfumatoDialog dlg(QImage(), this);
+    if (dlg.exec() == QDialog::Accepted) {
+        if (dlg.sourceImage().isNull()) {
+            QMessageBox::warning(this, windowTitle(), QStringLiteral("Bitte zuerst ein Bild in der Vorschau laden."));
+            return;
+        }
+        const auto sp = dlg.params();
+        m_current = SfumatoGenerator::generate(dlg.sourceImage(), sp);
+        setCurrentSequence(m_current, QStringLiteral("Sfumato Photo-Stitch"));
+        statusBar()->showMessage(QStringLiteral("Sfumato Photo-Stitch mit %1 Stichen generiert.").arg(m_current.size()), 6000);
+    }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::digitizeCrossStitch()
+{
+    CrossStitchDialog dlg(QImage(), this);
+    if (dlg.exec() == QDialog::Accepted) {
+        if (dlg.sourceImage().isNull()) {
+            QMessageBox::warning(this, windowTitle(), QStringLiteral("Bitte zuerst ein Bild wählen."));
+            return;
+        }
+        const auto cp = dlg.params();
+        m_current = CrossStitchGenerator::generate(dlg.sourceImage(), cp);
+        setCurrentSequence(m_current, QStringLiteral("Traditioneller Kreuzstich"));
+        statusBar()->showMessage(QStringLiteral("Kreuzstichmuster mit %1 Stichen generiert.").arg(m_current.size()), 6000);
+    }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::multiHoopSplit()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, windowTitle(), QStringLiteral("Kein Motiv geladen zum Teilen."));
+        return;
+    }
+
+    MultiHoopDialog dlg(m_current.boundingRect(), this);
+    if (dlg.exec() == QDialog::Accepted) {
+        const auto mp = dlg.params();
+        MultiHoopSplitter::Result res = MultiHoopSplitter::split(m_current, mp);
+        if (!res.success) {
+            QMessageBox::warning(this, QStringLiteral("Mehrfach-Rahmung fehlgeschlagen"), res.summary);
+            return;
+        }
+
+        const QString baseFn = QFileDialog::getSaveFileName(
+            this, QStringLiteral("Basis-Dateiname für Teil 1 & Teil 2 speichern"),
+            QStringLiteral("Geteiltes_Motiv.jef"), QStringLiteral("Janome JEF (*.jef);;Tajima DST (*.dst)"));
+
+        if (!baseFn.isEmpty()) {
+            QFileInfo fi(baseFn);
+            const QString ext = fi.suffix().toLower();
+            const QString p1Fn = fi.path() + "/" + fi.completeBaseName() + "_Teil1." + ext;
+            const QString p2Fn = fi.path() + "/" + fi.completeBaseName() + "_Teil2." + ext;
+
+            if (ext == "dst") {
+                DstCodec::exportToFile(p1Fn, res.hoop1);
+                DstCodec::exportToFile(p2Fn, res.hoop2);
+            } else {
+                JefCodec::exportToFile(p1Fn, res.hoop1, HoopType::HoopB_140x200);
+                JefCodec::exportToFile(p2Fn, res.hoop2, HoopType::HoopB_140x200);
+            }
+
+            m_current = res.hoop1;
+            setCurrentSequence(m_current, QStringLiteral("Rahmen 1 (Teil 1)"));
+
+            QMessageBox::information(
+                this, QStringLiteral("Mehrfach-Rahmung erfolgreich"),
+                QStringLiteral("%1\n\nDateien gespeichert:\n• %2\n• %3\n\nTeil 1 ist nun zur Ansicht geladen.")
+                    .arg(res.summary).arg(p1Fn).arg(p2Fn));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::applyTatamiCarving()
+{
+    QStringList presets;
+    presets << QStringLiteral("🌿 Traditionelles Eichenlaub (OakLeaf)")
+            << QStringLiteral("⭐ Fünfzackiger Stern (Star)")
+            << QStringLiteral("❤ Klassisches Zierherz (Heart)")
+            << QStringLiteral("❖ Rauten-Prägung / Jacquard (DiamondGrid)")
+            << QStringLiteral("〰 Fließende Wellenlinien (WaveLines)");
+
+    bool ok = false;
+    const QString item = QInputDialog::getItem(
+        this, QStringLiteral("Tatami-Prägemuster (Carving Pattern) wählen"),
+        QStringLiteral("Ornament wählen, das als Nadelstich-Relief eingeprägt werden soll:"),
+        presets, 0, false, &ok);
+    if (!ok) return;
+
+    CarvingPattern::Preset chosen = CarvingPattern::Preset::OakLeaf;
+    if (item.contains("Stern")) chosen = CarvingPattern::Preset::Star;
+    else if (item.contains("Zierherz")) chosen = CarvingPattern::Preset::Heart;
+    else if (item.contains("Rauten")) chosen = CarvingPattern::Preset::DiamondGrid;
+    else if (item.contains("Wellen")) chosen = CarvingPattern::Preset::WaveLines;
+
+    const double scale = QInputDialog::getDouble(
+        this, QStringLiteral("Prägemuster-Größe"),
+        QStringLiteral("Größe des Ornaments in mm:"), 30.0, 10.0, 100.0, 1, &ok);
+    if (!ok) return;
+
+    const auto paths = m_editor->paths();
+    QPolygonF poly;
+    for (const auto& p : paths) {
+        if (p.count() >= 3) {
+            poly = p.toPolygon();
+            break;
+        }
+    }
+
+    if (poly.isEmpty()) {
+        const double s = 35.0;
+        poly << QPointF(-s, -s + 5) << QPointF(-s + 5, -s)
+             << QPointF(s - 5, -s) << QPointF(s, -s + 5)
+             << QPointF(s, s - 5) << QPointF(s - 5, s)
+             << QPointF(-s + 5, s) << QPointF(-s, s - 5);
+    }
+
+    TatamiFill::Params tp;
+    tp.fillAngleDeg = m_fillAngleSpin ? m_fillAngleSpin->value() : 45.0;
+    tp.rowSpacingMm = m_density ? m_density->value() : 0.40;
+    tp.maxStitchMm = m_maxStitch ? m_maxStitch->value() : 4.0;
+    tp.underlay = m_underlay ? m_underlay->isChecked() : true;
+    tp.carving = chosen;
+    tp.carvingScaleMm = scale;
+
+    m_current = TatamiFill::generate(poly, tp);
+    m_current.palette = { ThreadCatalog::snap(QColor(34, 139, 34)) };
+    setCurrentSequence(m_current, QStringLiteral("Tatami mit %1").arg(CarvingPattern::presetName(chosen)));
+    statusBar()->showMessage(
+        QStringLiteral("Tatami-Prägemuster (%1) erfolgreich mit %2 Stichen generiert.")
+            .arg(CarvingPattern::presetName(chosen)).arg(m_current.size()), 6000);
 }
 
 } // namespace stick

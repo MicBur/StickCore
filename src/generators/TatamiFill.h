@@ -6,6 +6,8 @@
 #pragma once
 
 #include "core/StitchTypes.h"
+#include "generators/CarvingPattern.h"
+#include <QPainterPath>
 #include <QPolygonF>
 #include <QVector>
 
@@ -25,13 +27,16 @@ public:
     static QString patternName(PatternType p);
 
     struct Params {
-        double      fillAngleDeg = 0.0;   ///< Fill direction θ (0° - 360°).
-        double      rowSpacingMm = 0.40;  ///< Distance between scan rows S.
-        double      maxStitchMm  = 4.00;  ///< Maximum stitch length L_max.
-        double      phaseFrac    = 0.25;  ///< Per-row puncture phase shift (× L_max).
-        PatternType pattern      = PatternType::StandardTatami; ///< Pattern style
-        bool        underlay     = true;  ///< Lay underlay (edge + cross) before the fill.
-        int         colorIdx     = 0;
+        double                 fillAngleDeg   = 0.0;   ///< Fill direction θ (0° - 360°).
+        double                 rowSpacingMm   = 0.40;  ///< Distance between scan rows S.
+        double                 maxStitchMm    = 4.00;  ///< Maximum stitch length L_max.
+        double                 phaseFrac      = 0.25;  ///< Per-row puncture phase shift (× L_max).
+        PatternType            pattern        = PatternType::StandardTatami; ///< Pattern style
+        bool                   underlay       = true;  ///< Lay underlay (edge + cross) before the fill.
+        int                    colorIdx       = 0;
+        CarvingPattern::Preset carving        = CarvingPattern::Preset::None; ///< Carving/Embossing stamp
+        QPainterPath           carvingPath;            ///< Custom carving path or pre-rendered preset
+        double                 carvingScaleMm = 20.0;  ///< Size of carving motif
     };
 
     /// region[0] is the outer boundary; region[1..] are holes.
@@ -46,7 +51,8 @@ public:
     /// module can reuse it for a sparse cross layer.
     static StitchSequence fillOnly(const QVector<QPolygonF>& region,
                                    double angleDeg, double rowSpacingMm,
-                                   double maxStitchMm, double phaseFrac, int colorIdx);
+                                   double maxStitchMm, double phaseFrac, int colorIdx,
+                                   const QPainterPath& carvingPath = QPainterPath());
 };
 
 } // namespace stick

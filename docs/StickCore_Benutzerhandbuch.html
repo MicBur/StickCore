@@ -360,6 +360,10 @@
       <span><b>10. Jagd-, Natur- & Traditionsmotive im 2D-Vektoreditor anpassen</b></span>
       <span class="toc-page-num">Kapitel 10</span>
     </li>
+    <li class="toc-item">
+      <span><b>11. Embird-Flaggschiff-Funktionen: Farbsortierung, Heftrahmen, Sfumato, Kreuzstich, Auto-Split & Tatami-Prägemuster</b></span>
+      <span class="toc-page-num">Kapitel 11</span>
+    </li>
   </ul>
 
   <div class="callout callout-info" style="margin-top: 36px;">
@@ -938,7 +942,132 @@
     <li><b>Füllmuster-Tipp:</b> Verwenden Sie für Lodenbekleidung das <b>Köper-Muster (Twill, 1/3 Versatz)</b> oder das <b>Ziegelstein-Muster (Brick, 1/2 Versatz)</b>. Der Fadenverlauf erzeugt einen rustikalen, seidenmatten Glanz, der hervorragend mit Naturtuch harmoniert.</li>
   </ul>
 
-  <div class="callout callout-info" style="margin-top: 24px; text-align: center;">
+  </ul>
+</div>
+
+<!-- CHAPTER 11 -->
+<div class="chapter-page">
+  <div class="chapter-header">
+    <div class="chapter-num">11</div>
+    <h2 class="chapter-title">Embird-Flaggschiff-Funktionen: Farbsortierung, Heftrahmen, Sfumato, Kreuzstich, Auto-Split &amp; Tatami-Prägemuster</h2>
+  </div>
+
+  <p>
+    Mit Version 1.0 integriert StickCore Studio die beliebtesten und produktivsten Spezialwerkzeuge der renommierten <b>Embird</b>-Sticksoftware. Diese Werkzeuge automatisieren zeitintensive Handarbeit, schonen empfindliche Stoffe und erschließen völlig neue kreative Gestaltungsmöglichkeiten.
+  </p>
+
+  <h3>11.1 Intelligente Farbsortierung (Smart Color Sort)</h3>
+  <p>
+    Ein häufiges Ärgernis bei vielteiligen Motiven ist häufiges Umfädeln der Stickmaschine. Eine naive Farbsortierung (z.B. alle roten Stiche zuerst, dann alle blauen) führt jedoch unweigerlich zu Stickfehlern: Schriften oder Konturen, die eigentlich <i>auf</i> einer Füllung liegen sollten, werden plötzlich <i>unter</i> die Füllung gestickt!
+  </p>
+  <p>
+    Der in StickCore Studio implementierte <b>Smart Color Sorter</b> löst dieses Problem durch eine mathematische <b>2D-Kollisionsanalyse mit topologischem Warshall-Graphen</b>:
+  </p>
+  <ul>
+    <li><b>Schichterhaltungs-Garantie:</b> Das Programm prüft für jeden Farbblock, ob nachfolgende Stiche räumlich mit ihm überlappen (&lt; 0,4 mm Nadelabstand). Liegt eine Schichtung vor, wird eine strikte Abhängigkeitskante im Graph fixiert.</li>
+    <li><b>Topologische Sortierung:</b> Räumlich getrennte Elemente derselben Garnfarbe (z.B. Blätter links und rechts) werden zusammengefasst, ohne jemals die Stapelreihenfolge überlappender Lagen zu verletzen.</li>
+    <li><b>Ergebnis:</b> Bis zu <b>60% weniger Garnwechsel</b> an Ihrer Janome MC350E bei 100% identischem optischen Stickergebnis!</li>
+  </ul>
+  <div class="callout callout-tip">
+    <b>Aufruf:</b> Menü <i>Bearbeiten &rarr; 🎨 Intelligente Farbsortierung (Smart Color Sort)…</i>. StickCore zeigt Ihnen sofort einen Bericht über die eingesparten Garnwechsel.
+  </div>
+
+  <h3>11.2 Heftrahmen-Assistent (Basting Box / Fixierrahmen)</h3>
+  <p>
+    Das Einspannen von empfindlichen Stoffen wie Loden, Samt, Seide oder feinem Leder hinterlässt oft unschöne, bleibende Druckstellen des Spannrahmens (&bdquo;Hoop Marks&ldquo;). Die Profilösung hierfür ist das <b>Floating-Verfahren</b>:
+  </p>
+  <div class="grid-2">
+    <div>
+      <p>
+        Nur das Stickvlies wird fest im Rahmen eingespannt. Der edle Stoff wird lose oben aufgelegt. Der <b>Heftrahmen</b> stickt vorab mit weiten Stichen (z.B. 5&ndash;6 mm Stichlänge) ein Rechteck um das Motiv oder entlang des Rahmens und heftet den Stoff rutschfest auf dem Vlies fest.
+      </p>
+      <p>
+        Nach dem Sticken des Motivs lässt sich der Heftfaden mit einem Handgriff rückstandslos herausziehen!
+      </p>
+    </div>
+    <div class="callout callout-info" style="margin: 0;">
+      <b>Optionen im Assistenten:</b><br>
+      • <b>Motif Bounds:</b> Sparsamer Heftrahmen mit 4 mm Sicherheitsabstand um das Motiv.<br>
+      • <b>Hoop Bounds:</b> Weiträumiger Heftrahmen entlang der maximalen Rahmenfläche.<br>
+      • <b>Doppelter Durchgang:</b> Zweifache Umrundung für extra Halt bei hochflorigem Walkstoff.<br>
+      • <b>Automatischer Stopp:</b> Die Maschine hält nach dem Heften an (Farbwechsel-Signal), damit Sie den Kontrast-Heftfaden gegen das Motivgarn tauschen können.
+    </div>
+  </div>
+  <div class="callout callout-tip">
+    <b>Aufruf:</b> Menü <i>Bearbeiten &rarr; 🔲 Heftrahmen hinzufügen (Basting Box)…</i>
+  </div>
+
+  <h3>11.3 Tatami-Prägemuster (Carving Patterns &amp; Texturstempel)</h3>
+  <p>
+    Klassische Tatami-Füllungen wirken bei großen Flächen oft flach und eintönig. Mit <b>Carving Patterns</b> prägen Sie edle Vektorornamente direkt in die Webstruktur ein, ohne dass der Stoff ausgestanzt oder das Garn gewechselt werden muss:
+  </p>
+  <ul>
+    <li><b>Das physikalische Prinzip:</b> StickCore berechnet die Schnittpunkte der horizontalen Scanzeilen mit den Konturen des Ornaments. An exakt diesen Schnittpunkten werden Nadel-Einstichstellen erzwungen. Das Garn wird an den Konturen straff in das Gewebe gezogen, wodurch eine haptisch spürbare Lichtbrechung (Relief-Effekt) entsteht!</li>
+    <li><b>Verfügbare Prägemuster:</b>
+      <br>• 🌿 <i>Traditionelles Eichenlaub:</i> Ideal für Jagd- und Trachtenabzeichen.
+      <br>• ⭐ <i>Fünfzackiger Stern:</i> Meisterhafter Ziereffekt für Wappen und Sterne.
+      <br>• ❤ <i>Klassisches Zierherz:</i> Romantische Texturierung für Geschenke.
+      <br>• ❖ <i>Rauten-Prägung (Diamond Grid):</i> Edle Jacquard-Struktur für Kissen und Westen.
+      <br>• 〰 <i>Fließende Wellenlinien:</i> Dynamischer Schimmereffekt.
+    </li>
+  </ul>
+  <div class="callout callout-tip">
+    <b>Aufruf:</b> Menü <i>Motive &amp; Assistenten &rarr; ⚜ Tatami Prägemuster (Carving / Eichenlaub / Stern)…</i>
+  </div>
+
+  <h3>11.4 Sfumato Photo-Stitch (Fotorealistisches Stippeln)</h3>
+  <p>
+    Der von Embird berühmt gemachte <b>Sfumato Photo-Stitch</b> verwandelt Fotografien, Tierporträts und Konterfeis in atemberaubende Fadenkunstwerke. Im Gegensatz zur groben Farbflächen-Digitalisierung arbeitet Sfumato mit einer <b>kontinuierlichen, dichte-modulierten Mäanderlinie</b>:
+  </p>
+  <ul>
+    <li><b>Tonwert-Modulation:</b> In dunklen Schattenbereichen schwingt die Sticknadel in engmaschigen, hochfrequenten Sinuswellen mit großer Amplitude. In hellen Lichtern läuft der Stich geradlinig und mit weiten Stichabständen (bis 3,5 mm).</li>
+    <li><b>Keine Farbabrisse:</b> Sanfte, fließende Tonwertübergänge wie bei einem klassischen Kupferstich.</li>
+    <li><b>Stichrichtungen:</b>
+      <br>• <i>Horizontal (0°):</i> Klassischer Zeilensweep.
+      <br>• <i>Vertikal (90°):</i> Vertikale Fadenführung für baumbeständige Motive.
+      <br>• <i>Kreuzschraffur (Cross-Hatch, 0° + 90°):</i> Zwei orthogonale Durchgänge für tiefste Schatten und maximale Plastizität.
+    </li>
+  </ul>
+  <div class="callout callout-tip">
+    <b>Aufruf:</b> Menü <i>Motive &amp; Assistenten &rarr; 🌫 Sfumato Photo-Stitch (Fotorealistisch)…</i>
+  </div>
+
+  <h3>11.5 Traditioneller Kreuzstich (Counted Cross-Stitch auf Aida-Raster)</h3>
+  <p>
+    Für traditionelle Trachtenstickerei, historische Alphabete und Pixel-Art bietet StickCore Studio einen vollständigen <b>Zähl-Kreuzstich-Generator</b> auf Basis standardisierter Aida-Gewebe:
+  </p>
+  <table>
+    <tr><th>Aida Stoffdichte</th><th>Zellabstand (Pitch)</th><th>Charakter &amp; Einsatzgebiet</th></tr>
+    <tr><td><b>11 count (11 ct)</b></td><td>2,31 mm</td><td>Rustikaler, markanter Bauernkreuzstich auf grobem Leinen</td></tr>
+    <tr><td><b>14 count (14 ct)</b></td><td>1,81 mm</td><td>Der weltweite Standard für Kreuzsticharbeiten</td></tr>
+    <tr><td><b>16 count (16 ct)</b></td><td>1,59 mm</td><td>Feiner Kreuzstich für zierliche Monogramme und Borten</td></tr>
+    <tr><td><b>18 count (18 ct)</b></td><td>1,41 mm</td><td>Sehr feiner Miniatur-Kreuzstich für detailreiche Bildmotive</td></tr>
+  </table>
+  <p>
+    <b>Meisterhafte Deckstich-Ausrichtung:</b> Wie in der traditionellen Handstickerei wird jeder Kreuzstich in zwei getrennten Schenkeln aufgebaut. Der Grundstich verläuft stets von links-unten nach rechts-oben (<code>/</code>), der abschließende Deckstich einheitlich von rechts-unten nach links-oben (<code>\</code>). Dies garantiert einen absolut gleichmäßigen Glanz über die gesamte Stickfläche! Für extreme Reliefwirkung steht zudem das <b>Smyrna-Sternkreuz (Double Cross, X + +)</b> zur Verfügung.
+  </p>
+  <div class="callout callout-tip">
+    <b>Aufruf:</b> Menü <i>Motive &amp; Assistenten &rarr; ✖ Traditioneller Kreuzstich (Aida Raster)…</i>
+  </div>
+
+  <h3>11.6 Mehrfach-Rahmung (Auto-Split &amp; Passkreuze für Großprojekte)</h3>
+  <p>
+    Die Janome Memory Craft 350E verfügt mit dem Rahmen B über ein maximales Stickfeld von <b>140 &times; 200 mm</b>. Was aber, wenn Sie einen großen Rückenschriftzug, ein langes Bannermotiv (z.B. 140 &times; 360 mm) oder ein großes Jagdszenario sticken möchten?
+  </p>
+  <p>
+    Der <b>Mehrfach-Rahmungs-Assistent (Multi-Hoop Auto-Splitter)</b> teilt übergroße Motive vollautomatisch:
+  </p>
+  <ul>
+    <li><b>Schnittlinie &amp; Überlappungszone:</b> Das Motiv wird wahlweise horizontal oder vertikal mit einer Sicherheits-Nahtzugabe (Standard: 8 mm) in <b>Teil 1</b> und <b>Teil 2</b> aufgeteilt. Übergänge werden mit Verriegelungsstichen und Fadenschnitt abgesichert.</li>
+    <li><b>Passkreuze (Registrierstiche):</b> Am Ende von Teil 1 stickt die Maschine zwei präzise Fadenkreuze (<code>+</code>) an den Außenrändern der Schnittlinie und hält an. Sie markieren diese Punkte mit einem Kreidestift auf dem Vlies.</li>
+    <li><b>Perfekte Wiederausrichtung:</b> Vor dem Sticken von Teil 2 im zweiten Einspannvorgang stickt die Maschine exakt dieselben Passkreuze zuerst. So können Sie den Stoff vor dem Hauptstickvorgang mikrometergenau ausrichten!</li>
+    <li><b>Automatischer Dateiexport:</b> Speichert direkt <code>Motiv_Teil1.jef</code> und <code>Motiv_Teil2.jef</code> zur direkten Übertragung auf Ihren USB-Stick.</li>
+  </ul>
+  <div class="callout callout-tip">
+    <b>Aufruf:</b> Menü <i>Bearbeiten &rarr; ✂ Mehrfach-Rahmung (Auto-Split &amp; Passkreuze)…</i>
+  </div>
+
+  <div class="callout callout-info" style="margin-top: 32px; text-align: center;">
     <b>StickCore Studio — Perfektion bis zum letzten Stich.</b><br>
     Modewerkstatt Knüppel · Meisterbetrieb Haute Couture.
   </div>
