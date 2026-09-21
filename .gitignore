@@ -1,0 +1,34 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+.cache/
+
+# Executables & object files
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.obj
+*.o
+
+# Qt & IDE specific files
+*.user
+*.user.*
+.vscode/
+.vs/
+.idea/
+
+# Installer distribution & deployment outputs (build artifacts)
+installer/deploy/
+installer/Output/
+Output/
+deploy/
+
+# Temporary profiles, logs & test outputs
+*.log
+_mef_test.*
+chrome-profile/
+build-mingw/

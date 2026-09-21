@@ -1,0 +1,58 @@
+<!DOCTYPE html><html lang="de"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>StickCore Studio — Mobile Upload</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       background: #0f1117; color: #dbe0e9; margin: 0; padding: 24px 16px;
+       display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+.card { background: #1b1e26; border: 1px solid #2c313d; border-radius: 24px;
+        padding: 28px 24px; max-width: 360px; width: 100%; box-shadow: 0 12px 40px rgba(0,0,0,0.6); text-align: center; }
+.logo { font-size: 40px; margin-bottom: 8px; }
+h1 { font-size: 22px; font-weight: 700; margin: 0 0 8px; color: #f1f5f9; letter-spacing: -0.5px; }
+p { color: #8b93a4; font-size: 14px; line-height: 1.5; margin: 0 0 24px; }
+.btn-grid { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+.btn { width: 100%; padding: 16px 20px; border: 0; border-radius: 14px;
+       font-size: 15px; font-weight: 600; cursor: pointer; display: flex;
+       align-items: center; justify-content: center; gap: 12px; transition: all 0.2s ease; }
+.btn-primary { background: #2dd4bf; color: #04201c; box-shadow: 0 4px 14px rgba(45,212,191,0.3); }
+.btn-secondary { background: #232732; color: #dbe0e9; border: 1px solid #3b4252; }
+.btn-upload { background: #3b82f6; color: #ffffff; font-size: 16px; padding: 16px; box-shadow: 0 4px 16px rgba(59,130,246,0.35); }
+#previewBox { margin: 18px 0; padding: 14px; background: #14171f;
+              border-radius: 16px; border: 1px solid #2c313d; }
+.preview-ph { width: 100%; height: 160px; background: linear-gradient(135deg, #1e293b, #0f172a);
+              border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #2dd4bf; font-size: 14px; font-weight: 600; border: 1px dashed #334155; }
+.preview-ph span { font-size: 36px; margin-bottom: 6px; }
+#fileInfo { margin-top: 10px; font-size: 12px; color: #2dd4bf; word-break: break-all; font-weight: 600; }
+.status-msg { margin-top: 14px; font-size: 13px; color: #10b981; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">??</div>
+  <h1>StickCore Studio</h1>
+  <p>Wähle ein Bild oder eine Grafik aus deiner Fotomediathek / Speicher oder nimm ein Foto auf.</p>
+
+  <div class="btn-grid">
+    <button type="button" class="btn btn-primary">
+      <span style="font-size:20px;">??</span><span>Foto / Datei aus Mediathek</span>
+    </button>
+    <button type="button" class="btn btn-secondary">
+      <span style="font-size:20px;">??</span><span>Neues Foto aufnehmen</span>
+    </button>
+  </div>
+
+  <div id="previewBox">
+    <div class="preview-ph">
+      <span>??</span>
+      <span>mef_logo_knueppel.svg</span>
+    </div>
+    <div id="fileInfo">Ausgewählt: mef_logo_knueppel.svg (48.6 KB)</div>
+  </div>
+
+  <button type="button" class="btn btn-upload">
+    <span>?</span><span>An StickCore senden</span>
+  </button>
+  <div class="status-msg">? Bereit zur Übertragung an PC</div>
+</div>
+</body></html>

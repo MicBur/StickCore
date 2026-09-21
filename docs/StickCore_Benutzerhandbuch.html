@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>StickCore Studio — Offizielles Benutzerhandbuch</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 18mm 14mm;
+    @bottom-center {
+      content: "StickCore Studio — Offizielles Handbuch";
+      font-size: 8pt;
+      color: #94a3b8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    @bottom-right {
+      content: "Seite " counter(page);
+      font-size: 8pt;
+      color: #64748b;
+      font-weight: 600;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+  }
+
+  @page:first {
+    margin: 0;
+    @bottom-center { content: ""; }
+    @bottom-right { content: ""; }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    background: #ffffff;
+    line-height: 1.55;
+    font-size: 10pt;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Cover Page */
+  .cover {
+    height: 100vh;
+    padding: 60px 48px;
+    background: radial-gradient(circle at 80% 20%, #1e293b 0%, #0f172a 100%);
+    color: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    page-break-after: always;
+  }
+  .cover-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(45, 212, 191, 0.15);
+    border: 1px solid rgba(45, 212, 191, 0.4);
+    color: #2dd4bf;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 9pt;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    width: fit-content;
+  }
+  .cover-title {
+    font-size: 32pt;
+    font-weight: 800;
+    line-height: 1.15;
+    margin: 20px 0 12px;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #2dd4bf 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .cover-subtitle {
+    font-size: 14pt;
+    color: #94a3b8;
+    line-height: 1.4;
+    max-width: 580px;
+    margin-bottom: 28px;
+  }
+  .cover-hero-img {
+    width: 100%;
+    max-height: 340px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid #334155;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+  }
+  .cover-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-top: 1px solid #334155;
+    padding-top: 20px;
+  }
+  .cover-meta {
+    font-size: 9pt;
+    color: #64748b;
+    line-height: 1.6;
+  }
+  .cover-meta b { color: #cbd5e1; }
+  .cover-logo-icon {
+    font-size: 28pt;
+  }
+
+  /* Table of Contents */
+  .toc-page {
+    padding: 30px 10px;
+    page-break-after: always;
+  }
+  .toc-title {
+    font-size: 18pt;
+    font-weight: 800;
+    color: #0f172a;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 8px;
+    margin-bottom: 24px;
+  }
+  .toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 0;
+    border-bottom: 1px dashed #cbd5e1;
+    font-size: 10.5pt;
+  }
+  .toc-item b {
+    color: #0f172a;
+  }
+  .toc-page-num {
+    color: #2dd4bf;
+    font-weight: 700;
+  }
+
+  /* Content Chapters */
+  .chapter {
+    page-break-before: always;
+    padding-top: 8px;
+  }
+  .chapter-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 2px solid #0f172a;
+    padding-bottom: 8px;
+    margin-bottom: 18px;
+  }
+  .chapter-num {
+    background: #0f172a;
+    color: #2dd4bf;
+    font-size: 11pt;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+  .chapter-title {
+    font-size: 16pt;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+  }
+
+  h3 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 16px 0 6px;
+  }
+
+  p {
+    margin: 0 0 10px;
+    color: #334155;
+  }
+
+  /* Images & Figures */
+  .figure {
+    margin: 14px 0 18px;
+    page-break-inside: avoid;
+    text-align: center;
+  }
+  .figure img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  }
+  .figure-caption {
+    font-size: 8.5pt;
+    color: #64748b;
+    margin-top: 6px;
+    font-style: italic;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    page-break-inside: avoid;
+    margin: 14px 0;
+  }
+  .grid-2 .figure {
+    margin: 0;
+  }
+
+  /* Callouts & Info Boxes */
+  .callout {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin: 12px 0;
+    font-size: 9pt;
+    line-height: 1.5;
+    page-break-inside: avoid;
+  }
+  .callout-info {
+    background: #f0fdfa;
+    border-left: 4px solid #2dd4bf;
+    color: #134e4a;
+  }
+  .callout-tip {
+    background: #fefce8;
+    border-left: 4px solid #eab308;
+    color: #713f12;
+  }
+  .callout-warn {
+    background: #fef2f2;
+    border-left: 4px solid #f43f5e;
+    color: #881337;
+  }
+  .callout b {
+    display: inline-block;
+    margin-bottom: 2px;
+  }
+
+  /* Feature Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  th, td {
+    padding: 7px 10px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 700;
+    border-top: 1px solid #cbd5e1;
+  }
+  tr:nth-child(even) td {
+    background: #fafafa;
+  }
+  kbd {
+    display: inline-block;
+    padding: 2px 5px;
+    font-size: 8pt;
+    font-family: inherit;
+    font-weight: 600;
+    color: #1e293b;
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .badge-teal { background: #ccfbf1; color: #0f766e; }
+  .badge-gold { background: #fef3c7; color: #92400e; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div>
+    <div class="cover-badge">✨ Offizielles Benutzerhandbuch · Version 1.0</div>
+    <div class="cover-title">StickCore Studio</div>
+    <div class="cover-subtitle">
+      Professionelles Stickmuster-Design, 2D/3D-Echtzeit-Simulation, Janome Digitizer Jr Parität & Vektor-Digitalisierung für Janome MC350E / MC500E und Tajima DST.
+    </div>
+  </div>
+
+  <div>
+    <img src="manual_assets/01_studio_main_mef.png" class="cover-hero-img" alt="StickCore Studio Übersicht">
+  </div>
+
+  <div class="cover-footer">
+    <div class="cover-meta">
+      <b>Modewerkstatt Knüppel — Meisterbetrieb Haute Couture</b><br>
+      Entwickelt für Windows 10 & 11 (64-Bit) · Qt 6 & OpenGL 3.3<br>
+      Stand: September 2026 · Vollständige Farbillustrationen
+    </div>
+    <div class="cover-logo-icon">🧵</div>
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc-page">
+  <div class="toc-title">Inhaltsverzeichnis</div>
+  <ul class="toc-list">
+    <li class="toc-item">
+      <span><b>1. Die Studio-Arbeitsoberfläche & der duale 2D/3D-Workflow</b></span>
+      <span class="toc-page-num">Kapitel 1</span>
+    </li>
+    <li class="toc-item">
+      <span><b>2. Die interaktive 2D Design-Leinwand & Vorlagen-Dimmung</b></span>
+      <span class="toc-page-num">Kapitel 2</span>
+    </li>
+    <li class="toc-item">
+      <span><b>3. Janome Digitizer Jr Lettering: Bogenschriften & Kerning</b></span>
+      <span class="toc-page-num">Kapitel 3</span>
+    </li>
+    <li class="toc-item">
+      <span><b>4. Janome Stickrahmen, Überlauf-Überwachung & Verschieben</b></span>
+      <span class="toc-page-num">Kapitel 4</span>
+    </li>
+    <li class="toc-item">
+      <span><b>5. Smartphone QR-Code Upload: Galerie-, Datei- & Kamera-Auswahl</b></span>
+      <span class="toc-page-num">Kapitel 5</span>
+    </li>
+    <li class="toc-item">
+      <span><b>6. Manuelles Digitalisieren: Der Bézier-Vektoreditor & Applikation</b></span>
+      <span class="toc-page-num">Kapitel 6</span>
+    </li>
+    <li class="toc-item">
+      <span><b>7. MEF Meister-Emblem, JEF/DST-Export & Maschinenübertragung</b></span>
+      <span class="toc-page-num">Kapitel 7</span>
+    </li>
+  </ul>
+
+  <div class="callout callout-info" style="margin-top: 36px;">
+    <b>Über dieses Handbuch:</b><br>
+    StickCore Studio kombiniert die intuitive Einfachheit von <i>Janome Digitizer Jr</i> mit den fortschrittlichen Algorithmen moderner Vektor-Sticksoftware (Wilcom, Hatch, StitchArtist). Alle Funktionen sind direkt ohne Cloud-Zwang lokal auf Ihrem Rechner lauffähig.
+  </div>
+</div>
+
+<!-- CHAPTER 1 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">01</div>
+    <h1 class="chapter-title">Die Studio-Arbeitsoberfläche & der duale 2D/3D-Workflow</h1>
+  </div>
+
+  <p>
+    StickCore Studio führt eine revolutionäre <b>Zweifeld-Architektur</b> ein: Links arbeiten Sie technisch präzise in der <b>2D Design-Leinwand</b>, während rechts gleichzeitig die <b>photorealistische 3D-Fadensimulation</b> die textile Haptik, Lichtreflexe und Fadenspannung berechnet.
+  </p>
+
+  <div class="figure">
+    <img src="manual_assets/01_studio_main_mef.png" alt="Hauptfenster StickCore Studio">
+    <div class="figure-caption">Abbildung 1.1: Das Studio-Hauptfenster mit geladenem Haute-Couture-Emblem der Modewerkstatt Knüppel.</div>
+  </div>
+
+  <h3>Die drei Hauptbereiche der Benutzeroberfläche:</h3>
+  <table>
+    <tr>
+      <th style="width: 25%;">Bereich</th>
+      <th style="width: 35%;">Komponente</th>
+      <th>Aufgabe & Nutzen</th>
+    </tr>
+    <tr>
+      <td><b>Linker Bereich</b></td>
+      <td>2D Design- & Stickbild-Leinwand (<code>Canvas2DWidget</code>)</td>
+      <td>Visualisiert das Motiv vor und während der Simulation: Echte Nadeleinstiche, Garnfarben, gestrichelte Sprungfäden, Janome-Rahmen und Vorlagen-Dimmung.</td>
+    </tr>
+    <tr>
+      <td><b>Mittlerer Bereich</b></td>
+      <td>3D Photorealistische Fadensimulation (<code>StitchGLWidget</code>)</td>
+      <td>OpenGL 3.3 Ray-Shading mit Glanzlichtern nach Madeira Rayon/Polyneon Spezifikation, 3D-Kamera-Orbit, Playback-Transportleiste zum Abspulen des Stickvorgangs.</td>
+    </tr>
+    <tr>
+      <td><b>Rechter Bereich</b></td>
+      <td>Maschinen- & Eigenschafts-Panel (<code>InfoPanel</code>)</td>
+      <td>Janome Rahmenauswahl, Millimeter-Positionsjustierung (X/Y), Garnfarben-Palette mit Farbstopps, Stichdichte, Zugkompensation und Stickzeit-Berechnung.</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-tip">
+    <b>Tipp zur Navigation:</b> Mit <kbd>Strg</kbd> + <kbd>D</kbd> schalten Sie die 3D-Kamera blitzschnell zwischen isometrischer Perspektive und senkrechter 2D-Draufsicht um. Mit der <kbd>Leertaste</kbd> starten und pausieren Sie die Live-Sticksimulation!
+  </div>
+</div>
+
+<!-- CHAPTER 2 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">02</div>
+    <h1 class="chapter-title">Die interaktive 2D Design-Leinwand & Vorlagen-Dimmung</h1>
+  </div>
+
+  <p>
+    Im linken Feld sehen Sie das Stickmuster in technischer Vollendung. Jeder einzelne Nadeleinstich wird als kreisrunder Penetrationspunkt dargestellt, Fäden werden mit abgerundeten Linienverbindungen gezeichnet und Sprungfäden sind sofort an gestrichelten Linien mit Start- (<kbd>S</kbd>) und Endmarkern (<kbd>E</kbd>) erkennbar.
+  </p>
+
+  <div class="grid-2">
+    <div class="figure">
+      <img src="manual_assets/02_canvas_2d_closeup.png" alt="2D Canvas Detail">
+      <div class="figure-caption">Abb. 2.1: 2D-Stickpfade mit Einstichpunkten und Janome Hoop B.</div>
+    </div>
+    <div class="figure">
+      <img src="manual_assets/06_artwork_dimming_overlay.png" alt="Vorlagen-Dimmung Overlay">
+      <div class="figure-caption">Abb. 2.2: Vorlagen-Dimmung: Originalzeichnung unter den Stichen.</div>
+    </div>
+  </div>
+
+  <h3>Die Steuerungselemente der 2D-Werkzeugleiste:</h3>
+  <ul>
+    <li><b>[🧵 2D Stickbild] / [✏ Bézier Pfade]:</b> Schaltet das linke Feld zwischen der reinen Stichansicht und dem Vektorkurven-Editor um.</li>
+    <li><b>[• Punkte]:</b> Schaltet die Anzeige der einzelnen Nadelpenetrationen ein oder aus.</li>
+    <li><b>[⤹ Sprünge]:</b> Blendet ungestickte Verbindungslinien (Jump Stitches) ein oder aus.</li>
+    <li><b>[⭕ Rahmen]:</b> Zeigt die exakten Abmessungen des gewählten Janome Stickrahmens samt Fadenkreuz an.</li>
+    <li><b>[⌖ Einpassen] & [1:1]:</b> Zoomt das Motiv optimal formatfüllend oder in Originalgröße (1 mm auf dem Bildschirm = 1 mm am Stoff).</li>
+    <li><b>Vorlage-Dimmung (0–100 %):</b> Stufenloser Schieberegler zum Einblenden und Abdimmen der geladenen Hintergrundgrafik (Fotos, SVG, Skizzen).</li>
+  </ul>
+
+  <div class="callout callout-info">
+    <b>Warum Vorlagen-Dimmung?</b> Wie im professionellen <i>Janome Digitizer Jr</i> (Wilcom-Engine) ermöglicht das Dimmen der Hintergrundgrafik auf ca. 40–50 % eine perfekte Beurteilung, ob Kontursäume und Satinsäulen exakt die Vorlagenkanten abdecken.
+  </div>
+</div>
+
+<!-- CHAPTER 3 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">03</div>
+    <h1 class="chapter-title">Janome Digitizer Jr Lettering: Bogenschriften & Kerning</h1>
+  </div>
+
+  <p>
+    Über den Menüpunkt <b>Motive & Assistenten → Text sticken…</b> (<kbd>Strg</kbd> + <kbd>T</kbd>) öffnet sich das vollwertige Schrift- und Lettering-Studio mit exakter Parität zu <i>Janome Digitizer Jr</i>.
+  </p>
+
+  <div class="figure">
+    <img src="manual_assets/04_janome_lettering_dialog.png" style="max-width: 75%;" alt="Janome Digitizer Jr Textdialog">
+    <div class="figure-caption">Abbildung 3.1: Der interaktive Janome Digitizer Jr Schriftzug- und Lettering-Dialog.</div>
+  </div>
+
+  <h3>Die vier Bogengrundlinien (Baselines):</h3>
+  <table>
+    <tr>
+      <th>Grundlinie</th>
+      <th>Verhalten & Geometrie</th>
+      <th>Einstellbare Parameter</th>
+    </tr>
+    <tr>
+      <td><b>━ Gerade (Horizontal)</b></td>
+      <td>Klassischer geradliniger Textverlauf auf der X-Achse.</td>
+      <td>Schrifthöhe, Zeichenabstand, Kursivwinkel.</td>
+    </tr>
+    <tr>
+      <td><b>⌒ Bogen Oben (Arc Up)</b></td>
+      <td>Der Text wölbt sich nach oben über einen definierten Kreisradius.</td>
+      <td>Bogenradius (15–300 mm), Kerning, Slant.</td>
+    </tr>
+    <tr>
+      <td><b>⌣ Bogen Unten (Arc Down)</b></td>
+      <td>Der Text hängt in einer Schale nach unten durch (ideal für Wappenunterkanten).</td>
+      <td>Bogenradius (15–300 mm), Kerning, Slant.</td>
+    </tr>
+    <tr>
+      <td><b>⭕ Kreis (Circle)</b></td>
+      <td>Rundsatz um ein kreisförmiges Zentrum (z. B. für runde Vereinsabzeichen).</td>
+      <td>Kreisradius (15–300 mm), Zeichenabstand.</td>
+    </tr>
+  </table>
+
+  <div class="grid-2">
+    <div class="figure">
+      <img src="manual_assets/04b_curved_lettering_canvas.png" alt="Bogenschrift 2D">
+      <div class="figure-caption">Abb. 3.2: 2D-Berechnung der Bogenschrift (Arc Up mit Tangentialdrehung).</div>
+    </div>
+    <div class="figure">
+      <img src="manual_assets/04c_curved_lettering_3d.png" alt="Bogenschrift 3D">
+      <div class="figure-caption">Abb. 3.3: 3D-Simulation mit erhabenem Satinstich (Raised Satin).</div>
+    </div>
+  </div>
+
+  <h3>Professionelle Stickstile für Schriften:</h3>
+  <p>
+    <b>1. ✦ Erhabener Satin-Rand auf Füllung (Janome Jr):</b> Erstklassiger 3D-Reliefeffekt. Die Buchstabenmitte wird mit Unterlegern gestützt, die Kontur erhält dichte Satinstiche.<br>
+    <b>2. 🧵 Reine Satin-Kontur:</b> Feine, glänzende Satinsäulen für elegante Monogramme.<br>
+    <b>3. ▦ Dichte Tatami-Webung:</b> Für große Buchstaben (> 25 mm), verhindert zu lange Fäden.<br>
+    <b>4. ✒ Feiner Steppstich:</b> Filigrane Kontur-Laufstiche für kleine Etiketten und Kragenstickereien.
+  </p>
+</div>
+
+<!-- CHAPTER 4 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">04</div>
+    <h1 class="chapter-title">Janome Stickrahmen, Überlauf-Überwachung & Verschieben</h1>
+  </div>
+
+  <p>
+    StickCore Studio enthält die vollständige Rahmenpalette der <b>Janome Memory Craft Serie</b> (MC350E, MC500E, MC550E, Atelier 9) mit automatischer Überlaufkontrolle.
+  </p>
+
+  <table>
+    <tr>
+      <th>Janome Rahmen</th>
+      <th>Nutzfläche</th>
+      <th>Janome Maschinen-Code</th>
+      <th>Idealer Einsatzbereich</th>
+    </tr>
+    <tr>
+      <td><span class="badge badge-teal">Hoop C</span> (Freiarm)</td>
+      <td>50 × 50 mm</td>
+      <td>Code 2</td>
+      <td>Socken, Ärmel, Hosenbeine, kleine Monogramme, Kragen.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-teal">Hoop A</span> (Standard)</td>
+      <td>126 × 110 mm</td>
+      <td>Code 1</td>
+      <td>Brustlogos, Vereinswappen, Babykleidung, Servietten.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-teal">Hoop SQ14</span> (Quadrat)</td>
+      <td>140 × 140 mm</td>
+      <td>Code 3</td>
+      <td>Quadratische Patches, Quilts, Kissenbezüge, Mandalas.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-teal">Hoop B</span> (Groß)</td>
+      <td>140 × 200 mm</td>
+      <td>Code 0</td>
+      <td>Rückenmotive, Taschen, Atelier-Embleme (z. B. MEF Original).</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-teal">Hoop D</span> (GigaHoop)</td>
+      <td>230 × 200 mm</td>
+      <td>Code 4</td>
+      <td>Großflächige Stickereien, Jackenrücken, Tischdecken.</td>
+    </tr>
+  </table>
+
+  <h3>Interaktives Verschieben & Überlaufschutz:</h3>
+  <p>
+    Sie können Ihr Motiv jederzeit frei auf der Stoffebene bewegen:
+  </p>
+  <ul>
+    <li><b>Mit der Maus in 3D:</b> Aktivieren Sie in der Toolbar <kbd>✥ Bewegen</kbd> (oder halten Sie <kbd>Shift</kbd> gedrückt) und ziehen Sie das Motiv direkt mit der linken Maustaste.</li>
+    <li><b>Mit Pfeiltasten:</b> <kbd>←</kbd>, <kbd>→</kbd>, <kbd>↑</kbd>, <kbd>↓</kbd> bewegen das Motiv in 1,0 mm Schritten (<kbd>Shift</kbd> = 5,0 mm, <kbd>Alt</kbd> = 0,1 mm).</li>
+    <li><b>⌖ Zentrieren (<kbd>Strg</kbd> + <kbd>0</kbd>):</b> Setzt das Motiv exakt in die geometrische Mitte des Rahmens zurück.</li>
+  </ul>
+
+  <div class="callout callout-warn">
+    <b>Automatische Überlauf-Erkennung:</b> Sobald auch nur ein einziger Nadelstich über die zulässige Grenze des Rahmens ragt, verfärbt sich der Rahmen im 2D- und 3D-Fenster leuchtend <b>korallenrot</b> und im Infopanel erscheint die Warnung <i>„⚠ Außerhalb des Rahmens!“</i>. Passt alles perfekt, leuchtet der Rahmen beruhigend <b>smaragdgrün</b>.
+  </div>
+
+  <h3>Digitizer Jr Transformationen:</h3>
+  <p>
+    Im Menü <b>Bearbeiten</b> oder über die Schnellzugriffstasten:
+    <br>• <b>Horizontal spiegeln</b> (<kbd>Strg</kbd> + <kbd>H</kbd>) & <b>Vertikal spiegeln</b> (<kbd>Strg</kbd> + <kbd>V</kbd>).
+    <br>• <b>90° Drehen</b> im Uhrzeigersinn (<kbd>Strg</kbd> + <kbd>R</kbd>) oder gegen den Uhrzeigersinn (<kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd>).
+    <br>• <b>Freie Rotation:</b> Beliebiger Winkel von -180° bis +180° mit automatischer Neuberechnung der Bounding-Box.
+  </p>
+</div>
+
+<!-- CHAPTER 5 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">05</div>
+    <h1 class="chapter-title">Smartphone QR-Code Upload: Galerie-, Datei- & Kamera-Auswahl</h1>
+  </div>
+
+  <p>
+    Mit der <b>Smartphone-Upload-Funktion</b> (<kbd>Strg</kbd> + <kbd>U</kbd>) übertragen Sie Grafiken und Fotos kabellos in Sekundenschnelle vom Handy direkt an Ihren PC – völlig ohne Kabel, Cloud oder Drittanbieter-Apps.
+  </p>
+
+  <div class="grid-2">
+    <div class="figure">
+      <img src="manual_assets/07_mobile_qr_upload.png" style="max-height: 380px; width: auto;" alt="Mobile Web App auf Smartphone">
+      <div class="figure-caption">Abb. 5.1: Die responsive Smartphone-Web-App mit Mediathek- & Kamera-Auswahl.</div>
+    </div>
+    <div style="padding-top: 10px;">
+      <h3>So funktioniert der Upload in 3 Schritten:</h3>
+      <ol style="padding-left: 18px; line-height: 1.8;">
+        <li>Klicken Sie in StickCore auf <b>📱 Handy (QR)</b>. Ein QR-Code öffnet sich auf dem PC-Monitor.</li>
+        <li>Scannen Sie den QR-Code mit der normalen Kamera-App Ihres Smartphones (beide Geräte im selben WLAN).</li>
+        <li>Die Web-App öffnet sich im mobilen Browser (Safari, Chrome, etc.):
+          <br>• <b>📁 Foto / Datei aus Mediathek:</b> Wählt vorhandene Bilder, SVG-Vektoren, Downloads oder iCloud/Google Drive Dateien aus.
+          <br>• <b>📸 Neues Foto aufnehmen:</b> Aktiviert die Kamera für spontane Schnappschüsse von Stoffmustern oder Zeichnungen.
+        </li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="callout callout-info">
+    <b>Neu in Version 1.0 (Kein Kamera-Zwang mehr!):</b> Frühere Versionen öffneten auf manchen Mobilgeräten automatisch die Rückkamera. Die neue Web-App bietet zwei getrennte Schaltflächen und zeigt nach der Auswahl sofort eine lokale Bildvorschau mit Dateigröße an, bevor Sie auf <i>„⚡ An StickCore senden“</i> tippen.
+  </div>
+
+  <p>
+    Sobald das Bild am PC empfangen wird, erscheint es automatisch in der linken 2D-Leinwand und der <b>Click-to-Design Auto-Digitalisierer</b> schlägt passende Garnfarben und Sticharten vor!
+  </p>
+</div>
+
+<!-- CHAPTER 6 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">06</div>
+    <h1 class="chapter-title">Manuelles Digitalisieren: Der Bézier-Vektoreditor & Applikation</h1>
+  </div>
+
+  <p>
+    Für maßgeschneiderte Stickobjekte verfügt StickCore Studio über einen vollwertigen Vektoreditor mit kubischen Bézier-Kurven, der direkt mit den mathematischen Stichgeneratoren gekoppelt ist.
+  </p>
+
+  <div class="figure">
+    <img src="manual_assets/05_bezier_editor_closeup.png" style="max-width: 80%;" alt="Bézier Vektoreditor">
+    <div class="figure-caption">Abbildung 6.1: Bézier-Editor mit Satinsäulen-Führungsschienen (Rails) und Stützpunkten.</div>
+  </div>
+
+  <h3>Die Digitalisier-Modi im Editor:</h3>
+  <table>
+    <tr>
+      <th>Modus</th>
+      <th>Arbeitsweise</th>
+      <th>Ergebnis & Stickart</th>
+    </tr>
+    <tr>
+      <td><b>Satin (2 Rails)</b></td>
+      <td>Zeichnen Sie zuerst die linke Begrenzungsschiene (Rail A) mit Kurvenpunkten, klicken Sie auf <i>„Neuer Pfad“</i> und zeichnen Sie die rechte Schiene (Rail B).</td>
+      <td>Erzeugt eine variable Satinsäule mit dynamischer Fadenneigung, die sich geschmeidig an die Kurven anpasst.</td>
+    </tr>
+    <tr>
+      <td><b>Tatami (Polygon)</b></td>
+      <td>Klicken Sie mindestens 3 Punkte für eine geschlossene Fläche. Kurventangenten können mit der Maus verzerrt werden.</td>
+      <td>Erzeugt eine dichte Webung (Tatami-Füllung) mit einstellbarem Stichwinkel (z. B. 15° bis 45°) und Kantenverriegelung.</td>
+    </tr>
+    <tr>
+      <td><b>✂ Applikation</b></td>
+      <td>Zeichnen Sie die gewünschte Stoff-Applikationskontur als geschlossenes Polygon.</td>
+      <td><b>3-Stufen-Applikation:</b> 1. Platzierungslinie (Heftnaht auf Grundstoff) → 2. Stoff-Befestigung (Tackdown) → 3. Satinkanten-Versäuberung.</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-tip">
+    <b>Punkte bearbeiten:</b> Klicken Sie auf einen Knotenpunkt, um ihn zu verschieben. Ziehen Sie an den Steuergriff-Linien (Bezier Handles), um die Krümmung der Kurve stufenlos zu glätten.
+  </div>
+</div>
+
+<!-- CHAPTER 7 -->
+<div class="chapter">
+  <div class="chapter-header">
+    <div class="chapter-num">07</div>
+    <h1 class="chapter-title">MEF Meister-Emblem, JEF/DST-Export & Maschinenübertragung</h1>
+  </div>
+
+  <p>
+    Das originale Atelier-Wappen der <b>Modewerkstatt Knüppel (mef)</b> wurde exakt nach dem realen, physischen Meister-Aufnäher aus der Vektordatei für Janome- und Tajima-Maschinen digitalisiert und steht standardmäßig über die Schnellwahltaste <b>👑 MEF Original</b> zur Verfügung.
+  </p>
+
+  <div class="grid-2">
+    <div class="figure">
+      <img src="manual_assets/09b_mef_patch_white.png" alt="MEF Original Meister-Aufnäher">
+      <div class="figure-caption">Abb. 7.1: Foto-Originalgetreuer Meister-Aufnäher mit 3,8 mm Satin-Kettelrand, Akzentring & erhabener Satinschrift.</div>
+    </div>
+    <div class="figure">
+      <img src="manual_assets/03_gl_simulation_closeup.png" alt="3D Fadenglanz">
+      <div class="figure-caption">Abb. 7.2: 3D-Fadensimulation mit echtem Madeira-Goldglanz im Janome-Rahmen B.</div>
+    </div>
+  </div>
+
+  <h3>Die 5 künstlerischen Haute-Couture Stickstile:</h3>
+  <ol>
+    <li><b>👑 Meister-Aufnäher (Foto-Original: Kettelrand & Satinschrift, Standard):</b> Exakte Nachbildung des realen Aufnähers. Breiter 3,8 mm radialer Satin-Kettelrand mit Unterleger (Center-Track und Edge-Walk) und Zugausgleich, feiner doppelter Innenring (1,8 mm Inset) sowie solide, erhabene Satinstiche mit 45°-Stabilisierungsunterleger für alle Schriftzüge (<i>Meisterbetrieb, Modewerkstatt, Knüppel, Haute Couture</i>).</li>
+    <li><b>✦ Atelier Kontur-Glanz (Florentiner Schimmer):</b> Konzentrische Abstandstransformations-Ringe (0,40 mm Abstand, 2,4 mm Stichlänge). Im Licht schimmert der Goldfaden wie handgeführt.</li>
+    <li><b>✨ Zwei-Ton-Relief Gold:</b> Untere Schicht in <i>Madeira Rayon 1083</i> (Antikgold), obere Glanzschicht in <i>Madeira Rayon 1070</i> (Brillantgold) mit automatischem Farbstopp (<kbd>SF_ColorChange</kbd>).</li>
+    <li><b>🧵 Königliche Meister-Tatami:</b> 15°-Webung mit feiner Kontur-Kantenverriegelung für extrem strapazierfähige Stickereien.</li>
+    <li><b>✒ Feiner Gold-Steppstich:</b> Filigrane Doppelnaht-Laufstiche für dezente Textilveredelung.</li>
+  </ol>
+
+  <h3>Dateiexport & Maschinenübergabe:</h3>
+  <ul>
+    <li><b>Janome JEF Export (<kbd>Datei → Als Janome JEF speichern…</kbd>):</b> Erzeugt binäre JEF-Dateien mit exaktem Header (Version 0x14), Maschinengrenzen, Farbcodes und Endemarker (<code>0x80 0x10</code>). Kopieren Sie die Datei einfach auf einen USB-Stick in den Ordner <code>\EMBF\</code> Ihrer Janome MC350E.</li>
+    <li><b>Tajima DST Export (<kbd>Datei → Als Tajima DST speichern…</kbd>):</b> Universelles Industrieformat mit ternärer 3-Byte-Differenzkodierung, kompatibel mit Brother, Bernina, Ricoma, Melco und Barudan.</li>
+    <li><b>📄 Druckblatt… (<kbd>Datei → Produktionsblatt exportieren…</kbd>):</b> Erstellt ein druckfertiges HTML-Produktionsdatenblatt mit Miniaturansicht, Garnlängen (Ober- und Unterfaden) und geschätzter Stickzeit.</li>
+  </ul>
+
+  <div class="callout callout-info" style="margin-top: 24px; text-align: center;">
+    <b>StickCore Studio — Präzision, Kunstfertigkeit & Handwerkstradition.</b><br>
+    Entwickelt für Modewerkstatt Knüppel. Viel Freude beim Sticken!
+  </div>
+</div>
+
+</body>
+</html>

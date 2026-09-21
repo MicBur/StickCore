@@ -1,0 +1,12 @@
+StickCore – gebündelte Kalligrafie-Schriften
+Alle unter der SIL Open Font License 1.1 (siehe OFL.txt), frei verwendbar
+und mit der Software verteilbar.
+
+- Great Vibes            © 2012 TypeSETit, LLC
+- Tangerine              © 2010 Toshi Omagari
+- Pinyon Script          © 2011 Nicole Fally
+- Parisienne             © 2011 Astigmatic (AOETI)
+- Allura                 © 2013 TypeSETit, LLC  (Commercial-Script-Stil)
+- Petit Formal Script    © 2012 Vernon Adams
+- Herr Von Muellerhoff   © 2011 TypeSETit, LLC
+- Alex Brush             © 2011 Robert Leuschke (TypeSETit)

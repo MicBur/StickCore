@@ -1,0 +1,5 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/cv">
+    <file alias="haarcascade_frontalface_default.xml">media/cv/haarcascade_frontalface_default.xml</file>
+</qresource>
+</RCC>

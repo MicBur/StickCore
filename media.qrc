@@ -1,0 +1,12 @@
+<RCC>
+  <qresource prefix="/anim">
+    <file alias="satin.gif">media/anim/satin.gif</file>
+    <file alias="fill.gif">media/anim/fill.gif</file>
+    <file alias="underlay.gif">media/anim/underlay.gif</file>
+    <file alias="monogram.gif">media/anim/monogram.gif</file>
+    <file alias="image.gif">media/anim/image.gif</file>
+  </qresource>
+  <qresource prefix="/svg">
+    <file alias="meflogo.svg">media/meflogoplain.svg</file>
+  </qresource>
+</RCC>

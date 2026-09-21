@@ -1,0 +1,12 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/fonts">
+    <file alias="GreatVibes-Regular.ttf">media/fonts/GreatVibes-Regular.ttf</file>
+    <file alias="Tangerine-Bold.ttf">media/fonts/Tangerine-Bold.ttf</file>
+    <file alias="PinyonScript-Regular.ttf">media/fonts/PinyonScript-Regular.ttf</file>
+    <file alias="Parisienne-Regular.ttf">media/fonts/Parisienne-Regular.ttf</file>
+    <file alias="Allura-Regular.ttf">media/fonts/Allura-Regular.ttf</file>
+    <file alias="PetitFormalScript-Regular.ttf">media/fonts/PetitFormalScript-Regular.ttf</file>
+    <file alias="HerrVonMuellerhoff-Regular.ttf">media/fonts/HerrVonMuellerhoff-Regular.ttf</file>
+    <file alias="AlexBrush-Regular.ttf">media/fonts/AlexBrush-Regular.ttf</file>
+</qresource>
+</RCC>
