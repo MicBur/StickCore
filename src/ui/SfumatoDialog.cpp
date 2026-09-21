@@ -4,6 +4,7 @@
 //  Sfumato Photo-Stitch Assistant Dialog Implementation.
 // ---------------------------------------------------------------------------
 #include "ui/SfumatoDialog.h"
+#include "library/StitchThumbnail.h"
 
 #include <QColorDialog>
 #include <QComboBox>
@@ -109,6 +110,11 @@ SfumatoDialog::SfumatoDialog(const QImage& img, QWidget* parent)
     m_angleCombo->addItem(QStringLiteral("Horizontal (0° Zeilen)"), static_cast<int>(SfumatoGenerator::AngleMode::Horizontal));
     m_angleCombo->addItem(QStringLiteral("Vertikal (90° Spalten)"), static_cast<int>(SfumatoGenerator::AngleMode::Vertical));
     m_angleCombo->addItem(QStringLiteral("Kreuzschraffur (0° + 90° Doppelpass)"), static_cast<int>(SfumatoGenerator::AngleMode::CrossHatch));
+    connect(m_angleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SfumatoDialog::refreshPreview);
+    connect(m_spacingSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SfumatoDialog::refreshPreview);
+    connect(m_amplitudeSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SfumatoDialog::refreshPreview);
+    connect(m_widthSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SfumatoDialog::refreshPreview);
+    connect(m_heightSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SfumatoDialog::refreshPreview);
     form->addRow(QStringLiteral("Stichrichtung:"), m_angleCombo);
 
     mainHBox->addLayout(form);
@@ -146,6 +152,7 @@ void SfumatoDialog::chooseColor()
         m_colorBtn->setStyleSheet(QString("background-color: %1; color: %2; font-weight: bold;")
                                       .arg(col.name())
                                       .arg(col.lightness() > 128 ? "#000000" : "#ffffff"));
+        refreshPreview();
     }
 }
 
@@ -157,15 +164,31 @@ void SfumatoDialog::refreshPreview()
     }
 
     SfumatoGenerator::Params p;
+    p.widthMm = m_widthSpin->value();
+    p.heightMm = m_heightSpin->value();
+    p.lineSpacingMm = m_spacingSpin->value();
+    p.maxAmplitudeMm = m_amplitudeSpin->value();
     p.contrast = m_contrastSlider->value() / 100.0;
     p.gamma = m_gammaSlider->value() / 100.0;
     p.invertLuminance = m_invertChk->isChecked();
+    p.angleMode = static_cast<SfumatoGenerator::AngleMode>(m_angleCombo->currentData().toInt());
+    p.threadColor = m_params.threadColor;
 
-    QImage prep = SfumatoGenerator::preprocessImage(m_source, p);
-    if (!prep.isNull()) {
-        m_imgPreview->setPixmap(QPixmap::fromImage(prep.scaled(m_imgPreview->size(),
-                                                               Qt::KeepAspectRatio,
-                                                               Qt::SmoothTransformation)));
+    // Fast stitch preview
+    SfumatoGenerator::Params fastP = p;
+    fastP.lineSpacingMm = std::max(p.lineSpacingMm, 1.2);
+    StitchSequence seq = SfumatoGenerator::generate(m_source, fastP);
+    if (!seq.empty()) {
+        const QColor fabric = p.invertLuminance ? QColor(0x14, 0x17, 0x1C) : QColor(0xEF, 0xEA, 0xDE);
+        QImage thumb = StitchThumbnail::render(seq, m_imgPreview->width(), fabric, true);
+        m_imgPreview->setPixmap(QPixmap::fromImage(thumb));
+    } else {
+        QImage prep = SfumatoGenerator::preprocessImage(m_source, p);
+        if (!prep.isNull()) {
+            m_imgPreview->setPixmap(QPixmap::fromImage(prep.scaled(m_imgPreview->size(),
+                                                                   Qt::KeepAspectRatio,
+                                                                   Qt::SmoothTransformation)));
+        }
     }
 }
 

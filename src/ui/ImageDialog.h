@@ -30,18 +30,28 @@ public:
 
     ImageDigitizer::Params params() const { return m_params; }
 
+signals:
+    void livePreviewGenerated(const StitchSequence& previewSeq);
+
 private slots:
     void refreshPreview();
+    void updatePreviewDisplay();
 
 private:
     void collectParams();
+    QColor currentFabricColor() const;
 
     QImage  m_source;
     ImageDigitizer::Params m_params;
+    StitchSequence m_latestPreviewSeq;
+    QImage  m_latestAnalysisImg;
 
-    QComboBox* m_mode     = nullptr;
-    QLabel*    m_before    = nullptr;
-    QLabel*    m_after     = nullptr;
+    QComboBox* m_mode          = nullptr;
+    QComboBox* m_previewMode   = nullptr;
+    QComboBox* m_fabricCombo   = nullptr;
+    QLabel*    m_before        = nullptr;
+    QLabel*    m_after         = nullptr;
+    QLabel*    m_metricsLabel  = nullptr;
 
     QStackedWidget* m_stack = nullptr;
 
@@ -52,11 +62,14 @@ private:
     QCheckBox*      m_dropBg     = nullptr;
     QCheckBox*      m_satinBorder = nullptr;
     QDoubleSpinBox* m_borderWidth = nullptr;
+
     // Portrait page
     QComboBox* m_portraitStyle = nullptr;
     QLabel*    m_tonesLabel = nullptr;
     QSpinBox*  m_tones    = nullptr;
-    // shared threshold / contrast / invert (portrait + lineart)
+
+    // Common adjustment controls
+    QWidget*   m_threshRow  = nullptr;
     QSlider*   m_thresh   = nullptr;
     QCheckBox* m_autoThresh = nullptr;
     QSlider*   m_contrast = nullptr;

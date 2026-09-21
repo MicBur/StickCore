@@ -51,8 +51,8 @@ public:
         int     colors        = 6;      ///< number of thread colours
         double  densityMm     = 0.50;   ///< fill row spacing
         bool    dropBackground= true;   ///< skip a dominant near-white background
-        double  fillAngleDeg  = 45.0;   ///< Stichwinkel in Grad (0° - 360°)
-        bool    multiAngle    = true;   ///< Automatischer Verzugsausgleich (je Farbe +45°)
+        double  fillAngleDeg  = 0.0;    ///< Stichwinkel in Grad (0° - 360°)
+        bool    multiAngle    = false;  ///< Automatischer Verzugsausgleich (je Farbe +45°)
         bool    satinBorder   = false;  ///< Farbkonturen mit Satinstich nachzeichnen
         double  borderWidthMm = 1.2;
 
@@ -77,6 +77,11 @@ public:
     };
 
     static StitchSequence generate(const QImage& image, const Params& p);
+
+    /// Fast preview generation for live UI slider interaction (< 20 ms).
+    /// Performs reduced-resolution k-means / tracing and returns a StitchSequence
+    /// suitable for instant StitchThumbnail rendering.
+    static StitchSequence generateFastPreview(const QImage& image, const Params& p);
 
     /// Render what the machine-analysis stage "sees" for the Portrait/LineArt
     /// modes — used by the UI for a live preview. Returns an ARGB image the

@@ -20,6 +20,7 @@
 #include "net/QrUploadServer.h"
 #include "library/DesignFactory.h"
 #include "library/DesignLibrary.h"
+#include "library/StitchThumbnail.h"
 #include "editor/BezierPath.h"
 #include "generators/ColorSorter.h"
 #include "generators/BastingGenerator.h"
@@ -1823,6 +1824,64 @@ int main(int argc, char** argv)
         const QString scaledJef = QDir::tempPath() + QStringLiteral("/_test_scaled.jef");
         auto sres = JefCodec::exportToFile(scaledJef, upscaled, HoopType::HoopB_140x200);
         CHECK(sres.ok, "resampled scaled stitches export cleanly to JEF");
+    }
+
+    std::printf("== ImageDigitizer & Real-Time Photo Live Preview ==\n");
+    {
+        // 1. Verify loading of webp photo
+        QImage skullImg(QStringLiteral("E:/StickCore/schädel.webp"));
+        if (skullImg.isNull()) {
+            skullImg.load(QStringLiteral("schädel.webp"));
+        }
+        CHECK(!skullImg.isNull(), "schädel.webp loaded successfully via Qt WebP plugin");
+        if (!skullImg.isNull()) {
+            std::printf("     schädel.webp: %dx%d px, format=%d, corners: top-left RGB(%d,%d,%d)\n",
+                        skullImg.width(), skullImg.height(), int(skullImg.format()),
+                        qRed(skullImg.pixel(0,0)), qGreen(skullImg.pixel(0,0)), qBlue(skullImg.pixel(0,0)));
+            
+            // 2. Test ImageDigitizer::preview for Mode::Colors with real k-means quantization
+            ImageDigitizer::Params pColors;
+            pColors.mode = ImageDigitizer::Mode::Colors;
+            pColors.colors = 4;
+            pColors.widthMm = 100.0;
+            pColors.dropBackground = true;
+            QImage prevColors = ImageDigitizer::preview(skullImg, pColors);
+            CHECK(!prevColors.isNull(), "preview() for Mode::Colors produces valid preview image");
+            CHECK(prevColors.format() == QImage::Format_ARGB32, "preview() produces ARGB32 quantized preview");
+
+            // 3. Test ImageDigitizer::generateFastPreview for responsive UI sliders (< 20 ms)
+            StitchSequence fastSeq = ImageDigitizer::generateFastPreview(skullImg, pColors);
+            CHECK(!fastSeq.empty(), "generateFastPreview() returns valid stitch stream");
+            CHECK(fastSeq.palette.size() <= 4, "fast preview palette matches reduced colors");
+
+            // 4. Test realistic stitch simulation rendering on dark fabric
+            QImage realisticThumb = StitchThumbnail::render(fastSeq, 340, QColor(20, 23, 28), true);
+            CHECK(!realisticThumb.isNull(), "realistic StitchThumbnail rendering succeeded");
+            CHECK(realisticThumb.width() == 340 && realisticThumb.height() == 340, "thumbnail dimensions match 340x340");
+
+            // 5. Test ImageDigitizer::generate for full-res production
+            StitchSequence seq = ImageDigitizer::generate(skullImg, pColors);
+            CHECK(!seq.empty(), "generate() for schädel.webp in Colors mode generates stitches");
+            CHECK(seq.realStitchCount() > 500, "production sequence has high stitch density");
+            std::printf("     schädel stitches: %zu, palette: %zu colors\n",
+                        seq.realStitchCount(), seq.palette.size());
+
+            realisticThumb.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/schaedel_stitch_preview.png"), "PNG");
+            prevColors.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/schaedel_analysis_preview.png"), "PNG");
+            QImage prodThumb = StitchThumbnail::render(seq, 600, QColor(20, 23, 28), true);
+            prodThumb.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/schaedel_production_stitches.png"), "PNG");
+
+            // 6. Test fast Sfumato photo-stitch preview on schädel.webp
+            SfumatoGenerator::Params sfp;
+            sfp.widthMm = 100.0;
+            sfp.heightMm = 100.0;
+            sfp.lineSpacingMm = 1.4;
+            sfp.invertLuminance = true;
+            StitchSequence sfumatoSeq = SfumatoGenerator::generate(skullImg, sfp);
+            CHECK(!sfumatoSeq.empty(), "fast Sfumato preview generates stitches for photo");
+            QImage sfumatoThumb = StitchThumbnail::render(sfumatoSeq, 600, QColor(20, 23, 28), true);
+            sfumatoThumb.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/schaedel_sfumato_preview.png"), "PNG");
+        }
     }
 
     std::printf("== Real reference round-trip ==\n");

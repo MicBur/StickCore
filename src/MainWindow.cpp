@@ -2033,7 +2033,7 @@ void MainWindow::exportSizeVariants()
 void MainWindow::digitizeImage()
 {
     const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Bild digitalisieren"),
-        QString(), QStringLiteral("Bilder (*.png *.jpg *.jpeg *.bmp *.gif)"));
+        QString(), QStringLiteral("Bilder (*.png *.jpg *.jpeg *.bmp *.gif *.webp)"));
     if (path.isEmpty()) return;
     QImage img(path);
     if (img.isNull()) { QMessageBox::warning(this, windowTitle(), QStringLiteral("Bild konnte nicht geladen werden.")); return; }
@@ -2044,13 +2044,29 @@ void MainWindow::digitizeImage()
 // ---------------------------------------------------------------------------
 void MainWindow::digitizeWithDialog(const QImage& img, const QString& label)
 {
+    const StitchSequence backupSeq = m_editor->sequence();
     ImageDialog dlg(img, this);
-    if (dlg.exec() != QDialog::Accepted) return;
+
+    connect(&dlg, &ImageDialog::livePreviewGenerated, this, [this](const StitchSequence& previewSeq) {
+        if (!previewSeq.empty()) {
+            m_editor->setSequence(previewSeq);
+            if (m_view) m_view->setSequence(previewSeq);
+        }
+    });
+
+    if (dlg.exec() != QDialog::Accepted) {
+        m_editor->setSequence(backupSeq);
+        if (m_view) m_view->setSequence(backupSeq);
+        return;
+    }
+
     ImageDigitizer::Params ip = dlg.params();
     ip.densityMm   = m_density->value();
     ip.maxStitchMm = m_maxStitch->value();
     StitchSequence s = ImageDigitizer::generate(img, ip);
     if (s.empty()) {
+        m_editor->setSequence(backupSeq);
+        if (m_view) m_view->setSequence(backupSeq);
         QMessageBox::information(this, windowTitle(),
             QStringLiteral("Keine Stiche erzeugt — probiere mehr Kontrast oder einen anderen Schwellwert."));
         return;

@@ -35,6 +35,41 @@ QImage analysisScaled(const QImage& src, int maxPx)
     return img;
 }
 
+// RGB contrast & blur adjustment preserving color channels in Format_RGB32:
+QImage rgbAdjust(const QImage& src, double contrast, int blur, bool invert)
+{
+    if (src.isNull()) return src;
+    QImage img = src.convertToFormat(QImage::Format_RGB32);
+    if (invert) img.invertPixels();
+    if (std::abs(contrast - 1.0) > 1e-3) {
+        quint8 lut[256];
+        for (int v = 0; v < 256; ++v) {
+            const double nv = (v - 128.0) * contrast + 128.0;
+            lut[v] = quint8(std::clamp(int(std::lround(nv)), 0, 255));
+        }
+        const int W = img.width(), H = img.height();
+        for (int y = 0; y < H; ++y) {
+            QRgb* line = reinterpret_cast<QRgb*>(img.scanLine(y));
+            for (int x = 0; x < W; ++x) {
+                QRgb c = line[x];
+                line[x] = qRgb(lut[qRed(c)], lut[qGreen(c)], lut[qBlue(c)]);
+            }
+        }
+    }
+    if (blur > 0) {
+        if (OpenCvBridge::available()) {
+            img = OpenCvBridge::bilateralDenoise(img, 5 + blur * 2, 40.0, 40.0);
+        } else {
+            const int W = img.width(), H = img.height();
+            const int sw = std::max(2, W / (1 + blur));
+            const int sh = std::max(2, H / (1 + blur));
+            img = img.scaled(sw, sh, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                     .scaled(W, H, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        }
+    }
+    return img.convertToFormat(QImage::Format_RGB32);
+}
+
 // Produce the grayscale analysis buffer (blur + contrast applied).
 QImage grayAnalysis(const QImage& scaled, const ImageDigitizer::Params& p)
 {
@@ -159,12 +194,7 @@ static StitchSequence generateColors(const QImage& src, const ImageDigitizer::Pa
 {
     StitchSequence seq;
     QImage img = analysisScaled(src, p.maxProcessPx);
-    if (p.dropBackground) {
-        img = OpenCvBridge::removeBackground(img, 28.0);
-    }
-    if (OpenCvBridge::available()) {
-        img = OpenCvBridge::bilateralDenoise(img, 7, 60.0, 60.0);
-    }
+    img = rgbAdjust(img, p.contrast, p.blur, p.invert);
     const int W = img.width(), H = img.height();
     if (W < 2 || H < 2) return seq;
 
@@ -205,8 +235,37 @@ static StitchSequence generateColors(const QImage& src, const ImageDigitizer::Pa
     int background = -1;
     if (p.dropBackground) {
         long tot = long(px.size());
-        for (int k = 0; k < K; ++k)
-            if (lum(cen[k]) > 225 && cnt[k] > tot * 0.30) background = k;
+        std::vector<long> borderCnt(K, 0);
+        long borderTotal = 0;
+        for (int x = 0; x < W; ++x) {
+            borderCnt[label[0 * W + x]]++;
+            borderCnt[label[(H - 1) * W + x]]++;
+            borderTotal += 2;
+        }
+        for (int y = 1; y < H - 1; ++y) {
+            borderCnt[label[y * W + 0]]++;
+            borderCnt[label[y * W + (W - 1)]]++;
+            borderTotal += 2;
+        }
+        int borderDominant = -1;
+        long maxBorder = 0;
+        for (int k = 0; k < K; ++k) {
+            if (borderCnt[k] > maxBorder && borderCnt[k] >= borderTotal * 0.40 && cnt[k] >= tot * 0.15) {
+                maxBorder = borderCnt[k];
+                borderDominant = k;
+            }
+        }
+        if (borderDominant >= 0) {
+            background = borderDominant;
+        } else {
+            for (int k = 0; k < K; ++k) {
+                const double l = lum(cen[k]);
+                if ((l > 220 || l < 35) && cnt[k] > tot * 0.25) {
+                    background = k;
+                    break;
+                }
+            }
+        }
     }
 
     std::vector<int> order;
@@ -446,6 +505,15 @@ StitchSequence ImageDigitizer::generate(const QImage& image, const Params& p)
     }
 }
 
+StitchSequence ImageDigitizer::generateFastPreview(const QImage& image, const Params& p)
+{
+    if (image.isNull()) return StitchSequence();
+    Params fastP = p;
+    fastP.maxProcessPx = std::min(p.maxProcessPx, 130);
+    fastP.densityMm    = std::max(p.densityMm, 0.55);
+    return generate(image, fastP);
+}
+
 // ===========================================================================
 //  Preview: what the analysis stage "sees" (for the settings dialog).
 // ===========================================================================
@@ -464,8 +532,96 @@ QImage ImageDigitizer::preview(const QImage& image, const Params& p)
     if (W < 2 || H < 2) return QImage();
 
     if (p.mode == Mode::Colors) {
-        // A smooth downscale is a fair "before" preview for the colour mode.
-        return scaled;
+        QImage img = rgbAdjust(scaled, p.contrast, p.blur, p.invert);
+
+        std::vector<RGB> px(std::size_t(W) * H);
+        for (int y = 0; y < H; ++y) {
+            const QRgb* line = reinterpret_cast<const QRgb*>(img.constScanLine(y));
+            for (int x = 0; x < W; ++x)
+                px[std::size_t(y)*W + x] = { double(qRed(line[x])), double(qGreen(line[x])), double(qBlue(line[x])) };
+        }
+
+        const int K = std::clamp(p.colors, 2, 16);
+        std::vector<RGB> cen(K);
+        for (int k = 0; k < K; ++k) cen[k] = px[std::size_t((k + 0.5) / K * px.size())];
+
+        std::vector<int> label(px.size(), 0);
+        for (int iter = 0; iter < 8; ++iter) {
+            for (std::size_t i = 0; i < px.size(); ++i) {
+                double best = std::numeric_limits<double>::max(); int bi = 0;
+                for (int k = 0; k < K; ++k){ double d = d2(px[i], cen[k]); if (d < best){best=d;bi=k;} }
+                label[i] = bi;
+            }
+            std::vector<RGB> sum(K, {0,0,0}); std::vector<long> cnt(K, 0);
+            for (std::size_t i = 0; i < px.size(); ++i){
+                sum[label[i]].r += px[i].r; sum[label[i]].g += px[i].g; sum[label[i]].b += px[i].b; cnt[label[i]]++;
+            }
+            for (int k = 0; k < K; ++k){
+                if (cnt[k] > 0){ cen[k] = { sum[k].r/cnt[k], sum[k].g/cnt[k], sum[k].b/cnt[k] }; }
+                else cen[k] = px[std::size_t(std::rand() % px.size())];
+            }
+        }
+        label = PhotoProcessor::filterSpeckles(label, W, H, 16);
+
+        std::vector<long> cnt(K, 0);
+        for (int l : label) cnt[l]++;
+
+        int background = -1;
+        if (p.dropBackground) {
+            long tot = long(px.size());
+            std::vector<long> borderCnt(K, 0);
+            long borderTotal = 0;
+            for (int x = 0; x < W; ++x) {
+                borderCnt[label[0 * W + x]]++;
+                borderCnt[label[(H - 1) * W + x]]++;
+                borderTotal += 2;
+            }
+            for (int y = 1; y < H - 1; ++y) {
+                borderCnt[label[y * W + 0]]++;
+                borderCnt[label[y * W + (W - 1)]]++;
+                borderTotal += 2;
+            }
+            int borderDominant = -1;
+            long maxBorder = 0;
+            for (int k = 0; k < K; ++k) {
+                if (borderCnt[k] > maxBorder && borderCnt[k] >= borderTotal * 0.40 && cnt[k] >= tot * 0.15) {
+                    maxBorder = borderCnt[k];
+                    borderDominant = k;
+                }
+            }
+            if (borderDominant >= 0) {
+                background = borderDominant;
+            } else {
+                for (int k = 0; k < K; ++k) {
+                    const double l = lum(cen[k]);
+                    if ((l > 220 || l < 35) && cnt[k] > tot * 0.25) {
+                        background = k;
+                        break;
+                    }
+                }
+            }
+        }
+
+        std::vector<QRgb> snappedColors(K);
+        for (int k = 0; k < K; ++k) {
+            const QColor c(int(std::round(cen[k].r)), int(std::round(cen[k].g)), int(std::round(cen[k].b)));
+            snappedColors[k] = ThreadCatalog::snap(c, p.brand).color.rgb();
+        }
+
+        QImage out(W, H, QImage::Format_ARGB32);
+        for (int y = 0; y < H; ++y) {
+            QRgb* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+            for (int x = 0; x < W; ++x) {
+                int l = label[std::size_t(y)*W + x];
+                if (l == background) {
+                    const bool checker = ((x / 8) + (y / 8)) % 2 == 0;
+                    line[x] = checker ? qRgba(35, 40, 48, 255) : qRgba(25, 28, 34, 255);
+                } else {
+                    line[x] = snappedColors[l];
+                }
+            }
+        }
+        return out;
     }
 
     QImage g = grayAnalysis(scaled, p);

@@ -353,7 +353,7 @@
       <span class="toc-page-num">Kapitel 8</span>
     </li>
     <li class="toc-item">
-      <span><b>9. Digitalisierungs-Meisterschule: 6 Füllmuster, Füllwinkel & OpenCV Foto-KI</b></span>
+      <span><b>9. Digitalisierungs-Meisterschule: 6 Füllmuster, Füllwinkel, Echtzeit-Foto-Vorschau & OpenCV Foto-KI</b></span>
       <span class="toc-page-num">Kapitel 9</span>
     </li>
     <li class="toc-item">
@@ -860,7 +860,7 @@
 <div class="chapter">
   <div class="chapter-header">
     <div class="chapter-num">09</div>
-    <h1 class="chapter-title">Digitalisierungs-Meisterschule: 6 Füllmuster, Füllwinkel & OpenCV Foto-KI</h1>
+    <h1 class="chapter-title">Digitalisierungs-Meisterschule: 6 Füllmuster, Füllwinkel, Echtzeit-Foto-Vorschau & OpenCV Foto-KI</h1>
   </div>
 
   <p>
@@ -936,6 +936,39 @@
     <img src="manual_assets/13_opencv_motif_pipeline.png" alt="OpenCV Digitalisierungs-Pipeline für beliebige Motive">
     <div class="figure-caption">Abb. 9.2: Die 5 Phasen der OpenCV Motiv-Digitalisierung (vom Kundenfoto über OpenCV Freistellung & Vektor-Glättung zum fertigen Janome-Stick).</div>
   </div>
+
+  <h3>Echtzeit-Live-Vorschau (Real-Time Stitch Preview) &amp; WebP-Fotodigitalisierung</h3>
+  <p>
+    Beim Digitalisieren von Fotos und Grafiken (unterstützt moderne <b>WebP</b>-Bilder, PNG, JPG, BMP und TIFF) müssen oft mehrere Parameter wie Farbanzahl, Kontrast, Kantenunschärfe und Skalierung feinjustiert werden. In StickCore Studio geschieht dies in echter Echtzeit (&lt; 20 ms Reaktionszeit) – Sie sehen das Resultat schon während des Ziehens am Schieberegler:
+  </p>
+
+  <div class="grid-2">
+    <div class="figure">
+      <img src="manual_assets/14_photo_live_preview_skull.png" alt="Echtzeit-Fadensimulation Fotomotiv">
+      <div class="figure-caption">Abb. 9.3: 3D-Fadensimulation (schädel.webp) mit 3 Madeira-Garnfarben, Nadel-Einstichstellen und Lichtreflexion.</div>
+    </div>
+    <div class="figure">
+      <img src="manual_assets/15_photo_kmeans_analysis.png" alt="Bildanalyse K-Means Maske">
+      <div class="figure-caption">Abb. 9.4: Bildanalyse-Modus: K-Means-Clusterung mit automatischer Freistellung des Hintergrundgewebes.</div>
+    </div>
+  </div>
+
+  <ul>
+    <li><b>Duale Vorschau-Modi (Umschaltbar):</b>
+      <br>• 🧵 <i>Gestickte Fäden:</i> Fotorealistische Fadensimulation mit Schattierung, Lichtglanz, Nadel-Einstichlöchern und fühlbarer Webstoff-Struktur.
+      <br>• 🔍 <i>Bildanalyse / Maske:</i> Farbflächen-Clusterung und Freistellungsmaske zur Kontrolle, welche Bildbereiche gestickt und welche als Hintergrund verworfen werden.
+    </li>
+    <li><b>Intelligente Stoffuntergrund-Wahl (Fabric Selector):</b> Wählen Sie die Farbe des Trägerstoffs (Schwarz, Anthrazit, Loden/Waldgrün, Marineblau, Naturleinen/Beige, Reinweiß). StickCore analysiert automatisch den Kontrast des Motivs und wählt den optimalen Hintergrund zur Beurteilung.</li>
+    <li><b>Robuste Rand-Freistellung bei strukturierten Textilien:</b> Die Hintergrund-Erkennung analysiert die Clusterverteilung an den Bildrändern. Selbst unruhige Gewebestrukturen oder dunkle Fotohintergründe (wie bei <code>schädel.webp</code>) werden sauber abgetrennt, ohne Details des Motivs zu beschädigen.</li>
+    <li><b>Dynamische Live-Metriken &amp; Rahmen-Passung:</b> Ein Status-Badge im Dialog zeigt Ihnen bei jeder Reglerbewegung live:
+      <br>• Exakte Stichanzahl (z.B. <i>2.059 Stiche</i>)
+      <br>• Anzahl aktiver Garnfarben
+      <br>• Tatsächliche Stickmaße in Millimetern
+      <br>• Geschätzte Maschinenlaufzeit
+      <br>• Janome-Rahmenpassung (z.B. <i>⭕ Passt in: Hoop B (140×200), SQ14 (140×140)</i> oder Warnhinweis bei Übergröße)
+    </li>
+    <li><b>Synchronisierte Studio-Leinwand:</b> Die Hauptleinwand hinter dem Dialog aktualisiert sich live mit. Bei Klick auf <i>„Abbrechen“</i> wird der ursprüngliche Zustand des Arbeitsbereichs verlustfrei wiederhergestellt.</li>
+  </ul>
 
   <h3>Praxis-Leitfaden A: Vereinswappen & Aufnäher vom Smartphone-Foto</h3>
   <p>
@@ -1094,6 +1127,13 @@
       <br>• <i>Kreuzschraffur (Cross-Hatch, 0° + 90°):</i> Zwei orthogonale Durchgänge für tiefste Schatten und maximale Plastizität.
     </li>
   </ul>
+  <div class="figure" style="margin: 14px 0;">
+    <img src="manual_assets/16_sfumato_skull_live.png" alt="Sfumato Photo-Stitch Live-Vorschau" style="max-height: 280px;">
+    <div class="figure-caption">Abb. 11.1: Live-Vorschau des Sfumato-Stitching: Dichte-modulierte Sinuswellen mit dynamischer Garnfarben- und Amplitudenanpassung.</div>
+  </div>
+  <p>
+    <b>Interaktive Sfumato-Vorschau:</b> Wie im Standard-Bilddialog berechnet auch der Sfumato-Generator das resultierende Fadenmuster live während der Anpassung von Zeilenabstand, Wellenamplitude, Skalierung und Garnfarbe im Vorschaufeld vor.
+  </p>
   <div class="callout callout-tip">
     <b>Aufruf:</b> Menü <i>Motive &amp; Assistenten &rarr; 🌫 Sfumato Photo-Stitch (Fotorealistisch)…</i>
   </div>
