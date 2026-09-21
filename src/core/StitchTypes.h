@@ -173,6 +173,111 @@ struct StitchSequence {
         }
         return out;
     }
+
+    /// Append another stitch sequence into this one.
+    void append(const StitchSequence& other)
+    {
+        stitches.insert(stitches.end(), other.stitches.begin(), other.stitches.end());
+    }
+
+    /// Translates all stitches by (dx, dy) mm.
+    void translate(double dx, double dy)
+    {
+        for (auto& s : stitches) {
+            s.x += dx;
+            s.y += dy;
+        }
+    }
+
+    /// Mirrors all stitches horizontally across an X axis (default: bounding box center).
+    bool mirrorHorizontal(const double* customCenterX = nullptr)
+    {
+        if (stitches.empty()) return false;
+        double cx = 0.0;
+        if (customCenterX) {
+            cx = *customCenterX;
+        } else {
+            double minX, minY, maxX, maxY;
+            if (!bounds(minX, minY, maxX, maxY)) return false;
+            cx = 0.5 * (minX + maxX);
+        }
+        for (auto& s : stitches) {
+            s.x = 2.0 * cx - s.x;
+        }
+        return true;
+    }
+
+    /// Mirrors all stitches vertically across a Y axis (default: bounding box center).
+    bool mirrorVertical(const double* customCenterY = nullptr)
+    {
+        if (stitches.empty()) return false;
+        double cy = 0.0;
+        if (customCenterY) {
+            cy = *customCenterY;
+        } else {
+            double minX, minY, maxX, maxY;
+            if (!bounds(minX, minY, maxX, maxY)) return false;
+            cy = 0.5 * (minY + maxY);
+        }
+        for (auto& s : stitches) {
+            s.y = 2.0 * cy - s.y;
+        }
+        return true;
+    }
+
+    /// Rotates all stitches by 90 degrees around a center point (default: bounding box center).
+    bool rotate90(bool clockwise = true, const QPointF* customCenter = nullptr)
+    {
+        if (stitches.empty()) return false;
+        double cx = 0.0, cy = 0.0;
+        if (customCenter) {
+            cx = customCenter->x();
+            cy = customCenter->y();
+        } else {
+            double minX, minY, maxX, maxY;
+            if (!bounds(minX, minY, maxX, maxY)) return false;
+            cx = 0.5 * (minX + maxX);
+            cy = 0.5 * (minY + maxY);
+        }
+        for (auto& s : stitches) {
+            const double dx = s.x - cx;
+            const double dy = s.y - cy;
+            if (clockwise) {
+                s.x = cx + dy;
+                s.y = cy - dx;
+            } else {
+                s.x = cx - dy;
+                s.y = cy + dx;
+            }
+        }
+        return true;
+    }
+
+    /// Rotates all stitches by an arbitrary angle in degrees around a center point (default: bounding box center).
+    bool rotate(double angleDeg, const QPointF* customCenter = nullptr)
+    {
+        if (stitches.empty() || std::abs(angleDeg) < 1e-6) return false;
+        double cx = 0.0, cy = 0.0;
+        if (customCenter) {
+            cx = customCenter->x();
+            cy = customCenter->y();
+        } else {
+            double minX, minY, maxX, maxY;
+            if (!bounds(minX, minY, maxX, maxY)) return false;
+            cx = 0.5 * (minX + maxX);
+            cy = 0.5 * (minY + maxY);
+        }
+        const double rad = -angleDeg * 3.14159265358979323846 / 180.0;
+        const double cosA = std::cos(rad);
+        const double sinA = std::sin(rad);
+        for (auto& s : stitches) {
+            const double dx = s.x - cx;
+            const double dy = s.y - cy;
+            s.x = cx + dx * cosA - dy * sinA;
+            s.y = cy + dx * sinA + dy * cosA;
+        }
+        return true;
+    }
 };
 
 // ---------------------------------------------------------------------------

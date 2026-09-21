@@ -349,48 +349,48 @@ void MainWindow::setupMenus()
 {
     // --- Datei ---
     QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("&Datei"));
-    auto* newAct = fileMenu->addAction(QStringLiteral("&Neues Motiv"), this, [this]{
+    auto* newAct = fileMenu->addAction(QStringLiteral("&Neues Motiv"), QKeySequence::New, this, [this]{
         m_editor->clearAll();
         m_current.clear();
         m_view->setSequence(m_current);
         updateInfoPanel();
         statusBar()->showMessage(QStringLiteral("Neues leeres Motiv angelegt."), 4000);
-    }, QKeySequence::New);
-    auto* openImgAct = fileMenu->addAction(QStringLiteral("&Bild öffnen & digitalisieren…"), this, &MainWindow::digitizeImage, QKeySequence::Open);
-    auto* openSvgAct = fileMenu->addAction(QStringLiteral("&SVG-Vektordatei importieren & sticken…"), this, &MainWindow::importSvg, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
+    });
+    auto* openImgAct = fileMenu->addAction(QStringLiteral("&Bild öffnen & digitalisieren…"), QKeySequence::Open, this, &MainWindow::digitizeImage);
+    auto* openSvgAct = fileMenu->addAction(QStringLiteral("&SVG-Vektordatei importieren & sticken…"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this, &MainWindow::importSvg);
     fileMenu->addSeparator();
-    auto* libOpenAct = fileMenu->addAction(QStringLiteral("Aus &Bibliothek laden…"), this, &MainWindow::openLibrary, QKeySequence(Qt::CTRL | Qt::Key_L));
-    auto* libSaveAct = fileMenu->addAction(QStringLiteral("In Bibliothek &speichern…"), this, &MainWindow::saveToLibrary, QKeySequence::Save);
+    auto* libOpenAct = fileMenu->addAction(QStringLiteral("Aus &Bibliothek laden…"), QKeySequence(Qt::CTRL | Qt::Key_L), this, &MainWindow::openLibrary);
+    auto* libSaveAct = fileMenu->addAction(QStringLiteral("In Bibliothek &speichern…"), QKeySequence::Save, this, &MainWindow::saveToLibrary);
     fileMenu->addSeparator();
-    auto* expJefAct  = fileMenu->addAction(QStringLiteral("&JEF exportieren (Janome)…"), this, &MainWindow::exportJef, QKeySequence(Qt::CTRL | Qt::Key_E));
+    auto* expJefAct  = fileMenu->addAction(QStringLiteral("&JEF exportieren (Janome)…"), QKeySequence(Qt::CTRL | Qt::Key_E), this, &MainWindow::exportJef);
     auto* expDstAct  = fileMenu->addAction(QStringLiteral("&DST exportieren (Tajima Universal)…"), this, &MainWindow::exportDst);
     auto* expVarAct  = fileMenu->addAction(QStringLiteral("&Größen-Varianten exportieren…"), this, &MainWindow::exportSizeVariants);
-    auto* expSheetAct = fileMenu->addAction(QStringLiteral("&Produktionsdatenblatt (HTML/Druck)…"), this, &MainWindow::exportWorksheet, QKeySequence::Print);
+    auto* expSheetAct = fileMenu->addAction(QStringLiteral("&Produktionsdatenblatt (HTML/Druck)…"), QKeySequence::Print, this, &MainWindow::exportWorksheet);
     fileMenu->addSeparator();
-    auto* quitAct    = fileMenu->addAction(QStringLiteral("&Beenden"), this, &QWidget::close, QKeySequence::Quit);
+    auto* quitAct    = fileMenu->addAction(QStringLiteral("&Beenden"), QKeySequence::Quit, this, &QWidget::close);
 
     Q_UNUSED(newAct); Q_UNUSED(openImgAct); Q_UNUSED(openSvgAct); Q_UNUSED(libOpenAct); Q_UNUSED(libSaveAct);
     Q_UNUSED(expJefAct); Q_UNUSED(expDstAct); Q_UNUSED(expVarAct); Q_UNUSED(expSheetAct); Q_UNUSED(quitAct);
 
     // --- Bearbeiten ---
     QMenu* editMenu = menuBar()->addMenu(QStringLiteral("&Bearbeiten"));
-    editMenu->addAction(QStringLiteral("↩ &Rückgängig"), m_editor, &PathEditorWidget::undo, QKeySequence::Undo);
-    editMenu->addAction(QStringLiteral("↪ &Wiederholen"), m_editor, &PathEditorWidget::redo, QKeySequence::Redo);
+    editMenu->addAction(QStringLiteral("↩ &Rückgängig"), QKeySequence::Undo, m_editor, &PathEditorWidget::undo);
+    editMenu->addAction(QStringLiteral("↪ &Wiederholen"), QKeySequence::Redo, m_editor, &PathEditorWidget::redo);
     editMenu->addSeparator();
-    editMenu->addAction(QStringLiteral("🗑 Ausgewählte Pfade &löschen"), m_editor, &PathEditorWidget::deleteSelected, QKeySequence::Delete);
-    editMenu->addAction(QStringLiteral("&Alle Pfade markieren"), m_editor, &PathEditorWidget::selectAllPaths, QKeySequence::SelectAll);
+    editMenu->addAction(QStringLiteral("🗑 Ausgewählte Pfade &löschen"), QKeySequence::Delete, m_editor, &PathEditorWidget::deleteSelected);
+    editMenu->addAction(QStringLiteral("&Alle Pfade markieren"), QKeySequence::SelectAll, m_editor, &PathEditorWidget::selectAllPaths);
     editMenu->addAction(QStringLiteral("Auswahl &aufheben"), m_editor, &PathEditorWidget::clearSelection);
     editMenu->addAction(QStringLiteral("🧹 Kleine Inseln / Splitter &filtern…"), this, [this]{ m_editor->filterSmallIslands(4.0); });
     editMenu->addSeparator();
-    editMenu->addAction(QStringLiteral("📐 An aktuellen Rahmen &einpassen & neu berechnen"), this, &MainWindow::fitDesignToHoop, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
-    editMenu->addAction(QStringLiteral("&Größe ändern & neu berechnen…"), this, &MainWindow::resizeDesign, QKeySequence(Qt::CTRL | Qt::Key_R));
+    editMenu->addAction(QStringLiteral("📐 An aktuellen Rahmen &einpassen & neu berechnen"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F), this, &MainWindow::fitDesignToHoop);
+    editMenu->addAction(QStringLiteral("&Größe ändern & neu berechnen…"), QKeySequence(Qt::CTRL | Qt::Key_R), this, &MainWindow::resizeDesign);
     editMenu->addAction(QStringLiteral("Im &Rahmen platzieren…"), this, &MainWindow::placeDesign);
     editMenu->addSeparator();
-    editMenu->addAction(QStringLiteral("↔ Horizontal &spiegeln"), this, &MainWindow::mirrorHorizontal, QKeySequence(Qt::Key_F7));
-    editMenu->addAction(QStringLiteral("↕ Vertikal sp&iegeln"), this, &MainWindow::mirrorVertical, QKeySequence(Qt::Key_F8));
-    editMenu->addAction(QStringLiteral("↻ &90° im Uhrzeigersinn"), this, [this]{ rotate90(true); }, QKeySequence(Qt::Key_F9));
-    editMenu->addAction(QStringLiteral("↺ 90° &gegen Uhrzeigersinn"), this, [this]{ rotate90(false); }, QKeySequence(Qt::SHIFT | Qt::Key_F9));
-    editMenu->addAction(QStringLiteral("⟳ &Freier Drehwinkel…"), this, &MainWindow::rotateFree, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
+    editMenu->addAction(QStringLiteral("↔ Horizontal &spiegeln"), QKeySequence(Qt::Key_F7), this, &MainWindow::mirrorHorizontal);
+    editMenu->addAction(QStringLiteral("↕ Vertikal sp&iegeln"), QKeySequence(Qt::Key_F8), this, &MainWindow::mirrorVertical);
+    editMenu->addAction(QStringLiteral("↻ &90° im Uhrzeigersinn"), QKeySequence(Qt::Key_F9), this, [this]{ rotate90(true); });
+    editMenu->addAction(QStringLiteral("↺ 90° &gegen Uhrzeigersinn"), QKeySequence(Qt::SHIFT | Qt::Key_F9), this, [this]{ rotate90(false); });
+    editMenu->addAction(QStringLiteral("⟳ &Freier Drehwinkel…"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), this, &MainWindow::rotateFree);
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("🎨 Intelligente Farbsortierung (Smart Color Sort)…"), this, &MainWindow::smartColorSort);
     editMenu->addAction(QStringLiteral("🔲 Heftrahmen hinzufügen (Basting Box)…"), this, &MainWindow::addBastingBox);
@@ -400,11 +400,11 @@ void MainWindow::setupMenus()
 
     // --- Motive & Assistenten ---
     QMenu* motMenu = menuBar()->addMenu(QStringLiteral("&Motive & Assistenten"));
-    motMenu->addAction(QStringLiteral("Stiche &berechnen ▶"), this, &MainWindow::generate, QKeySequence(Qt::Key_F5));
+    motMenu->addAction(QStringLiteral("Stiche &berechnen ▶"), QKeySequence(Qt::Key_F5), this, &MainWindow::generate);
     motMenu->addSeparator();
     motMenu->addAction(QStringLiteral("✂ 3-Stufen-&Applikation (Aufnäher)…"), this, &MainWindow::makeApplique);
-    motMenu->addAction(QStringLiteral("&Text sticken…"), this, &MainWindow::makeText, QKeySequence(Qt::CTRL | Qt::Key_T));
-    motMenu->addAction(QStringLiteral("✦ Kunstvolles &Monogramm…"), this, &MainWindow::makeMonogram, QKeySequence(Qt::CTRL | Qt::Key_M));
+    motMenu->addAction(QStringLiteral("&Text sticken…"), QKeySequence(Qt::CTRL | Qt::Key_T), this, &MainWindow::makeText);
+    motMenu->addAction(QStringLiteral("✦ Kunstvolles &Monogramm…"), QKeySequence(Qt::CTRL | Qt::Key_M), this, &MainWindow::makeMonogram);
     motMenu->addAction(QStringLiteral("🌫 Sfumato Photo-Stitch (Fotorealistisch)…"), this, &MainWindow::digitizeSfumato);
     motMenu->addAction(QStringLiteral("✖ Traditioneller Kreuzstich (Aida Raster)…"), this, &MainWindow::digitizeCrossStitch);
     motMenu->addAction(QStringLiteral("⚜ Tatami Prägemuster (Carving / Eichenlaub / Stern)…"), this, &MainWindow::applyTatamiCarving);
@@ -441,7 +441,7 @@ void MainWindow::setupMenus()
     crestMenu->addAction(QStringLiteral("▶ Als fertige Stickerei laden"), this, [this]{ loadHuntingMotif(3, false); });
     crestMenu->addAction(QStringLiteral("✏ Im 2D-Editor bearbeiten (Bézier-Pfade)"), this, [this]{ loadHuntingMotif(3, true); });
 
-    motMenu->addAction(QStringLiteral("📱 &Smartphone-Foto Upload (QR)…"), this, &MainWindow::phoneUpload, QKeySequence(Qt::CTRL | Qt::Key_U));
+    motMenu->addAction(QStringLiteral("📱 &Smartphone-Foto Upload (QR)…"), QKeySequence(Qt::CTRL | Qt::Key_U), this, &MainWindow::phoneUpload);
     motMenu->addSeparator();
     motMenu->addAction(QStringLiteral("Demo: Satin-Welle"), this, &MainWindow::loadSatinDemo);
     motMenu->addAction(QStringLiteral("Demo: Tatami-Kreis"), this, &MainWindow::loadTatamiDemo);
@@ -450,9 +450,9 @@ void MainWindow::setupMenus()
 
     // --- Simulation & Ansicht ---
     QMenu* simMenu = menuBar()->addMenu(QStringLiteral("&Simulation & Ansicht"));
-    simMenu->addAction(QStringLiteral("&Wiedergabe starten/pausieren"), this, &MainWindow::togglePlayback, QKeySequence(Qt::Key_Space));
-    simMenu->addAction(QStringLiteral("&Zurückspulen"), m_view, &StitchGLWidget::resetPlayback, QKeySequence(Qt::Key_Home));
-    simMenu->addAction(QStringLiteral("&Alles anzeigen"), m_view, &StitchGLWidget::showAll, QKeySequence(Qt::Key_End));
+    simMenu->addAction(QStringLiteral("&Wiedergabe starten/pausieren"), QKeySequence(Qt::Key_Space), this, &MainWindow::togglePlayback);
+    simMenu->addAction(QStringLiteral("&Zurückspulen"), QKeySequence(Qt::Key_Home), m_view, &StitchGLWidget::resetPlayback);
+    simMenu->addAction(QStringLiteral("&Alles anzeigen"), QKeySequence(Qt::Key_End), m_view, &StitchGLWidget::showAll);
     simMenu->addAction(QStringLiteral("&Kamera zentrieren"), m_view, &StitchGLWidget::showAll);
     simMenu->addSeparator();
     if (m_actOrbitMode) simMenu->addAction(m_actOrbitMode);
@@ -497,7 +497,7 @@ void MainWindow::setupMenus()
 
     simMenu->addSeparator();
     if (m_actTopDown)   simMenu->addAction(m_actTopDown);
-    simMenu->addAction(QStringLiteral("&Im Rahmen zentrieren"), this, &MainWindow::centerCurrentDesign, QKeySequence(Qt::CTRL | Qt::Key_0));
+    simMenu->addAction(QStringLiteral("&Im Rahmen zentrieren"), QKeySequence(Qt::CTRL | Qt::Key_0), this, &MainWindow::centerCurrentDesign);
 
     // --- Hilfe ---
     QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("&Hilfe"));
@@ -1245,17 +1245,10 @@ void MainWindow::mirrorHorizontal()
         m_editor->canvasMode() == PathEditorWidget::CanvasMode::Combined) {
         m_editor->flipHorizontalSelected();
     }
-    if (!m_current.empty()) {
-        double minX, minY, maxX, maxY;
-        if (m_current.bounds(minX, minY, maxX, maxY)) {
-            const double cx = 0.5 * (minX + maxX);
-            for (Stitch& s : m_current.stitches) {
-                s.x = 2.0 * cx - s.x;
-            }
-            m_editor->setSequence(m_current);
-            m_view->setSequence(m_current);
-            updateInfoPanel();
-        }
+    if (!m_current.empty() && m_current.mirrorHorizontal()) {
+        m_editor->setSequence(m_current);
+        m_view->setSequence(m_current);
+        updateInfoPanel();
     }
     statusBar()->showMessage(QStringLiteral("Motiv horizontal gespiegelt (↔)."), 3000);
 }
@@ -1266,17 +1259,10 @@ void MainWindow::mirrorVertical()
         m_editor->canvasMode() == PathEditorWidget::CanvasMode::Combined) {
         m_editor->flipVerticalSelected();
     }
-    if (!m_current.empty()) {
-        double minX, minY, maxX, maxY;
-        if (m_current.bounds(minX, minY, maxX, maxY)) {
-            const double cy = 0.5 * (minY + maxY);
-            for (Stitch& s : m_current.stitches) {
-                s.y = 2.0 * cy - s.y;
-            }
-            m_editor->setSequence(m_current);
-            m_view->setSequence(m_current);
-            updateInfoPanel();
-        }
+    if (!m_current.empty() && m_current.mirrorVertical()) {
+        m_editor->setSequence(m_current);
+        m_view->setSequence(m_current);
+        updateInfoPanel();
     }
     statusBar()->showMessage(QStringLiteral("Motiv vertikal gespiegelt (↕)."), 3000);
 }
@@ -1287,26 +1273,10 @@ void MainWindow::rotate90(bool clockwise)
         m_editor->canvasMode() == PathEditorWidget::CanvasMode::Combined) {
         m_editor->rotateSelected(clockwise ? 90.0 : -90.0);
     }
-    if (!m_current.empty()) {
-        double minX, minY, maxX, maxY;
-        if (m_current.bounds(minX, minY, maxX, maxY)) {
-            const double cx = 0.5 * (minX + maxX);
-            const double cy = 0.5 * (minY + maxY);
-            for (Stitch& s : m_current.stitches) {
-                const double dx = s.x - cx;
-                const double dy = s.y - cy;
-                if (clockwise) {
-                    s.x = cx + dy;
-                    s.y = cy - dx;
-                } else {
-                    s.x = cx - dy;
-                    s.y = cy + dx;
-                }
-            }
-            m_editor->setSequence(m_current);
-            m_view->setSequence(m_current);
-            updateInfoPanel();
-        }
+    if (!m_current.empty() && m_current.rotate90(clockwise)) {
+        m_editor->setSequence(m_current);
+        m_view->setSequence(m_current);
+        updateInfoPanel();
     }
     statusBar()->showMessage(clockwise
         ? QStringLiteral("Motiv 90° im Uhrzeigersinn gedreht (↻).")
@@ -1324,24 +1294,12 @@ void MainWindow::rotateFree()
         QStringLiteral("Drehwinkel in Grad (-180° bis +180°):"), 45.0, -180.0, 180.0, 1, &ok);
     if (!ok || std::abs(deg) < 1e-4) return;
 
-    double minX, minY, maxX, maxY;
-    if (!m_current.bounds(minX, minY, maxX, maxY)) return;
-    const double cx = 0.5 * (minX + maxX);
-    const double cy = 0.5 * (minY + maxY);
-    const double rad = -deg * M_PI / 180.0;
-    const double cosA = std::cos(rad);
-    const double sinA = std::sin(rad);
-
-    for (Stitch& s : m_current.stitches) {
-        const double dx = s.x - cx;
-        const double dy = s.y - cy;
-        s.x = cx + dx * cosA - dy * sinA;
-        s.y = cy + dx * sinA + dy * cosA;
+    if (m_current.rotate(deg)) {
+        m_editor->setSequence(m_current);
+        m_view->setSequence(m_current);
+        updateInfoPanel();
+        statusBar()->showMessage(QStringLiteral("Motiv um %1° gedreht (⟳).").arg(deg, 0, 'f', 1), 3000);
     }
-    m_editor->setSequence(m_current);
-    m_view->setSequence(m_current);
-    updateInfoPanel();
-    statusBar()->showMessage(QStringLiteral("Motiv um %1° gedreht (⟳).").arg(deg, 0, 'f', 1), 3000);
 }
 
 // ---------------------------------------------------------------------------

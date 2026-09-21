@@ -717,7 +717,9 @@ int main(int argc, char** argv)
     JefCodec::Result r = JefCodec::exportToFile(testJefPath, tat, HoopType::HoopA_126x110);
     CHECK(r.ok, "JEF export succeeded");
 
-    QFile f(testJefPath); f.open(QIODevice::ReadOnly);
+    QFile f(testJefPath);
+    bool openOk = f.open(QIODevice::ReadOnly);
+    CHECK(openOk, "test JEF file opened for verification");
     QByteArray d = f.readAll(); f.close();
     const uchar* p = reinterpret_cast<const uchar*>(d.constData());
     qint32 off  = qFromLittleEndian<qint32>(p+0x00);
@@ -1303,41 +1305,57 @@ int main(int argc, char** argv)
 
         // 1. Mirror Horizontal (Flip X across cx)
         StitchSequence hSeq = testSeq;
-        for (Stitch& s : hSeq.stitches) s.x = 2.0 * cx - s.x;
+        CHECK(hSeq.mirrorHorizontal(), "mirrorHorizontal returned true");
         CHECK(std::abs(hSeq.stitches[0].x - 30.0) < 1e-4, "mirror horizontal moved 10 to 30");
         CHECK(std::abs(hSeq.stitches[1].x - 10.0) < 1e-4, "mirror horizontal moved 30 to 10");
 
         // 2. Mirror Vertical (Flip Y across cy)
         StitchSequence vSeq = testSeq;
-        for (Stitch& s : vSeq.stitches) s.y = 2.0 * cy - s.y;
+        CHECK(vSeq.mirrorVertical(), "mirrorVertical returned true");
         CHECK(std::abs(vSeq.stitches[0].y - 60.0) < 1e-4, "mirror vertical moved 20 to 60");
         CHECK(std::abs(vSeq.stitches[1].y - 20.0) < 1e-4, "mirror vertical moved 60 to 20");
 
         // 3. Rotate 90 degrees clockwise
         StitchSequence rSeq = testSeq;
-        for (Stitch& s : rSeq.stitches) {
-            double dx = s.x - cx;
-            double dy = s.y - cy;
-            s.x = cx + dy;
-            s.y = cy - dx;
-        }
+        CHECK(rSeq.rotate90(true), "rotate90 returned true");
         double rx0, ry0, rx1, ry1;
         rSeq.bounds(rx0, ry0, rx1, ry1);
         CHECK(std::abs((rx1 - rx0) - (y1 - y0)) < 1e-4, "rotate 90 swaps width and height");
         CHECK(std::abs((ry1 - ry0) - (x1 - x0)) < 1e-4, "rotate 90 swaps height and width");
 
         // 4. Free rotate 45 degrees preserves distance from origin center
-        const double rad = -45.0 * M_PI / 180.0;
-        const double cosA = std::cos(rad), sinA = std::sin(rad);
         StitchSequence fSeq = testSeq;
-        for (Stitch& s : fSeq.stitches) {
-            double dx = s.x - cx, dy = s.y - cy;
-            s.x = cx + dx * cosA - dy * sinA;
-            s.y = cy + dx * sinA + dy * cosA;
-        }
+        CHECK(fSeq.rotate(45.0), "rotate(45.0) returned true");
         const double origDist = std::hypot(testSeq.stitches[0].x - cx, testSeq.stitches[0].y - cy);
         const double rotDist  = std::hypot(fSeq.stitches[0].x - cx, fSeq.stitches[0].y - cy);
         CHECK(std::abs(origDist - rotDist) < 1e-4, "free rotate preserves distance from origin center");
+
+        // 5. Translate & Append
+        StitchSequence tSeq = testSeq;
+        tSeq.translate(5.0, -10.0);
+        CHECK(std::abs(tSeq.stitches[0].x - 15.0) < 1e-4, "translate shifted x by +5");
+        CHECK(std::abs(tSeq.stitches[0].y - 10.0) < 1e-4, "translate shifted y by -10");
+
+        StitchSequence appSeq = testSeq;
+        appSeq.append(tSeq);
+        CHECK(appSeq.size() == testSeq.size() + tSeq.size(), "append combined stitch counts");
+    }
+
+    std::printf("== Centralized Geometry Polygon Utilities ==\n");
+    {
+        // Counter-Clockwise 20x10 rectangle
+        QPolygonF ccwPoly;
+        ccwPoly << QPointF(0, 0) << QPointF(20, 0) << QPointF(20, 10) << QPointF(0, 10);
+        CHECK(isPolygonCounterClockwise(ccwPoly), "ccw polygon detected as counter-clockwise");
+        CHECK(std::abs(polygonArea(ccwPoly) - 200.0) < 1e-4, "polygonArea returns 200 mm²");
+        CHECK(polygonSignedArea(ccwPoly) > 0.0, "polygonSignedArea is positive for CCW");
+
+        // Clockwise 20x10 rectangle
+        QPolygonF cwPoly;
+        cwPoly << QPointF(0, 0) << QPointF(0, 10) << QPointF(20, 10) << QPointF(20, 0);
+        CHECK(!isPolygonCounterClockwise(cwPoly), "cw polygon detected as clockwise");
+        CHECK(std::abs(polygonArea(cwPoly) - 200.0) < 1e-4, "polygonArea returns 200 mm² for CW");
+        CHECK(polygonSignedArea(cwPoly) < 0.0, "polygonSignedArea is negative for CW");
     }
 
     std::printf("== TatamiFill Patterns & Angles ==\n");

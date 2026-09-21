@@ -14,6 +14,7 @@
 #include <QPolygonF>
 #include <QVector>
 #include <QColor>
+#include "core/Geometry.h"
 #include <cmath>
 #include <algorithm>
 
@@ -104,13 +105,7 @@ struct EditPath {
     {
         if (!closed || nodes.size() < 3) return 0.0;
         const QPolygonF poly = toPolygon();
-        if (poly.size() < 3) return 0.0;
-        double a = 0.0;
-        for (int i = 0; i < poly.size(); ++i) {
-            int next = (i + 1) % poly.size();
-            a += poly[i].x() * poly[next].y() - poly[next].x() * poly[i].y();
-        }
-        return std::abs(a) * 0.5;
+        return polygonArea(poly);
     }
 
     /// Translate path in mm.

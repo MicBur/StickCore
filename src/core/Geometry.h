@@ -28,6 +28,44 @@ inline QPointF normalized(const QPointF& a)
 inline QPointF perpLeft(const QPointF& a)  { return QPointF(-a.y(),  a.x()); }
 inline QPointF perpRight(const QPointF& a) { return QPointF( a.y(), -a.x()); }
 
+// --- 2D Polygon area & orientation helpers (Shoelace formula) ----------------
+/// Computes 2 * signed area of a 2D polygon using the Shoelace formula.
+/// Result is > 0 for counter-clockwise orientation, < 0 for clockwise.
+template<typename PolygonT>
+inline double polygonSignedAreaDouble(const PolygonT& poly)
+{
+    const int n = static_cast<int>(poly.size());
+    if (n < 3) return 0.0;
+    double a = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const auto& p1 = poly[i];
+        const auto& p2 = poly[(i + 1) % n];
+        a += (p1.x() * p2.y() - p2.x() * p1.y());
+    }
+    return a;
+}
+
+/// Signed area of a 2D polygon in mm² (positive = CCW, negative = CW).
+template<typename PolygonT>
+inline double polygonSignedArea(const PolygonT& poly)
+{
+    return 0.5 * polygonSignedAreaDouble(poly);
+}
+
+/// Absolute geometric surface area of a 2D polygon in mm².
+template<typename PolygonT>
+inline double polygonArea(const PolygonT& poly)
+{
+    return std::abs(polygonSignedArea(poly));
+}
+
+/// Returns true if polygon vertices wind counter-clockwise.
+template<typename PolygonT>
+inline bool isPolygonCounterClockwise(const PolygonT& poly)
+{
+    return polygonSignedAreaDouble(poly) > 0.0;
+}
+
 // ---------------------------------------------------------------------------
 //  ArcLengthCurve
 //

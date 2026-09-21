@@ -18,13 +18,7 @@ QPolygonF insetPolygon(const QPolygonF& poly, double insetMm)
     const int n = poly.size();
     if (n < 3 || insetMm <= 1e-4) return poly;
 
-    double area = 0.0;
-    for (int i = 0; i < n; ++i) {
-        const QPointF& p1 = poly[i];
-        const QPointF& p2 = poly[(i + 1) % n];
-        area += (p1.x() * p2.y() - p2.x() * p1.y());
-    }
-    const bool ccw = (area > 0.0);
+    const bool ccw = isPolygonCounterClockwise(poly);
 
     QPolygonF res;
     res.reserve(n);

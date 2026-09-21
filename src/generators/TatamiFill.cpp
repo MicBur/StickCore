@@ -179,18 +179,12 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
     if (p.pattern == PatternType::ContourEcho) {
         if (p.underlay) {
             StitchSequence ul = Underlay::forFill(validPolys, p.fillAngleDeg, p.colorIdx);
-            seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
+            seq.append(ul);
         }
         QPainterPath path;
         path.setFillRule(Qt::WindingFill);
         for (const auto& poly : validPolys) {
-            double a = 0.0;
-            const int n = poly.size();
-            for (int j = 0; j < n; ++j) {
-                int next = (j + 1) % n;
-                a += (poly[j].x() * poly[next].y() - poly[next].x() * poly[j].y());
-            }
-            if (a >= 0.0) {
+            if (isPolygonCounterClockwise(poly)) {
                 QPainterPath pIsland;
                 pIsland.addPolygon(poly);
                 path = path.united(pIsland);
@@ -206,7 +200,7 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
         cp.colorIdx = p.colorIdx;
         StitchSequence cseq = ContourFill::generate(path, cp);
         if (!cseq.empty()) {
-            seq.stitches.insert(seq.stitches.end(), cseq.stitches.begin(), cseq.stitches.end());
+            seq.append(cseq);
             if (seq.palette.empty())
                 seq.palette.emplace_back(QColor(40, 60, 140), QStringLiteral("Kontur-Füllung"));
             return seq;
@@ -217,15 +211,15 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
     if (p.pattern == PatternType::Honeycomb) {
         if (p.underlay) {
             StitchSequence ul = Underlay::forFill(validPolys, p.fillAngleDeg, p.colorIdx);
-            seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
+            seq.append(ul);
         }
         const double latticeSpacing = p.rowSpacingMm * 1.75;
         StitchSequence pass1 = fillOnly(validPolys, p.fillAngleDeg - 30.0, latticeSpacing,
                                         p.maxStitchMm, 0.5, p.colorIdx);
         StitchSequence pass2 = fillOnly(validPolys, p.fillAngleDeg + 30.0, latticeSpacing,
                                         p.maxStitchMm, 0.5, p.colorIdx);
-        seq.stitches.insert(seq.stitches.end(), pass1.stitches.begin(), pass1.stitches.end());
-        seq.stitches.insert(seq.stitches.end(), pass2.stitches.begin(), pass2.stitches.end());
+        seq.append(pass1);
+        seq.append(pass2);
         if (seq.palette.empty())
             seq.palette.emplace_back(QColor(40, 60, 140), QStringLiteral("Waben"));
         return seq;
@@ -244,7 +238,7 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
 
     if (p.underlay) {
         StitchSequence ul = Underlay::forFill(validPolys, p.fillAngleDeg, p.colorIdx);
-        seq.stitches.insert(seq.stitches.end(), ul.stitches.begin(), ul.stitches.end());
+        seq.append(ul);
     }
 
     QPainterPath cPath = p.carvingPath;
@@ -257,7 +251,7 @@ StitchSequence TatamiFill::generate(const QVector<QPolygonF>& region,
 
     StitchSequence cover = fillOnly(validPolys, p.fillAngleDeg, p.rowSpacingMm,
                                     p.maxStitchMm, effectivePhase, p.colorIdx, cPath);
-    seq.stitches.insert(seq.stitches.end(), cover.stitches.begin(), cover.stitches.end());
+    seq.append(cover);
 
     if (seq.palette.empty())
         seq.palette.emplace_back(QColor(40, 60, 140), patternName(p.pattern));

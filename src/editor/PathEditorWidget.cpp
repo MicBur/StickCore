@@ -1337,10 +1337,7 @@ void Canvas2DWidget::mouseMoveEvent(QMouseEvent* e)
     if (m_movingDesign) {
         const double dx = delta.x() / m_scale;
         const double dy = -delta.y() / m_scale;
-        for (Stitch& s : m_sequence.stitches) {
-            s.x += dx;
-            s.y += dy;
-        }
+        m_sequence.translate(dx, dy);
         emit designMoved(dx, dy);
         update();
         return;

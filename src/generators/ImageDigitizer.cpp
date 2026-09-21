@@ -11,6 +11,7 @@
 #include "generators/CrossStitchGenerator.h"
 #include "generators/BeanStitchGenerator.h"
 #include "core/ThreadCatalog.h"
+#include "core/Geometry.h"
 
 #include <QPainterPath>
 #include <QPoint>
@@ -176,13 +177,7 @@ QVector<QPolygonF> extractPolygonsForLabel(const std::vector<int>& label, int wa
                 // Apply Pull Compensation (Zugausgleich) along stitch direction
                 if (pullCompMm > 0.01) {
                     // Compute signed area to know outer vs hole
-                    double area = 0.0;
-                    for (int i = 0; i < poly.size(); ++i) {
-                        const QPointF& p1 = poly[i];
-                        const QPointF& p2 = poly[(i + 1) % poly.size()];
-                        area += (p1.x() * p2.y() - p2.x() * p1.y());
-                    }
-                    const double orientation = (area >= 0.0) ? 1.0 : -1.0;
+                    const double orientation = (polygonSignedAreaDouble(poly) >= 0.0) ? 1.0 : -1.0;
 
                     QPolygonF pullPoly;
                     pullPoly.reserve(poly.size());

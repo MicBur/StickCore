@@ -17,13 +17,6 @@ namespace {
 
 constexpr double PI = 3.14159265358979323846;
 
-void translate(StitchSequence& s, double dx, double dy) {
-    for (Stitch& st : s.stitches) { st.x += dx; st.y += dy; }
-}
-void append(StitchSequence& dst, const StitchSequence& src) {
-    dst.stitches.insert(dst.stitches.end(), src.stitches.begin(), src.stitches.end());
-}
-
 // Map a monogram style to concrete font families (with Windows + Linux
 // fallbacks) plus weight/slant. First installed family wins.
 void applyStyle(TextDigitizer::Params& tp, MonogramGenerator::Style s) {
@@ -169,8 +162,8 @@ StitchSequence MonogramGenerator::generate(const Params& p)
     double cursor = -totalW * 0.5;
     for (int i = 0; i < n; ++i) {
         // place letter centre at (cursor + w/2, 0)  (letters are origin-centred)
-        translate(parts[i], cursor + w[i] * 0.5, 0.0);
-        append(seq, parts[i]);
+        parts[i].translate(cursor + w[i] * 0.5, 0.0);
+        seq.append(parts[i]);
         cursor += w[i] + gap;
     }
 
@@ -194,7 +187,7 @@ StitchSequence MonogramGenerator::generate(const Params& p)
             framePath.addPolygon(ell);
             framePath.closeSubpath();
             StitchSequence fBand = SatinGenerator::fromCenterline(framePath, 2.2, 0.40, 1);
-            append(seq, fBand);
+            seq.append(fBand);
         } else if (p.frame == Frame::OakWreath) {
             // Oak wreath surrounding the monogram
             const int leafCount = 12;
@@ -224,7 +217,7 @@ StitchSequence MonogramGenerator::generate(const Params& p)
             framePath.addPolygon(ell);
             framePath.closeSubpath();
             StitchSequence fBand = SatinGenerator::fromCenterline(framePath, 1.8, 0.42, 1);
-            append(seq, fBand);
+            seq.append(fBand);
         } else if (p.frame == Frame::LaurelWreath) {
             // Classical Roman laurel wreath
             const int leafCount = 14;
@@ -248,7 +241,7 @@ StitchSequence MonogramGenerator::generate(const Params& p)
             framePath.addPolygon(ell);
             framePath.closeSubpath();
             StitchSequence fBand = SatinGenerator::fromCenterline(framePath, 1.6, 0.40, 1);
-            append(seq, fBand);
+            seq.append(fBand);
         } else if (p.frame == Frame::ShieldCrest) {
             // Gothic heraldic shield
             QPainterPath shield;
@@ -264,7 +257,7 @@ StitchSequence MonogramGenerator::generate(const Params& p)
             shield.cubicTo(cx - w2 * 0.4, botY + 4.0, cx - w2, botY + b * 0.4, cx - w2, midY);
             shield.closeSubpath();
             StitchSequence fBand = SatinGenerator::fromCenterline(shield, 2.0, 0.42, 1);
-            append(seq, fBand);
+            seq.append(fBand);
         } else if (p.frame == Frame::BaroqueCartouche) {
             // Rococo cartouche: oval with decorative C-scrolls
             QPainterPath rococo;
@@ -280,7 +273,7 @@ StitchSequence MonogramGenerator::generate(const Params& p)
             rococo.addEllipse(QPointF(cx - a * 1.05, cy), a * 0.15, b * 0.25);
             rococo.addEllipse(QPointF(cx + a * 1.05, cy), a * 0.15, b * 0.25);
             StitchSequence fBand = SatinGenerator::fromCenterline(rococo, 2.0, 0.42, 1);
-            append(seq, fBand);
+            seq.append(fBand);
         }
     }
 

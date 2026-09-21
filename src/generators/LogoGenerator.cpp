@@ -44,12 +44,6 @@ QPainterPath warpArc(const QPainterPath& in, double R, bool top)
     return out;
 }
 
-void translate(StitchSequence& s, double dx, double dy)
-{ for (Stitch& st : s.stitches) { st.x += dx; st.y += dy; } }
-
-void append(StitchSequence& d, const StitchSequence& s)
-{ d.stitches.insert(d.stitches.end(), s.stitches.begin(), s.stitches.end()); }
-
 // Solid tatami fill of a glyph path (clean look for small/fine text).
 StitchSequence fillSolid(const QPainterPath& p, double density)
 {
@@ -76,7 +70,7 @@ StitchSequence textLine(const QString& t, const QString& fam, double h,
     TextDigitizer::Params tp; tp.text = t; tp.families = { fam }; tp.heightMm = h;
     const QPainterPath path = TextDigitizer::textPath(tp);
     StitchSequence s = solid ? fillSolid(path, 0.4) : fillPath(path, spacing);
-    translate(s, cx, cy);
+    s.translate(cx, cy);
     return s;
 }
 
@@ -86,7 +80,7 @@ StitchSequence textArc(const QString& t, const QString& fam, double h,
     TextDigitizer::Params tp; tp.text = t; tp.families = { fam }; tp.heightMm = h;
     const QPainterPath path = warpArc(TextDigitizer::textPath(tp), R, top);
     StitchSequence s = solid ? fillSolid(path, 0.4) : fillPath(path, spacing);
-    translate(s, 0, cy);
+    s.translate(0, cy);
     return s;
 }
 
@@ -169,23 +163,23 @@ StitchSequence LogoGenerator::generate(const Badge& b)
     const double b_in  = b_out - borderW;
 
     // 1. Heavy Satin Oval Border (Kettelrand)
-    append(L, satinOvalBorder(a_out, b_out, borderW, 0.36, 0));
+    L.append(satinOvalBorder(a_out, b_out, borderW, 0.36, 0));
 
     // 2. Inner Accent Ring (1.8 mm inset)
-    append(L, innerAccentRing(a_in - 1.8, b_in - 1.8, 2.2, 0));
+    L.append(innerAccentRing(a_in - 1.8, b_in - 1.8, 2.2, 0));
 
     const QString F = b.family;
     const double sc = b_out / 43.0;
 
     // 3. Letters with solid raised satin
     if (!b.topArc.isEmpty())
-        append(L, textArc(b.topArc, F, 9.5*sc, 66*sc, true,  25*sc, 0.35, true));
+        L.append(textArc(b.topArc, F, 9.5*sc, 66*sc, true,  25*sc, 0.35, true));
     if (!b.centerBig.isEmpty())
-        append(L, textLine(b.centerBig, F, 16.5*sc, 0, 1*sc, 0.35, true));
+        L.append(textLine(b.centerBig, F, 16.5*sc, 0, 1*sc, 0.35, true));
     if (!b.centerSmall.isEmpty())
-        append(L, textLine(b.centerSmall, F, 9*sc, 0, -15*sc, 0.35, true));
+        L.append(textLine(b.centerSmall, F, 9*sc, 0, -15*sc, 0.35, true));
     if (!b.bottomArc.isEmpty())
-        append(L, textArc(b.bottomArc, F, 10*sc, 58*sc, false, -30*sc, 0.35, true));
+        L.append(textArc(b.bottomArc, F, 10*sc, 58*sc, false, -30*sc, 0.35, true));
 
     L.palette.clear();
     L.palette.emplace_back(b.gold, QStringLiteral("Madeira 1083 Gold"));

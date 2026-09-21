@@ -216,9 +216,7 @@ StitchSequence SvgDigitizer::digitize(const QPainterPath& inPath, const Params& 
         cp.outlineFirst = true;
         StitchSequence outline = ContourFill::generate(pathMm, cp);
 
-        for (const auto& st : outline.stitches) {
-            result.stitches.push_back(st);
-        }
+        result.append(outline);
 
         result.palette.clear();
         result.palette.emplace_back(p.primaryColor, QStringLiteral("Meister Gold"));
