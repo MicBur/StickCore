@@ -1,0 +1,64 @@
+name: Windows Installer
+
+# Baut StickCore auf einem echten Windows-Rechner und erzeugt einen
+# Doppelklick-Installer (StickCoreSetup.exe). Läuft bei jedem Push und
+# kann im Reiter "Actions" auch von Hand gestartet werden.
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Code holen
+        uses: actions/checkout@v4
+
+      - name: Qt 6 installieren
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.6.3'
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          modules: 'qtimageformats'
+
+      - name: OpenCV installieren (Foto-KI)
+        shell: cmd
+        run: choco install opencv -y --no-progress
+
+      - name: Konfigurieren & bauen
+        shell: cmd
+        run: |
+          for /d %%d in ("C:\tools\opencv\build") do set OCVDIR=%%d
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=C:\tools\opencv\build
+          cmake --build build --config Release
+
+      - name: Qt-Abhängigkeiten sammeln (windeployqt)
+        shell: cmd
+        run: |
+          mkdir deploy
+          copy build\Release\StickCore.exe deploy\
+          windeployqt --release --no-translations --no-system-d3d-compiler deploy\StickCore.exe
+
+      - name: OpenCV-DLL beilegen
+        shell: cmd
+        run: |
+          copy C:\tools\opencv\build\x64\vc16\bin\opencv_world*.dll deploy\
+          dir deploy
+
+      - name: Inno Setup installieren
+        shell: cmd
+        run: choco install innosetup -y --no-progress
+
+      - name: Installer bauen
+        shell: cmd
+        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\StickCore.iss'
+
+      - name: Installer als Download bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: StickCore-Windows-Installer
+          path: Output/StickCoreSetup.exe
+          if-no-files-found: error
