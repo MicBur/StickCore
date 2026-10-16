@@ -42,13 +42,23 @@ public:
         QString        summary;
     };
 
+    struct MultiResult {
+        bool                        success = false;
+        std::vector<StitchSequence> parts;       ///< Sequential hooping parts (Part 1, Part 2, ...)
+        std::vector<QPointF>        crosshairs;  ///< Seam registration positions
+        QString                     summary;
+    };
+
     /// Checks whether the design exceeds the specified hoop bounds
     static bool exceedsHoop(const StitchSequence& seq, double hoopW, double hoopH);
 
     /// Splits a sequence into two sequential multi-hooping parts with registration marks
     static Result split(const StitchSequence& source, const Params& p);
 
-    /// Creates an alignment crosshair (+) at the specified position
+    /// Splits an oversized design into N sequential hoopings (2, 3, 4, etc.)
+    static MultiResult splitMulti(const StitchSequence& source, const Params& p, int numParts = 0);
+
+    /// Creates an alignment crosshair (+) at the specified position with secure 1mm micro-locks
     static StitchSequence makeCrosshair(const QPointF& center, double sizeMm, int colorIdx);
 };
 

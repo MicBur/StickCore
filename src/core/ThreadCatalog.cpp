@@ -83,4 +83,73 @@ CatalogThread ThreadCatalog::nearest(const QColor& c, const QString& brand)
     return { QStringLiteral("Janome"), QStringLiteral("Black"), 1, QColor(0,0,0) };
 }
 
+const CatalogThread* ThreadCatalog::findByCode(int code, const QString& brand)
+{
+    const auto& list = all();
+    for (const auto& t : list) {
+        if ((brand.isEmpty() || t.brand.compare(brand, Qt::CaseInsensitive) == 0) && t.code == code) {
+            return &t;
+        }
+    }
+    return nullptr;
+}
+
+ThreadColor ThreadCatalog::fromJanomeCode(int code)
+{
+    const CatalogThread* match = findByCode(code, QStringLiteral("Janome"));
+    if (match) {
+        return match->toThread();
+    }
+
+    // Comprehensive Janome thread chart lookup
+    static const struct { int code; const char* name; int r; int g; int b; } kJanomeTable[] = {
+        { 1, "Black",          0,   0,   0 },
+        { 2, "White",        250, 250, 250 },
+        { 3, "Yellow",       247, 214,  45 },
+        { 4, "Orange",       230, 126,  34 },
+        { 5, "Olive Green",  107, 116,  51 },
+        { 6, "Green",         39, 174,  96 },
+        { 7, "Emerald",       32, 140,  92 },
+        { 8, "Cyan",          96, 166, 214 },
+        { 9, "Royal Blue",    40,  70, 150 },
+        { 10, "Silver",      160, 165, 175 },
+        { 11, "Sky Blue",    110, 180, 230 },
+        { 12, "Pink",        244, 114, 182 },
+        { 13, "Brown",       107,  79,  42 },
+        { 14, "Red",         220,  70,  45 },
+        { 15, "Pure White",  255, 255, 255 },
+        { 16, "Pale Yellow", 238, 228, 150 },
+        { 17, "Pale Pink",   236, 196, 200 },
+        { 18, "Pale Blue",   190, 220, 245 },
+        { 19, "Beige",       215, 200, 175 },
+        { 20, "Gold",        218, 165,  32 },
+        { 22, "Yellow Green", 63, 155,  86 },
+        { 24, "Dark Green",   25,  95,  50 },
+        { 26, "Teal",         30, 120, 120 },
+        { 28, "Dark Blue",    20,  45, 110 },
+        { 30, "Violet",      138,  43, 226 },
+        { 31, "Salmon Pink", 230, 120, 110 },
+        { 34, "Grey",        140, 144, 150 },
+        { 38, "Orchid Pink", 224, 106, 134 },
+        { 39, "Peony Purple",150,  60, 120 },
+        { 40, "Burgundy",    150,  40,  60 },
+        { 45, "Navy",         30,  40,  80 },
+        { 74, "Vermilion",   220,  70,  45 },
+        { 76, "Deep Red",    170,  30,  40 }
+    };
+    for (const auto& entry : kJanomeTable) {
+        if (entry.code == code) {
+            return ThreadColor(QColor(entry.r, entry.g, entry.b), QString::fromLatin1(entry.name), code);
+        }
+    }
+
+    // Fallback based on code hash for distinct vibrant colors
+    static const QColor fallbacks[] = {
+        QColor(220, 40, 50), QColor(40, 120, 220), QColor(240, 180, 20),
+        QColor(40, 160, 80), QColor(160, 60, 180), QColor(230, 120, 30)
+    };
+    const QColor c = fallbacks[std::abs(code) % 6];
+    return ThreadColor(c, QStringLiteral("Janome #%1").arg(code), code);
+}
+
 } // namespace stick

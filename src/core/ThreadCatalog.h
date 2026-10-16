@@ -35,6 +35,12 @@ public:
     /// Nearest catalogue thread to 'c'. If 'brand' is non-empty, restrict to it.
     static CatalogThread nearest(const QColor& c, const QString& brand = QString());
 
+    /// Find a catalogue thread by code and brand.
+    static const CatalogThread* findByCode(int code, const QString& brand = QStringLiteral("Janome"));
+
+    /// Get authentic ThreadColor for Janome JEF code (fallback to distinct color if unknown).
+    static ThreadColor fromJanomeCode(int code);
+
     /// Convenience: snap to a ThreadColor (with name + code) for a sequence.
     static ThreadColor snap(const QColor& c, const QString& brand = QString())
     {

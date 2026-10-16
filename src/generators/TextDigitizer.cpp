@@ -1,6 +1,7 @@
 #include "generators/TextDigitizer.h"
 #include "generators/TatamiFill.h"
 #include "generators/SatinGenerator.h"
+#include "generators/BeanStitchGenerator.h"
 #include "core/Geometry.h"
 
 #include <QFont>
@@ -132,6 +133,19 @@ QPainterPath TextDigitizer::textPath(const Params& p)
             tPlace.rotate(rotDeg);
             break;
         }
+        case Baseline::Wave: {
+            // Wave / S-curve: wavelength scaled by arcRadiusMm, amplitude proportional to text height
+            const double wavelength = std::max(60.0, p.arcRadiusMm * 2.0);
+            const double amp = p.heightMm * 0.35;
+            const double phase = 2.0 * M_PI * centerMm / wavelength;
+            const double X = centerMm;
+            const double Y = amp * std::sin(phase);
+            const double slope = amp * (2.0 * M_PI / wavelength) * std::cos(phase);
+            const double rotDeg = std::atan(slope) * (180.0 / M_PI);
+            tPlace.translate(X, Y);
+            tPlace.rotate(rotDeg);
+            break;
+        }
         }
 
         combined.addPath(tPlace.map(gMm));
@@ -165,12 +179,44 @@ StitchSequence TextDigitizer::generate(const Params& p)
 
     const bool needTatami = (p.style == StitchStyle::Raised || p.style == StitchStyle::TatamiOnly);
     const bool needSatin  = (p.style == StitchStyle::Raised || p.style == StitchStyle::SatinOutline || p.raised);
+    const bool isPadded   = (p.style == StitchStyle::PaddedSatin);
+    const bool isBean     = (p.style == StitchStyle::BeanStitch);
 
     if (needTatami) {
         seq = TatamiFill::generate(region, tp);
     }
 
-    if (needSatin) {
+    if (isPadded) {
+        // 3D-Relief Lettering ("Paddlerin"):
+        // Pass 1: Underlay padding satin cushion (narrower, e.g. 2.4 mm @ 0.48 mm pitch)
+        for (const QPolygonF& c : contours) {
+            if (c.size() < 2) continue;
+            QPainterPath pp;
+            pp.moveTo(c.first());
+            for (int i = 1; i < c.size(); ++i) pp.lineTo(c[i]);
+            pp.closeSubpath();
+            StitchSequence pad = SatinGenerator::fromCenterline(pp, p.paddingWidthMm, p.paddingPitchMm, p.colorIdx);
+            seq.stitches.insert(seq.stitches.end(), pad.stitches.begin(), pad.stitches.end());
+        }
+        // Pass 2: Cover satin (wider, dense pitch e.g. 3.5 mm @ 0.34 mm pitch)
+        for (const QPolygonF& c : contours) {
+            if (c.size() < 2) continue;
+            QPainterPath pp;
+            pp.moveTo(c.first());
+            for (int i = 1; i < c.size(); ++i) pp.lineTo(c[i]);
+            pp.closeSubpath();
+            StitchSequence cover = SatinGenerator::fromCenterline(pp, p.borderWidthMm, p.borderPitchMm, p.colorIdx);
+            seq.stitches.insert(seq.stitches.end(), cover.stitches.begin(), cover.stitches.end());
+        }
+    } else if (isBean) {
+        BeanStitchGenerator::Params bp;
+        bp.stitchLengthMm = 2.5;
+        bp.mode = BeanStitchGenerator::Mode::TriplePass;
+        bp.colorIdx = p.colorIdx;
+        bp.closed = true;
+        StitchSequence beanSeq = BeanStitchGenerator::generate(path, bp);
+        seq.stitches.insert(seq.stitches.end(), beanSeq.stitches.begin(), beanSeq.stitches.end());
+    } else if (needSatin) {
         for (const QPolygonF& c : contours) {
             if (c.size() < 2) continue;
             QPainterPath pp;
@@ -193,7 +239,7 @@ StitchSequence TextDigitizer::generate(const Params& p)
     }
 
     if (seq.palette.empty())
-        seq.palette.emplace_back(QColor(20, 20, 20), QStringLiteral("Text"));
+        seq.palette.emplace_back(QColor(240, 175, 25), QStringLiteral("Varsity Gold"));
 
     return seq;
 }

@@ -21,16 +21,28 @@ StitchSequence MultiHoopSplitter::makeCrosshair(const QPointF& center, double si
 {
     StitchSequence seq;
     const double r = sizeMm * 0.5;
+    const double lockStep = 0.8;
 
-    // Cross: Horizontal bar
-    seq.add(center.x() - r, center.y(), SF_Jump, colorIdx);
+    // 1. Jump to center and perform 3 micro-lock stitches (Tie-in) so needle thread never pulls out
+    seq.add(center.x(), center.y(), SF_Jump, colorIdx);
+    seq.add(center.x() + lockStep, center.y(), SF_Normal, colorIdx);
+    seq.add(center.x() - lockStep, center.y(), SF_Normal, colorIdx);
+    seq.add(center.x(), center.y(), SF_Normal, colorIdx);
+
+    // 2. Horizontal bar: out to right, through center to left, back to center
     seq.add(center.x() + r, center.y(), SF_Normal, colorIdx);
-    seq.add(center.x() - r, center.y(), SF_Normal, colorIdx); // double stitch
+    seq.add(center.x() - r, center.y(), SF_Normal, colorIdx);
+    seq.add(center.x(), center.y(), SF_Normal, colorIdx);
 
-    // Vertical bar
-    seq.add(center.x(), center.y() - r, SF_Jump, colorIdx);
+    // 3. Vertical bar: out to top, through center to bottom, back to center
     seq.add(center.x(), center.y() + r, SF_Normal, colorIdx);
-    seq.add(center.x(), center.y() - r, SF_Normal, colorIdx); // double stitch
+    seq.add(center.x(), center.y() - r, SF_Normal, colorIdx);
+    seq.add(center.x(), center.y(), SF_Normal, colorIdx);
+
+    // 4. Micro-lock stitches at center (Tie-off)
+    seq.add(center.x(), center.y() + lockStep, SF_Normal, colorIdx);
+    seq.add(center.x(), center.y() - lockStep, SF_Normal, colorIdx);
+    seq.add(center.x(), center.y(), SF_Normal, colorIdx);
 
     return seq;
 }
@@ -160,6 +172,128 @@ MultiHoopSplitter::Result MultiHoopSplitter::split(const StitchSequence& source,
                       .arg(dir == SplitDirection::Horizontal ? "Horizontal" : "Vertikal")
                       .arg(res.hoop1.size())
                       .arg(res.hoop2.size());
+    return res;
+}
+
+MultiHoopSplitter::MultiResult MultiHoopSplitter::splitMulti(const StitchSequence& source, const Params& p, int numParts)
+{
+    MultiResult res;
+    if (source.empty()) {
+        res.summary = QStringLiteral("Leeres Stickmuster kann nicht geteilt werden.");
+        return res;
+    }
+
+    const QRectF bb = source.boundingRect();
+    SplitDirection dir = p.direction;
+    if (dir == SplitDirection::Auto) {
+        const double wRatio = bb.width() / std::max(10.0, p.hoopWidthMm);
+        const double hRatio = bb.height() / std::max(10.0, p.hoopHeightMm);
+        dir = (hRatio >= wRatio) ? SplitDirection::Horizontal : SplitDirection::Vertical;
+    }
+
+    const double totalDim = (dir == SplitDirection::Horizontal) ? bb.height() : bb.width();
+    const double hoopDim  = (dir == SplitDirection::Horizontal) ? p.hoopHeightMm : p.hoopWidthMm;
+    const double usableDim = std::max(20.0, hoopDim - p.overlapMm);
+
+    if (numParts <= 0) {
+        numParts = std::max(2, static_cast<int>(std::ceil(totalDim / usableDim)));
+    }
+    numParts = std::clamp(numParts, 2, 8);
+
+    const double halfOverlap = p.overlapMm * 0.5;
+    const double startCoord  = (dir == SplitDirection::Horizontal) ? bb.bottom() : bb.left();
+    const double step        = totalDim / static_cast<double>(numParts);
+
+    // Compute seam coordinates and registration points
+    std::vector<double> seams(numParts - 1);
+    for (int k = 0; k < numParts - 1; ++k) {
+        seams[k] = startCoord + step * (k + 1);
+        if (dir == SplitDirection::Horizontal) {
+            res.crosshairs.push_back(QPointF(bb.left() + 4.0, seams[k]));
+            res.crosshairs.push_back(QPointF(bb.right() - 4.0, seams[k]));
+        } else {
+            res.crosshairs.push_back(QPointF(seams[k], bb.top() + 4.0));
+            res.crosshairs.push_back(QPointF(seams[k], bb.bottom() - 4.0));
+        }
+    }
+
+    res.parts.resize(numParts);
+
+    for (int k = 0; k < numParts; ++k) {
+        StitchSequence& part = res.parts[k];
+        part.palette = source.palette;
+
+        const double lowerBound = (k == 0) ? -1e9 : (seams[k - 1] - halfOverlap);
+        const double upperBound = (k == numParts - 1) ? 1e9 : (seams[k] + halfOverlap);
+
+        bool active = false;
+        for (const Stitch& st : source.stitches) {
+            const double coord = (dir == SplitDirection::Horizontal) ? st.y : st.x;
+            if (coord >= lowerBound && coord <= upperBound) {
+                quint32 flags = st.flags;
+                if (!active) {
+                    flags |= SF_Jump | SF_Trim;
+                    active = true;
+                }
+                part.add(st.x, st.y, flags, st.colorIdx);
+            } else {
+                active = false;
+            }
+        }
+
+        // Add alignment crosshairs if requested
+        if (p.addCrosshairs && !part.empty()) {
+            StitchSequence partCombined;
+
+            // If not the first part, prepend registration crosshairs matching previous seam
+            if (k > 0) {
+                partCombined.palette.emplace_back(QColor(220, 20, 60), QStringLiteral("Passkreuze Einpassung"));
+                for (const auto& th : part.palette) partCombined.palette.push_back(th);
+
+                const QPointF chA = res.crosshairs[(k - 1) * 2];
+                const QPointF chB = res.crosshairs[(k - 1) * 2 + 1];
+                StitchSequence markA = makeCrosshair(chA, p.crosshairSizeMm, 0);
+                StitchSequence markB = makeCrosshair(chB, p.crosshairSizeMm, 0);
+                partCombined.stitches.insert(partCombined.stitches.end(), markA.stitches.begin(), markA.stitches.end());
+                partCombined.stitches.insert(partCombined.stitches.end(), markB.stitches.begin(), markB.stitches.end());
+                partCombined.stitches.back().flags |= (SF_Stop | SF_ColorChange | SF_Trim);
+
+                // Add body stitches with shifted color index
+                for (const Stitch& s : part.stitches) {
+                    partCombined.add(s.x, s.y, s.flags, s.colorIdx + 1);
+                }
+                part = partCombined;
+            }
+
+            // If not the last part, append registration crosshairs for next seam
+            if (k < numParts - 1) {
+                const int postColor = static_cast<int>(part.palette.size());
+                part.palette.emplace_back(QColor(220, 20, 60), QStringLiteral("Passkreuze Folgerahmen"));
+                part.stitches.back().flags |= (SF_Stop | SF_ColorChange | SF_Trim);
+
+                const QPointF chA = res.crosshairs[k * 2];
+                const QPointF chB = res.crosshairs[k * 2 + 1];
+                StitchSequence markA = makeCrosshair(chA, p.crosshairSizeMm, postColor);
+                StitchSequence markB = makeCrosshair(chB, p.crosshairSizeMm, postColor);
+                part.stitches.insert(part.stitches.end(), markA.stitches.begin(), markA.stitches.end());
+                part.stitches.insert(part.stitches.end(), markB.stitches.begin(), markB.stitches.end());
+            }
+        }
+
+        // Optional centering per part
+        if (p.centerEachHoop && !part.empty()) {
+            const QPointF c = part.boundingRect().center();
+            for (Stitch& s : part.stitches) {
+                s.x -= c.x();
+                s.y -= c.y();
+            }
+        }
+    }
+
+    res.success = true;
+    res.summary = QString("Muster erfolgreich in %1 Teil-Rahmen zerlegt (%2)")
+                      .arg(numParts)
+                      .arg(dir == SplitDirection::Horizontal ? "Horizontal" : "Vertikal");
     return res;
 }
 

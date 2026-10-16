@@ -29,6 +29,7 @@
 //  JEF flips the Y axis and centres the design on the hoop origin.
 // ---------------------------------------------------------------------------
 #include "codec/JefCodec.h"
+#include "core/ThreadCatalog.h"
 
 #include <QFile>
 #include <QByteArray>
@@ -56,7 +57,13 @@ void putInt32LE(QByteArray& buf, qint32 v)
 }
 
 inline qint32 toUnits(double mm) { return static_cast<qint32>(std::llround(mm * 10.0)); }
-inline qint32 janomeCode(const ThreadColor& t) { return t.janomeCode >= 0 ? t.janomeCode : 0; }
+
+inline qint32 janomeCode(const ThreadColor& t)
+{
+    if (t.janomeCode > 0) return t.janomeCode;
+    CatalogThread ct = ThreadCatalog::nearest(t.color, QStringLiteral("Janome"));
+    return ct.code > 0 ? ct.code : 1;
+}
 
 // Encode one absolute move (0.1 mm units) into 'buf', splitting long moves.
 // 'ctrl' is 0 for a normal stitch, or the sub-command byte after 0x80.
@@ -130,8 +137,8 @@ JefCodec::Result JefCodec::exportToFile(const QString& path,
     bool haveExt = false;
 
     auto absUnits = [&](const Stitch& s, int& ux, int& uy) {
-        ux =  toUnits(s.x - cx);
-        uy = -toUnits(s.y - cy);          // JEF Y axis points down
+        ux = toUnits(s.x - cx);
+        uy = toUnits(s.y - cy);
     };
 
     for (const Stitch& s : seq.stitches) {
@@ -228,8 +235,7 @@ bool JefCodec::importFromFile(const QString& path, StitchSequence& out)
     out.clear();
     for (int i = 0; i < colorCount && (0x74 + i * 4 + 4) <= stitchOffset; ++i) {
         const qint32 code = qFromLittleEndian<qint32>(p + 0x74 + i * 4);
-        ThreadColor tc(QColor(0, 0, 0));
-        tc.janomeCode = code;
+        ThreadColor tc = ThreadCatalog::fromJanomeCode(code);
         out.palette.push_back(tc);
     }
 
@@ -244,14 +250,14 @@ bool JefCodec::importFromFile(const QString& path, StitchSequence& out)
             if (idx + 3 >= data.size()) break;
             const int dx = static_cast<signed char>(p[idx + 2]);
             const int dy = static_cast<signed char>(p[idx + 3]);
-            x += dx * 0.1; y -= dy * 0.1;
+            x += dx * 0.1; y += dy * 0.1;
             if (b1 == 0x01) { ++color; out.add(x, y, SF_ColorChange, color); }
             else            {          out.add(x, y, SF_Jump,        color); }
             idx += 4;
         } else {
             const int dx = static_cast<signed char>(b0);
             const int dy = static_cast<signed char>(b1);
-            x += dx * 0.1; y -= dy * 0.1;
+            x += dx * 0.1; y += dy * 0.1;
             out.add(x, y, SF_Normal, color);
             idx += 2;
         }

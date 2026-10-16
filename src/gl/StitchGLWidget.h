@@ -61,7 +61,7 @@ public:
     // Camera view presets
     void setTopDownView();
     void setPerspectiveView();
-    bool isTopDown() const { return m_pitch >= 88.0f; }
+    bool isTopDown() const { return std::abs(m_pitch) < 2.0f && std::abs(m_yaw) < 2.0f; }
 
     // Design movement (offset in mm)
     void moveDesign(double dxMm, double dyMm);

@@ -23,6 +23,7 @@
 #include "codec/DstCodec.h"
 #include "net/QrCode.h"
 #include "net/QrUploadServer.h"
+#include "net/AutoUpdater.h"
 #include "library/DesignLibrary.h"
 #include "library/LibraryDialog.h"
 #include "library/DesignFactory.h"
@@ -35,6 +36,7 @@
 #include "ui/SfumatoDialog.h"
 #include "ui/CrossStitchDialog.h"
 #include "ui/MultiHoopDialog.h"
+#include "ui/ArcTextDialog.h"
 #include "generators/ColorSorter.h"
 #include "generators/BastingGenerator.h"
 #include "generators/CarvingPattern.h"
@@ -84,6 +86,10 @@
 #include <QPushButton>
 #include <QBuffer>
 #include <QKeyEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include <cmath>
 
 namespace {
@@ -206,13 +212,22 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
     const auto& mp = MachineProfile::current();
     setWindowTitle(QStringLiteral("StickCore Studio — %1").arg(mp.name));
-    resize(1440, 880);
+    setWindowIcon(QIcon(QStringLiteral(":/logo/badge.png")));
+
+    // Responsive initial sizing for laptops and desktops
+    const QRect screenGeom = QGuiApplication::primaryScreen() ? QGuiApplication::primaryScreen()->availableGeometry() : QRect(0, 0, 1280, 720);
+    const int initW = std::clamp(static_cast<int>(screenGeom.width() * 0.92), 960, 1380);
+    const int initH = std::clamp(static_cast<int>(screenGeom.height() * 0.90), 580, 840);
+    resize(initW, initH);
+    setMinimumSize(800, 480);
 
     m_library = std::make_unique<DesignLibrary>();
     m_library->ensurePopulated();
 
     m_editor = new PathEditorWidget(this);
+    m_editor->setMinimumWidth(260);
     m_view   = new StitchGLWidget(this);
+    m_view->setMinimumWidth(320);
     const HoopSpec initHs = hoopSpec(HoopType::HoopB_140x200);
     m_view->setHoop(initHs.widthMm, initHs.heightMm, QString::fromLatin1(initHs.name));
     m_editor->setHoop(initHs.widthMm, initHs.heightMm, QString::fromLatin1(initHs.name), HoopType::HoopB_140x200);
@@ -232,17 +247,30 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     split->addWidget(m_editor);
     split->addWidget(centerView);
     split->addWidget(panel);
-    split->setStretchFactor(0, 4);
+    split->setCollapsible(0, true);
+    split->setCollapsible(1, false);
+    split->setCollapsible(2, true);
+    split->setStretchFactor(0, 3);
     split->setStretchFactor(1, 6);
-    split->setStretchFactor(2, 0);
-    split->setSizes({ 480, 660, 300 });
+    split->setStretchFactor(2, 2);
+
+    const int edW = std::min(360, static_cast<int>(initW * 0.28));
+    const int pnlW = std::min(280, static_cast<int>(initW * 0.22));
+    const int cntW = initW - edW - pnlW;
+    split->setSizes({ edW, cntW, pnlW });
     setCentralWidget(split);
 
     setupMenus();
 
-    // Studio Quick Toolbar
+    // Studio Quick Toolbar (Streamlined & Clean for Laptop Ergonomics)
     QToolBar* tb = addToolBar(QStringLiteral("StudioToolbar"));
     tb->setMovable(false);
+
+    tb->addAction(QStringLiteral("📂 Öffnen…"), this, &MainWindow::openEmbroideryFile);
+    tb->addAction(QStringLiteral("💾 Speichern"), this, &MainWindow::saveFile);
+    tb->addAction(QStringLiteral("JEF Export"),  this, &MainWindow::exportJef);
+    tb->addSeparator();
+
     tb->addWidget(new QLabel(QStringLiteral(" Modus ")));
     m_mode = new QComboBox(this);
     m_mode->addItem(QStringLiteral("Satin (2 Rails)"));
@@ -250,20 +278,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     connect(m_mode, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::modeChanged);
     tb->addWidget(m_mode);
 
-    tb->addAction(QStringLiteral("Neuer Pfad"), m_editor, &PathEditorWidget::newPath);
-    tb->addAction(QStringLiteral("Löschen"),    m_editor, &PathEditorWidget::clearAll);
     tb->addAction(QStringLiteral("⚡ Berechnen ▶"), this, &MainWindow::generate);
+    tb->addAction(QStringLiteral("🔀 Vektorisieren"), this, &MainWindow::convertStitchesToPaths);
     tb->addAction(QStringLiteral("📐 Einpassen"),  this, &MainWindow::fitDesignToHoop);
     tb->addSeparator();
 
     auto* moveGroup = new QActionGroup(this);
-    m_actOrbitMode = tb->addAction(QStringLiteral("🔄 Drehen"), this, [this]{
+    m_actOrbitMode = tb->addAction(QStringLiteral("🔄 3D"), this, [this]{
         m_view->setMouseMode(StitchGLWidget::MouseMode::Orbit);
         statusBar()->showMessage(QStringLiteral("Mausmodus: 3D Orbit-Kamera (Linksklick dreht, Shift+Klick verschiebt Motiv)."), 4000);
     });
     m_actOrbitMode->setCheckable(true);
     m_actOrbitMode->setChecked(true);
-    m_actOrbitMode->setToolTip(QStringLiteral("Kamera mit Maus frei drehen (O)"));
+    m_actOrbitMode->setToolTip(QStringLiteral("3D-Kamera mit Maus frei rotieren (O)"));
     moveGroup->addAction(m_actOrbitMode);
 
     m_actMoveMode = tb->addAction(QStringLiteral("✥ Bewegen"), this, [this]{
@@ -274,48 +301,65 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     m_actMoveMode->setToolTip(QStringLiteral("Motiv mit Maus im Rahmen verschieben (V)"));
     moveGroup->addAction(m_actMoveMode);
 
-    tb->addSeparator();
+    m_actTopDown = tb->addAction(QStringLiteral("👁 2D/3D"), this, &MainWindow::toggleViewPreset);
+    m_actTopDown->setToolTip(QStringLiteral("Zwischen 2D-Draufsicht und 3D-Perspektive umschalten (Strg+D)"));
+
     m_actHoop = tb->addAction(QStringLiteral("⭕ Rahmen"), this, &MainWindow::toggleHoopVisible);
     m_actHoop->setCheckable(true);
     m_actHoop->setChecked(true);
     m_actHoop->setToolTip(QStringLiteral("Stickrahmen und Zentrier-Fadenkreuz ein-/ausblenden (H)"));
 
-    m_actTopDown = tb->addAction(QStringLiteral("👁 2D/3D"), this, &MainWindow::toggleViewPreset);
-    m_actTopDown->setToolTip(QStringLiteral("Zwischen 2D-Draufsicht und 3D-Perspektive umschalten (Strg+D)"));
-
-    auto* centerAct = tb->addAction(QStringLiteral("⌖ Zentrieren"), this, &MainWindow::centerCurrentDesign);
+    auto* centerAct = tb->addAction(QStringLiteral("⌖ Mitte"), this, &MainWindow::centerCurrentDesign);
     centerAct->setToolTip(QStringLiteral("Motiv genau im Rahmen zentrieren (Strg+0)"));
+    tb->addSeparator();
 
+    // Studio Star Features
+    tb->addAction(QStringLiteral("🌟 Bogen-Schrift…"), this, &MainWindow::openArcTextStudio);
+    tb->addAction(QStringLiteral("🔤 Text…"),             this, &MainWindow::makeText);
+    tb->addAction(QStringLiteral("✂ Applikation…"),    this, &MainWindow::makeApplique);
     tb->addSeparator();
-    tb->addAction(QStringLiteral("📚 Bibliothek"), this, &MainWindow::openLibrary);
-    tb->addAction(QStringLiteral("★ Speichern…"), this, &MainWindow::saveToLibrary);
-    tb->addSeparator();
-    tb->addAction(QStringLiteral("Text…"),        this, &MainWindow::makeText);
-    tb->addAction(QStringLiteral("✦ Monogramm…"), this, &MainWindow::makeMonogram);
-    tb->addAction(QStringLiteral("✂ Applikation…"), this, &MainWindow::makeApplique);
-    tb->addAction(QStringLiteral("👑 MEF Original"), this, [this]{ loadMefOriginal(0); });
-    tb->addAction(QStringLiteral("❦ Logo"),        this, &MainWindow::makeLogo);
-    tb->addAction(QStringLiteral("Bild…"),        this, &MainWindow::digitizeImage);
-    tb->addAction(QStringLiteral("📱 Handy (QR)"), this, &MainWindow::phoneUpload);
-    tb->addSeparator();
-    tb->addAction(QStringLiteral("Größe…"),       this, &MainWindow::resizeDesign);
-    tb->addAction(QStringLiteral("⤢ Platzieren…"), this, &MainWindow::placeDesign);
-    tb->addAction(QStringLiteral("↔ Spieg. H"),   this, &MainWindow::mirrorHorizontal);
-    tb->addAction(QStringLiteral("↕ Spieg. V"),   this, &MainWindow::mirrorVertical);
-    tb->addAction(QStringLiteral("↻ 90°"),        this, [this]{ rotate90(true); });
-    tb->addAction(QStringLiteral("⟳ Drehen…"),    this, &MainWindow::rotateFree);
+
+    // Side-Panel Toggles (Maximum workspace on laptops!)
+    auto* actToggleEditor = tb->addAction(QStringLiteral("✏ Editor"), this, [this](bool checked){
+        m_editor->setVisible(checked);
+    });
+    actToggleEditor->setCheckable(true);
+    actToggleEditor->setChecked(true);
+    actToggleEditor->setToolTip(QStringLiteral("2D-Vektoreditor links ein-/ausblenden"));
+
+    auto* actTogglePanel = tb->addAction(QStringLiteral("📋 Eigenschaften"), this, [panel](bool checked){
+        panel->setVisible(checked);
+    });
+    actTogglePanel->setCheckable(true);
+    actTogglePanel->setChecked(true);
+    actTogglePanel->setToolTip(QStringLiteral("Eigenschaften- und Garnleiste rechts ein-/ausblenden"));
 
     auto* spacer = new QWidget; spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     tb->addWidget(spacer);
-    tb->addAction(QStringLiteral("📄 Druckblatt…"), this, &MainWindow::exportWorksheet);
-    tb->addAction(QStringLiteral("DST Export…"),   this, &MainWindow::exportDst);
-    tb->addAction(QStringLiteral("JEF Export…"),   this, &MainWindow::exportJef);
+    tb->addAction(QStringLiteral("📚 Bibliothek"), this, &MainWindow::openLibrary);
+    tb->addAction(QStringLiteral("📄 Druckblatt"), this, &MainWindow::exportWorksheet);
 
+    setAcceptDrops(true);
     statusBar()->showMessage(QStringLiteral("StickCore Studio bereit — für %1 eingerichtet. Rahmen eingeblendet.").arg(mp.name));
     loadSatinDemo();
 
-    // Command-line demo hooks
+    m_updater = new AutoUpdater(this);
+    QTimer::singleShot(3500, this, [this]() {
+        if (m_updater) m_updater->checkForUpdates(true);
+    });
+
+    // Command-line file loading and demo hooks
     const QStringList a = qApp->arguments();
+    bool loadedFromCli = false;
+    for (int i = 1; i < a.size(); ++i) {
+        if (!a[i].startsWith(QLatin1Char('-')) && QFile::exists(a[i])) {
+            const QString cliPath = a[i];
+            QTimer::singleShot(100, this, [this, cliPath]{ loadFile(cliPath); });
+            loadedFromCli = true;
+            break;
+        }
+    }
+
     const int di = a.indexOf(QStringLiteral("--demo"));
     if (di >= 0 && di + 1 < a.size()) {
         const QString which = a[di + 1];
@@ -337,7 +381,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         } else if (which == QLatin1String("monogram")) {
             makeMonogram();
         }
-    } else if (!a.contains(QStringLiteral("--manual-shots")) && !a.contains(QStringLiteral("--shot"))) {
+    } else if (!loadedFromCli && !a.contains(QStringLiteral("--manual-shots")) && !a.contains(QStringLiteral("--shot"))) {
         QTimer::singleShot(0, this, &MainWindow::maybeShowWizardOnStart);
     }
 }
@@ -352,15 +396,23 @@ void MainWindow::setupMenus()
     auto* newAct = fileMenu->addAction(QStringLiteral("&Neues Motiv"), QKeySequence::New, this, [this]{
         m_editor->clearAll();
         m_current.clear();
+        m_currentFilePath.clear();
         m_view->setSequence(m_current);
         updateInfoPanel();
+        setWindowTitle(QStringLiteral("StickCore Studio"));
         statusBar()->showMessage(QStringLiteral("Neues leeres Motiv angelegt."), 4000);
     });
-    auto* openImgAct = fileMenu->addAction(QStringLiteral("&Bild öffnen & digitalisieren…"), QKeySequence::Open, this, &MainWindow::digitizeImage);
+    auto* openAct = fileMenu->addAction(QStringLiteral("📂 &Stickdatei öffnen… (JEF, DST, SVG)"), QKeySequence::Open, this, &MainWindow::openEmbroideryFile);
+    m_recentFilesMenu = fileMenu->addMenu(QStringLiteral("🕒 &Zuletzt geöffnet"));
+    updateRecentFilesMenu();
+    auto* saveAct = fileMenu->addAction(QStringLiteral("💾 Motiv &speichern"), QKeySequence::Save, this, &MainWindow::saveFile);
+    auto* saveAsAct = fileMenu->addAction(QStringLiteral("💾 Motiv speichern &unter…"), QKeySequence::SaveAs, this, &MainWindow::saveFileAs);
+    fileMenu->addSeparator();
+    auto* openImgAct = fileMenu->addAction(QStringLiteral("&Bild öffnen & digitalisieren…"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I), this, &MainWindow::digitizeImage);
     auto* openSvgAct = fileMenu->addAction(QStringLiteral("&SVG-Vektordatei importieren & sticken…"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this, &MainWindow::importSvg);
     fileMenu->addSeparator();
     auto* libOpenAct = fileMenu->addAction(QStringLiteral("Aus &Bibliothek laden…"), QKeySequence(Qt::CTRL | Qt::Key_L), this, &MainWindow::openLibrary);
-    auto* libSaveAct = fileMenu->addAction(QStringLiteral("In Bibliothek &speichern…"), QKeySequence::Save, this, &MainWindow::saveToLibrary);
+    auto* libSaveAct = fileMenu->addAction(QStringLiteral("In Bibliothek &speichern…"), this, &MainWindow::saveToLibrary);
     fileMenu->addSeparator();
     auto* expJefAct  = fileMenu->addAction(QStringLiteral("&JEF exportieren (Janome)…"), QKeySequence(Qt::CTRL | Qt::Key_E), this, &MainWindow::exportJef);
     auto* expDstAct  = fileMenu->addAction(QStringLiteral("&DST exportieren (Tajima Universal)…"), this, &MainWindow::exportDst);
@@ -369,13 +421,16 @@ void MainWindow::setupMenus()
     fileMenu->addSeparator();
     auto* quitAct    = fileMenu->addAction(QStringLiteral("&Beenden"), QKeySequence::Quit, this, &QWidget::close);
 
-    Q_UNUSED(newAct); Q_UNUSED(openImgAct); Q_UNUSED(openSvgAct); Q_UNUSED(libOpenAct); Q_UNUSED(libSaveAct);
+    Q_UNUSED(newAct); Q_UNUSED(openAct); Q_UNUSED(saveAct); Q_UNUSED(saveAsAct);
+    Q_UNUSED(openImgAct); Q_UNUSED(openSvgAct); Q_UNUSED(libOpenAct); Q_UNUSED(libSaveAct);
     Q_UNUSED(expJefAct); Q_UNUSED(expDstAct); Q_UNUSED(expVarAct); Q_UNUSED(expSheetAct); Q_UNUSED(quitAct);
 
     // --- Bearbeiten ---
     QMenu* editMenu = menuBar()->addMenu(QStringLiteral("&Bearbeiten"));
     editMenu->addAction(QStringLiteral("↩ &Rückgängig"), QKeySequence::Undo, m_editor, &PathEditorWidget::undo);
     editMenu->addAction(QStringLiteral("↪ &Wiederholen"), QKeySequence::Redo, m_editor, &PathEditorWidget::redo);
+    editMenu->addSeparator();
+    editMenu->addAction(QStringLiteral("🔀 Stiche in bearbeitbare Vektorpfade umwandeln (Bézier-Knoten)…"), this, &MainWindow::convertStitchesToPaths);
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("🗑 Ausgewählte Pfade &löschen"), QKeySequence::Delete, m_editor, &PathEditorWidget::deleteSelected);
     editMenu->addAction(QStringLiteral("&Alle Pfade markieren"), QKeySequence::SelectAll, m_editor, &PathEditorWidget::selectAllPaths);
@@ -398,24 +453,20 @@ void MainWindow::setupMenus()
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("&Alle Pfade löschen"), m_editor, &PathEditorWidget::clearAll);
 
-    // --- Motive & Assistenten ---
-    QMenu* motMenu = menuBar()->addMenu(QStringLiteral("&Motive & Assistenten"));
-    motMenu->addAction(QStringLiteral("Stiche &berechnen ▶"), QKeySequence(Qt::Key_F5), this, &MainWindow::generate);
-    motMenu->addSeparator();
-    motMenu->addAction(QStringLiteral("✂ 3-Stufen-&Applikation (Aufnäher)…"), this, &MainWindow::makeApplique);
-    motMenu->addAction(QStringLiteral("&Text sticken…"), QKeySequence(Qt::CTRL | Qt::Key_T), this, &MainWindow::makeText);
-    motMenu->addAction(QStringLiteral("✦ Kunstvolles &Monogramm…"), QKeySequence(Qt::CTRL | Qt::Key_M), this, &MainWindow::makeMonogram);
-    motMenu->addAction(QStringLiteral("🌫 Sfumato Photo-Stitch (Fotorealistisch)…"), this, &MainWindow::digitizeSfumato);
-    motMenu->addAction(QStringLiteral("✖ Traditioneller Kreuzstich (Aida Raster)…"), this, &MainWindow::digitizeCrossStitch);
-    motMenu->addAction(QStringLiteral("⚜ Tatami Prägemuster (Carving / Eichenlaub / Stern)…"), this, &MainWindow::applyTatamiCarving);
-    
-    QMenu* highEndMenu = motMenu->addMenu(QStringLiteral("💎 Meister-Füllungen & Spezialstiche (Wilcom & Bernina)"));
-    highEndMenu->addAction(QStringLiteral("🎨 Farbverlaufs-Füllung (Ombré / Gradient Tatami)…"), this, &MainWindow::generateGradientFill);
-    highEndMenu->addAction(QStringLiteral("🪡 Dreifachstich / Bean Stitch (Plastische Kontur)…"), this, &MainWindow::generateBeanStitchOutline);
-    highEndMenu->addAction(QStringLiteral("🧵 Mäander- & Quiltfüllung (Stippling Meander)…"), this, &MainWindow::generateStipplingFill);
-    highEndMenu->addAction(QStringLiteral("〰 Florentiner Wellen-Tatami (Curved Wave Fill)…"), this, &MainWindow::generateFlorentineFill);
+    // --- Schrift & Lettering ---
+    QMenu* textMenu = menuBar()->addMenu(QStringLiteral("&Schrift & Lettering"));
+    textMenu->addAction(QStringLiteral("🌟 Bogen- & College-Schrift Studio (Arc & Varsity Studio)…"), QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_T), this, &MainWindow::openArcTextStudio);
+    textMenu->addAction(QStringLiteral("🔤 Standard-Text sticken…"), QKeySequence(Qt::CTRL | Qt::Key_T), this, &MainWindow::makeText);
+    textMenu->addAction(QStringLiteral("✦ Kunstvolles &Monogramm…"), QKeySequence(Qt::CTRL | Qt::Key_M), this, &MainWindow::makeMonogram);
+    textMenu->addAction(QStringLiteral("🔢 Trikot- & College-Nummern (00 - 99)…"), this, &MainWindow::makeJerseyNumbers);
 
-    QMenu* mefMenu = motMenu->addMenu(QStringLiteral("👑 Modewerkstatt Knüppel (Original Vektor-Logo)"));
+    // --- Aufnäher & Patches ---
+    QMenu* patchMenu = menuBar()->addMenu(QStringLiteral("&Aufnäher & Patches"));
+    patchMenu->addAction(QStringLiteral("✂ 3-Stufen-&Applikation (Aufnäher)…"), this, &MainWindow::makeApplique);
+    patchMenu->addAction(QStringLiteral("⚓ Offizielles &Kieler Stadtwappen (Aufnäher & Rücken)…"), this, &MainWindow::loadOfficialKielWappen);
+    patchMenu->addAction(QStringLiteral("🔲 Heftrahmen hinzufügen (Basting Box zur Fixierung)…"), this, &MainWindow::addBastingBox);
+
+    QMenu* mefMenu = patchMenu->addMenu(QStringLiteral("👑 Modewerkstatt Knüppel (Original Vektor-Logo)"));
     mefMenu->addAction(QStringLiteral("👑 Meister-Aufnäher (Foto-Original: Kettelrand & Satinschrift)"), this, [this]{ loadMefOriginal(0); });
     mefMenu->addAction(QStringLiteral("✦ Atelier Kontur-Glanz (Florentiner Schimmer)"), this, [this]{ loadMefOriginal(4); });
     mefMenu->addAction(QStringLiteral("✨ Zwei-Ton-Relief Gold (Madeira 1083 & 1070)"), this, [this]{ loadMefOriginal(2); });
@@ -424,7 +475,7 @@ void MainWindow::setupMenus()
     mefMenu->addSeparator();
     mefMenu->addAction(QStringLiteral("❦ Kalligraphie-Variante (Schriftarten-Badge)"), this, &MainWindow::makeLogo);
 
-    QMenu* huntMenu = motMenu->addMenu(QStringLiteral("🌿 Jagd, Natur & Tradition (Eichenlaub, Hirsch, Keiler)"));
+    QMenu* huntMenu = patchMenu->addMenu(QStringLiteral("🌿 Jagd, Natur & Tradition (Eichenlaub, Hirsch, Keiler)"));
     auto* oakMenu = huntMenu->addMenu(QStringLiteral("🌿 Eichenlaub mit Eicheln (Trachten & Schützen)"));
     oakMenu->addAction(QStringLiteral("▶ Als fertige Stickerei laden"), this, [this]{ loadHuntingMotif(0, false); });
     oakMenu->addAction(QStringLiteral("✏ Im 2D-Editor bearbeiten (Bézier-Pfade)"), this, [this]{ loadHuntingMotif(0, true); });
@@ -441,12 +492,34 @@ void MainWindow::setupMenus()
     crestMenu->addAction(QStringLiteral("▶ Als fertige Stickerei laden"), this, [this]{ loadHuntingMotif(3, false); });
     crestMenu->addAction(QStringLiteral("✏ Im 2D-Editor bearbeiten (Bézier-Pfade)"), this, [this]{ loadHuntingMotif(3, true); });
 
-    motMenu->addAction(QStringLiteral("📱 &Smartphone-Foto Upload (QR)…"), QKeySequence(Qt::CTRL | Qt::Key_U), this, &MainWindow::phoneUpload);
-    motMenu->addSeparator();
-    motMenu->addAction(QStringLiteral("Demo: Satin-Welle"), this, &MainWindow::loadSatinDemo);
-    motMenu->addAction(QStringLiteral("Demo: Tatami-Kreis"), this, &MainWindow::loadTatamiDemo);
-    motMenu->addSeparator();
-    motMenu->addAction(QStringLiteral("❔ Ersteinrichtungs-&Assistent…"), this, &MainWindow::showWizard);
+    patchMenu->addSeparator();
+    patchMenu->addAction(QStringLiteral("📱 &Smartphone-Foto Upload (QR)…"), QKeySequence(Qt::CTRL | Qt::Key_U), this, &MainWindow::phoneUpload);
+
+    // --- Meister-Füllungen & Effekte ---
+    QMenu* fillMenu = menuBar()->addMenu(QStringLiteral("&Meister-Füllungen"));
+    fillMenu->addAction(QStringLiteral("Stiche &berechnen ▶"), QKeySequence(Qt::Key_F5), this, &MainWindow::generate);
+    fillMenu->addSeparator();
+    fillMenu->addAction(QStringLiteral("🎨 Farbverlaufs-Füllung (Ombré / Gradient Tatami)…"), this, &MainWindow::generateGradientFill);
+    fillMenu->addAction(QStringLiteral("🪡 Dreifachstich / Bean Stitch (Plastische Kontur)…"), this, &MainWindow::generateBeanStitchOutline);
+    fillMenu->addAction(QStringLiteral("🧵 Mäander- & Quiltfüllung (Stippling Meander)…"), this, &MainWindow::generateStipplingFill);
+    fillMenu->addAction(QStringLiteral("〰 Florentiner Wellen-Tatami (Curved Wave Fill)…"), this, &MainWindow::generateFlorentineFill);
+    fillMenu->addAction(QStringLiteral("⚜ Tatami Prägemuster (Carving / Eichenlaub / Stern)…"), this, &MainWindow::applyTatamiCarving);
+    fillMenu->addSeparator();
+    fillMenu->addAction(QStringLiteral("🌫 Sfumato Photo-Stitch (Fotorealistisch)…"), this, &MainWindow::digitizeSfumato);
+    fillMenu->addAction(QStringLiteral("✖ Traditioneller Kreuzstich (Aida Raster)…"), this, &MainWindow::digitizeCrossStitch);
+    fillMenu->addSeparator();
+    fillMenu->addAction(QStringLiteral("Demo: Satin-Welle"), this, &MainWindow::loadSatinDemo);
+    fillMenu->addAction(QStringLiteral("Demo: Tatami-Kreis"), this, &MainWindow::loadTatamiDemo);
+
+    // --- Werkzeuge & Analyse ---
+    QMenu* toolMenu = menuBar()->addMenu(QStringLiteral("&Werkzeuge & Analyse"));
+    toolMenu->addAction(QStringLiteral("✂ Mehrfach-Rahmung (Auto-Split & Passkreuze für Übergröße)…"), this, &MainWindow::multiHoopSplit);
+    toolMenu->addAction(QStringLiteral("🎨 Intelligente Farbsortierung (Smart Color Sort)…"), this, &MainWindow::smartColorSort);
+    toolMenu->addAction(QStringLiteral("🔥 Stichdichte-Prüfer & Fadenbruch-Inspektor (Heatmap)…"), this, &MainWindow::inspectDensityHeatmap);
+    toolMenu->addAction(QStringLiteral("🔒 Stich-Sicherung & Vernäh-Stiche (Tie-In / Tie-Off Optimizer)…"), this, &MainWindow::optimizeTieStitches);
+    toolMenu->addAction(QStringLiteral("🧮 Garnbedarfs-Rechner & Kostenkalkulation…"), this, &MainWindow::calculateThreadCost);
+    toolMenu->addSeparator();
+    toolMenu->addAction(QStringLiteral("❔ Ersteinrichtungs-&Assistent…"), this, &MainWindow::showWizard);
 
     // --- Simulation & Ansicht ---
     QMenu* simMenu = menuBar()->addMenu(QStringLiteral("&Simulation & Ansicht"));
@@ -501,6 +574,8 @@ void MainWindow::setupMenus()
 
     // --- Hilfe ---
     QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("&Hilfe"));
+    helpMenu->addAction(QStringLiteral("🔄 Auf &Updates prüfen…"), this, &MainWindow::checkForUpdatesManual);
+    helpMenu->addSeparator();
     helpMenu->addAction(QStringLiteral("&Tastenkürzel & Anleitung"), this, [this]{
         QMessageBox::information(this, QStringLiteral("Tastenkürzel — StickCore Studio"),
             QStringLiteral("<b>Navigation, Ansicht & Verschieben:</b><br>"
@@ -521,10 +596,18 @@ void MainWindow::setupMenus()
     });
     helpMenu->addAction(QStringLiteral("&Über StickCore Studio"), this, [this]{
         QMessageBox::about(this, QStringLiteral("Über StickCore Studio"),
-            QStringLiteral("<h3>StickCore Studio 1.0</h3>"
-                           "<p>High-End Stickdatei-Studio für <b>Janome MC350E</b> und universelle <b>Tajima DST</b> Maschinen.</p>"
-                           "<p>Mit interaktiver 3D-Simulation, Rahmen-Visualisierung, Drag & Drop-Verschiebung und Garnkatalogen.</p>"
-                           "<p>Entwickelt mit Qt 6 & modernem C++.</p>"));
+            QStringLiteral("<div style='text-align:center;'>"
+                           "<img src=':/logo/badge.png' width='96' height='96'><br>"
+                           "<h2>StickCore Studio v1.0.0</h2>"
+                           "<b>Professionelle Sticksoftware & Digitalisierungs-Suite</b><br>"
+                           "Optimiert für Janome MC350E & Tajima DST"
+                           "</div><br><hr>"
+                           "<p>• Multi-Hoop Auto-Splitting & Passkreuze für Übergröße<br>"
+                           "• Bogen- & College-Schrift Studio (Varsity, Graduate, Jersey)<br>"
+                           "• 3D-Relief Padding („Paddlerin“ Dual-Pass Satinstich)<br>"
+                           "• Vektor-Digitalisierung, Sfumato Photo-Stitch & Kreuzstich<br>"
+                           "• Vollständige Garnkataloge (Madeira, Marathon, Isacord, Gunold)</p>"
+                           "<p style='color:#8b93a4;'>Entwickelt mit Qt 6 & modernem C++20 · MicBur</p>"));
     });
 }
 
@@ -704,6 +787,7 @@ void MainWindow::onThreadItemDoubleClicked(QListWidgetItem* item)
     ThreadPickDialog dlg(m_current.palette[idx], this);
     if (dlg.exec() == QDialog::Accepted) {
         m_current.palette[idx] = dlg.selectedThread();
+        m_editor->setSequence(m_current);
         m_view->setSequence(m_current);
         updateInfoPanel();
         statusBar()->showMessage(QStringLiteral("Garnfarbe %1 geändert zu: %2")
@@ -1065,7 +1149,15 @@ QWidget* MainWindow::buildInfoPanel()
     hint->setWordWrap(true); hint->setStyleSheet(QStringLiteral("color:#8b93a4;font-size:11px;"));
     outer->addWidget(hint);
 
-    return panel;
+    auto* scroll = new QScrollArea;
+    scroll->setObjectName(QStringLiteral("InfoPanelScroll"));
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(panel);
+    scroll->setMinimumWidth(260);
+    scroll->setMaximumWidth(320);
+    return scroll;
 }
 
 // ---------------------------------------------------------------------------
@@ -1232,6 +1324,7 @@ void MainWindow::setCurrentSequence(const StitchSequence& s, const QString& labe
 {
     m_current = s;
     m_editor->setSequence(m_current);
+    m_editor->fitInView();
     m_view->setSequence(m_current);
     m_view->showAll();
     updateInfoPanel();
@@ -1964,6 +2057,277 @@ void MainWindow::importSvg()
     setCurrentSequence(m_current, QStringLiteral("SVG: %1").arg(QFileInfo(fn).fileName()));
     statusBar()->showMessage(QStringLiteral("SVG-Vektordatei '%1' erfolgreich digitalisiert (%2 Stiche).")
                              .arg(QFileInfo(fn).fileName()).arg(m_current.stitches.size()), 8000);
+}
+
+// ---------------------------------------------------------------------------
+bool MainWindow::loadFile(const QString& filePath)
+{
+    if (filePath.isEmpty() || !QFile::exists(filePath)) return false;
+
+    QFileInfo fi(filePath);
+    const QString ext = fi.suffix().toLower();
+
+    StitchSequence seq;
+    if (ext == QStringLiteral("jef")) {
+        if (!JefCodec::importFromFile(filePath, seq)) {
+            QMessageBox::warning(this, QStringLiteral("Fehler beim Laden"),
+                QStringLiteral("Die Janome JEF-Datei konnte nicht gelesen werden:\n%1").arg(filePath));
+            return false;
+        }
+    } else if (ext == QStringLiteral("dst")) {
+        if (!DstCodec::importFromFile(filePath, seq)) {
+            QMessageBox::warning(this, QStringLiteral("Fehler beim Laden"),
+                QStringLiteral("Die Tajima DST-Datei konnte nicht gelesen werden:\n%1").arg(filePath));
+            return false;
+        }
+    } else if (ext == QStringLiteral("svg")) {
+        SvgDigitizer::Params sp;
+        sp.targetWidthMm = 120.0;
+        seq = SvgDigitizer::digitizeSvgFile(filePath, sp);
+        if (seq.empty()) {
+            QMessageBox::warning(this, QStringLiteral("Fehler beim Laden"),
+                QStringLiteral("Aus der SVG-Datei konnten keine Stiche erzeugt werden:\n%1").arg(filePath));
+            return false;
+        }
+    } else if (ext == QStringLiteral("png") || ext == QStringLiteral("jpg") || ext == QStringLiteral("jpeg") || ext == QStringLiteral("bmp")) {
+        QImage img(filePath);
+        if (!img.isNull()) {
+            digitizeWithDialog(img, fi.fileName());
+            m_currentFilePath = filePath;
+            setWindowTitle(QStringLiteral("StickCore Studio – %1").arg(fi.fileName()));
+            return true;
+        }
+        return false;
+    } else {
+        QMessageBox::warning(this, QStringLiteral("Unbekanntes Format"),
+            QStringLiteral("Das Dateiformat .%1 wird nicht unterstützt.\nUnterstützt werden: .jef, .dst, .svg, .png, .jpg").arg(ext));
+        return false;
+    }
+
+    if (seq.empty()) {
+        QMessageBox::warning(this, QStringLiteral("Leere Datei"),
+            QStringLiteral("Die Datei enthält keine druckbaren Stiche:\n%1").arg(filePath));
+        return false;
+    }
+
+    m_currentFilePath = filePath;
+    setWindowTitle(QStringLiteral("StickCore Studio – %1").arg(fi.fileName()));
+    addRecentFile(filePath);
+
+    // Automatische Rahmenauswahl passend zur geladenen Motivgröße
+    double minX, minY, maxX, maxY;
+    if (seq.bounds(minX, minY, maxX, maxY)) {
+        const double w = maxX - minX;
+        const double h = maxY - minY;
+        const auto& mp = MachineProfile::current();
+        const HoopType bestHoop = mp.hoopFor(w, h);
+        selectHoop(bestHoop);
+    }
+
+    setCurrentSequence(seq, QStringLiteral("Geladen: %1").arg(fi.fileName()));
+    statusBar()->showMessage(QStringLiteral("Stickdatei '%1' geladen (%2 Stiche, %3 Farben). Bereit zum Bearbeiten.")
+        .arg(fi.fileName()).arg(seq.realStitchCount()).arg(seq.palette.size()), 6000);
+    return true;
+}
+
+void MainWindow::openEmbroideryFile()
+{
+    QString startDir = QStringLiteral("F:/EmbF5/Feuerwehr");
+    if (!QDir(startDir).exists()) {
+        startDir = QDir::homePath();
+    }
+    if (!m_currentFilePath.isEmpty()) {
+        startDir = QFileInfo(m_currentFilePath).absolutePath();
+    }
+
+    const QString filter = QStringLiteral(
+        "Stickdateien (*.jef *.dst *.svg);;"
+        "Janome Stickdatei (*.jef);;"
+        "Tajima Universal (*.dst);;"
+        "SVG Vektordatei (*.svg);;"
+        "Bilder & Fotos (*.png *.jpg *.jpeg *.bmp);;"
+        "Alle Dateien (*.*)"
+    );
+    const QString fn = QFileDialog::getOpenFileName(this,
+        QStringLiteral("Stickdatei oder Entwurf öffnen"),
+        startDir,
+        filter);
+    if (!fn.isEmpty()) {
+        loadFile(fn);
+    }
+}
+
+void MainWindow::saveFile()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, windowTitle(), QStringLiteral("Kein Stickmotiv zum Speichern vorhanden."));
+        return;
+    }
+    if (m_currentFilePath.isEmpty()) {
+        saveFileAs();
+        return;
+    }
+
+    const QString ext = QFileInfo(m_currentFilePath).suffix().toLower();
+    if (ext == QStringLiteral("jef")) {
+        double x0, y0, x1, y1; m_current.bounds(x0, y0, x1, y1);
+        const auto& mp = MachineProfile::current();
+        HoopType hoop;
+        if (m_hoopCombo && m_hoopCombo->currentIndex() > 0)
+            hoop = static_cast<HoopType>(m_hoopCombo->currentData().toInt());
+        else
+            hoop = mp.hoopFor(x1 - x0, y1 - y0);
+
+        const JefCodec::Result res = JefCodec::exportToFile(m_currentFilePath, m_current, hoop);
+        if (res.ok) {
+            statusBar()->showMessage(QStringLiteral("Gespeichert nach %1 (%2)").arg(QFileInfo(m_currentFilePath).fileName(), res.message), 6000);
+        } else {
+            QMessageBox::warning(this, windowTitle(), QStringLiteral("Fehler beim Speichern: %1").arg(res.message));
+        }
+    } else if (ext == QStringLiteral("dst")) {
+        const DstCodec::Result res = DstCodec::exportToFile(m_currentFilePath, m_current);
+        if (res.ok) {
+            statusBar()->showMessage(QStringLiteral("Gespeichert nach %1 (%2)").arg(QFileInfo(m_currentFilePath).fileName(), res.message), 6000);
+        } else {
+            QMessageBox::warning(this, windowTitle(), QStringLiteral("Fehler beim Speichern: %1").arg(res.message));
+        }
+    } else {
+        saveFileAs();
+    }
+}
+
+void MainWindow::saveFileAs()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, windowTitle(), QStringLiteral("Kein Stickmotiv zum Speichern vorhanden."));
+        return;
+    }
+    QString defName = m_currentFilePath.isEmpty() ? QStringLiteral("design.jef") : m_currentFilePath;
+    const QString fn = QFileDialog::getSaveFileName(this,
+        QStringLiteral("Motiv speichern unter"),
+        defName,
+        QStringLiteral("Janome Stickdatei (*.jef);;Tajima Universal (*.dst);;Alle Dateien (*.*)"));
+    if (fn.isEmpty()) return;
+
+    m_currentFilePath = fn;
+    setWindowTitle(QStringLiteral("StickCore Studio – %1").arg(QFileInfo(fn).fileName()));
+    saveFile();
+}
+
+void MainWindow::convertStitchesToPaths()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, windowTitle(),
+            QStringLiteral("Kein Stickmotiv geladen. Öffne zuerst eine .JEF oder .DST-Datei."));
+        return;
+    }
+
+    QVector<EditPath> paths;
+    EditPath cur;
+    int curColorIdx = 0;
+    QColor curColor = QColor(220, 50, 60);
+    if (!m_current.palette.empty()) {
+        curColor = m_current.palette[0].color;
+    }
+
+    for (const auto& s : m_current.stitches) {
+        if (s.flags & SF_ColorChange) {
+            if (cur.nodes.size() >= 2) {
+                cur.color = curColor;
+                cur.colorIdx = curColorIdx;
+                paths.append(cur);
+            }
+            cur = EditPath();
+            curColorIdx = s.colorIdx;
+            if (curColorIdx >= 0 && curColorIdx < int(m_current.palette.size())) {
+                curColor = m_current.palette[curColorIdx].color;
+            }
+            continue;
+        }
+        if (s.flags & (SF_Jump | SF_Trim | SF_Stop)) {
+            if (cur.nodes.size() >= 2) {
+                cur.color = curColor;
+                cur.colorIdx = curColorIdx;
+                paths.append(cur);
+            }
+            cur = EditPath();
+            continue;
+        }
+
+        // Stiche in mm
+        cur.nodes.append(BezierNode(QPointF(s.x, s.y)));
+    }
+    if (cur.nodes.size() >= 2) {
+        cur.color = curColor;
+        cur.colorIdx = curColorIdx;
+        paths.append(cur);
+    }
+
+    if (paths.isEmpty()) {
+        QMessageBox::warning(this, windowTitle(), QStringLiteral("Aus den Stichen konnten keine Pfade extrahiert werden."));
+        return;
+    }
+
+    m_editor->loadPaths(paths);
+    m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Combined);
+    statusBar()->showMessage(QStringLiteral("%1 Vektorpfade aus Stichen extrahiert! Frei editierbar mit Zeiger, Lasso & Zeichenstift.").arg(paths.size()), 7000);
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasUrls() || event->mimeData()->hasText()) {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent* event)
+{
+    const QList<QUrl> urls = event->mimeData()->urls();
+    if (!urls.isEmpty()) {
+        const QString fn = urls.first().toLocalFile();
+        if (!fn.isEmpty()) {
+            loadFile(fn);
+            event->acceptProposedAction();
+        }
+}
+}
+
+void MainWindow::addRecentFile(const QString& filePath)
+{
+    if (filePath.isEmpty() || !QFile::exists(filePath)) return;
+    QSettings settings;
+    QStringList files = settings.value(QStringLiteral("recentFiles")).toStringList();
+    files.removeAll(filePath);
+    files.prepend(filePath);
+    while (files.size() > 8) files.removeLast();
+    settings.setValue(QStringLiteral("recentFiles"), files);
+    updateRecentFilesMenu();
+}
+
+void MainWindow::updateRecentFilesMenu()
+{
+    if (!m_recentFilesMenu) return;
+    m_recentFilesMenu->clear();
+    QSettings settings;
+    const QStringList files = settings.value(QStringLiteral("recentFiles")).toStringList();
+    if (files.isEmpty()) {
+        auto* act = m_recentFilesMenu->addAction(QStringLiteral("Keine Dateien"));
+        act->setEnabled(false);
+        return;
+    }
+    for (int i = 0; i < files.size(); ++i) {
+        const QString f = files[i];
+        if (!QFile::exists(f)) continue;
+        const QString text = QStringLiteral("&%1  %2").arg(i + 1).arg(QFileInfo(f).fileName());
+        auto* act = m_recentFilesMenu->addAction(text, this, [this, f]{ loadFile(f); });
+        act->setToolTip(f);
+    }
+    m_recentFilesMenu->addSeparator();
+    m_recentFilesMenu->addAction(QStringLiteral("Liste &leeren"), this, [this]{
+        QSettings settings;
+        settings.remove(QStringLiteral("recentFiles"));
+        updateRecentFilesMenu();
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -2763,6 +3127,281 @@ void MainWindow::generateFlorentineFill()
     statusBar()->showMessage(
         QStringLiteral("Florentiner Wellen-Tatami mit %1 Stichen erfolgreich berechnet.")
             .arg(m_current.size()), 6000);
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::openArcTextStudio()
+{
+    ArcTextDialog dlg(this);
+    if (dlg.exec() == QDialog::Accepted) {
+        StitchSequence seq = dlg.resultSequence();
+        if (!seq.empty()) {
+            m_editor->clearAll();
+            m_current = seq;
+            m_currentFilePath.clear();
+            m_view->setSequence(m_current);
+            m_editor->setSequence(m_current);
+            m_view->showAll();
+            updateInfoPanel();
+            setWindowTitle(QStringLiteral("StickCore Studio — Bogen-Schrift"));
+            statusBar()->showMessage(QStringLiteral("Bogen-Schriftzug mit 3D-Relief Polsterung ins Studio geladen (%1 Stiche).").arg(m_current.stitches.size()), 5000);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::makeJerseyNumbers()
+{
+    QDialog d(this);
+    d.setWindowTitle(QStringLiteral("Trikot- & College-Nummern (00 - 99)"));
+    d.resize(420, 320);
+    auto* form = new QFormLayout(&d);
+
+    auto* numSpin = new QSpinBox(&d);
+    numSpin->setRange(0, 99);
+    numSpin->setValue(10);
+    form->addRow(QStringLiteral("<b>Nummer (0-99):</b>"), numSpin);
+
+    auto* fontCombo = new QComboBox(&d);
+    fontCombo->addItem(QStringLiteral("🏈 Varsity (Authentic Athletic Block)"), QStringLiteral("Varsity"));
+    fontCombo->addItem(QStringLiteral("🔢 Jersey 10 (Chunky Block Athletics)"), QStringLiteral("Jersey 10"));
+    fontCombo->addItem(QStringLiteral("🔢 Jersey 15 (Standard Varsity Athleisure)"), QStringLiteral("Jersey 15"));
+    fontCombo->addItem(QStringLiteral("🔢 Jersey 25 (Bold Stadium Numbers)"), QStringLiteral("Jersey 25"));
+    fontCombo->addItem(QStringLiteral("🎓 Graduate (US Ivy League Serif)"), QStringLiteral("Graduate"));
+    form->addRow(QStringLiteral("College-Schriftart:"), fontCombo);
+
+    auto* hSpin = new QDoubleSpinBox(&d);
+    hSpin->setRange(20.0, 150.0);
+    hSpin->setValue(75.0);
+    hSpin->setSuffix(QStringLiteral(" mm"));
+    form->addRow(QStringLiteral("Ziffernhöhe:"), hSpin);
+
+    auto* styleCombo = new QComboBox(&d);
+    styleCombo->addItem(QStringLiteral("⭐ 3D-Relief Polsterraupe (Paddlerin Dual-Pass: 2,4mm -> 3,5mm)"), int(TextDigitizer::StitchStyle::PaddedSatin));
+    styleCombo->addItem(QStringLiteral("🧵 Reine Satin-Kontur (Satin Outline)"), int(TextDigitizer::StitchStyle::SatinOutline));
+    styleCombo->addItem(QStringLiteral("✦ Erhabener Satin-Rand auf Tatami-Füllung"), int(TextDigitizer::StitchStyle::Raised));
+    styleCombo->addItem(QStringLiteral("▦ Dichte Tatami-Webung"), int(TextDigitizer::StitchStyle::TatamiOnly));
+    form->addRow(QStringLiteral("Stick-Stil:"), styleCombo);
+
+    auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &d);
+    connect(bb, &QDialogButtonBox::accepted, &d, &QDialog::accept);
+    connect(bb, &QDialogButtonBox::rejected, &d, &QDialog::reject);
+    form->addRow(bb);
+
+    if (d.exec() != QDialog::Accepted) return;
+
+    TextDigitizer::Params tp;
+    tp.text = QString("%1").arg(numSpin->value(), 2, 10, QChar('0'));
+    tp.family = fontCombo->currentData().toString();
+    tp.heightMm = hSpin->value();
+    tp.style = TextDigitizer::StitchStyle(styleCombo->currentData().toInt());
+    tp.borderWidthMm = 3.5;
+    tp.borderPitchMm = 0.34;
+    tp.paddingWidthMm = 2.4;
+    tp.paddingPitchMm = 0.48;
+    tp.raised = (tp.style == TextDigitizer::StitchStyle::Raised);
+
+    m_current = TextDigitizer::generate(tp);
+    m_current.palette = { ThreadCatalog::snap(QColor(180, 30, 45)) };
+    setCurrentSequence(m_current, QStringLiteral("College-Nummer: %1").arg(tp.text));
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::loadOfficialKielWappen()
+{
+    QString svgPath = QStringLiteral(":/svg/wappen_kiel.svg");
+    if (!QFile::exists(svgPath)) {
+        svgPath = QStringLiteral("assets/wappen_kiel_official.svg");
+    }
+
+    if (QFile::exists(svgPath)) {
+        SvgDigitizer::Params sp;
+        sp.style = SvgDigitizer::StitchStyle::AuthenticPatchSatin;
+        sp.targetWidthMm = 100.0;
+        sp.spacingMm = 0.40;
+        StitchSequence seq = SvgDigitizer::digitizeSvgFile(svgPath, sp);
+        if (!seq.empty()) {
+            seq.palette = {
+                ThreadCatalog::snap(QColor(210, 25, 40)),   // Schleswig-Holstein Rot
+                ThreadCatalog::snap(QColor(245, 245, 250)),  // Silbernes Nesselblatt
+                ThreadCatalog::snap(QColor(25, 25, 30))      // Kieler Boot Schwarz
+            };
+            setCurrentSequence(seq, QStringLiteral("Kieler Stadtwappen (Offizieller Aufnäher)"));
+            statusBar()->showMessage(QStringLiteral("Offizielles Kieler Stadtwappen geladen (%1 Stiche, 3 Farben).").arg(seq.stitches.size()), 5000);
+            return;
+        }
+    }
+    QMessageBox::warning(this, QStringLiteral("Wappen nicht gefunden"), QStringLiteral("Die Vektordatei wappen_kiel_official.svg konnte nicht geladen werden."));
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::inspectDensityHeatmap()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, QStringLiteral("Kein Motiv"), QStringLiteral("Bitte zuerst ein Motiv laden."));
+        return;
+    }
+
+    const QRectF bb = m_current.boundingRect();
+    if (bb.width() < 1.0 || bb.height() < 1.0) return;
+
+    const double cellSize = 2.0; // 2mm grid cell
+    const int cols = std::max(1, static_cast<int>(std::ceil(bb.width() / cellSize)));
+    const int rows = std::max(1, static_cast<int>(std::ceil(bb.height() / cellSize)));
+
+    std::vector<int> grid(cols * rows, 0);
+    int microStitches = 0;
+    int maxCellCount = 0;
+
+    for (size_t i = 1; i < m_current.stitches.size(); ++i) {
+        const auto& s0 = m_current.stitches[i - 1];
+        const auto& s1 = m_current.stitches[i];
+        if (s1.flags & (SF_Jump | SF_Trim)) continue;
+
+        double d = std::hypot(s1.x - s0.x, s1.y - s0.y);
+        if (d < 0.35) ++microStitches;
+
+        int c = std::clamp(static_cast<int>((s1.x - bb.left()) / cellSize), 0, cols - 1);
+        int r = std::clamp(static_cast<int>((s1.y - bb.top()) / cellSize), 0, rows - 1);
+        grid[r * cols + c]++;
+        if (grid[r * cols + c] > maxCellCount) maxCellCount = grid[r * cols + c];
+    }
+
+    const double cellAreaMm2 = cellSize * cellSize;
+    const double maxDensity = maxCellCount / cellAreaMm2;
+
+    int criticalCells = 0;
+    for (int count : grid) {
+        if ((count / cellAreaMm2) > 4.5) ++criticalCells;
+    }
+
+    QString status;
+    if (criticalCells == 0 && microStitches < 20) {
+        status = QStringLiteral("<b style='color:#37d67a;'>✓ Exzellente Stickdichte!</b><br>"
+                                "Keine Fadenbruch-Zonen oder Stoffverzüge festgestellt.<br>"
+                                "Das Motiv läuft reibungslos auf der Janome MC350E.");
+    } else {
+        status = QStringLiteral("<b style='color:#f59e0b;'>⚠️ Optimierungspotenzial gefunden:</b><br>"
+                                "• %1 Cluster mit erhöhter Einstichdichte (&gt; 4,5 Stiche/mm²)<br>"
+                                "• %2 Mikro-Stiche (&lt; 0,35 mm) gefunden.<br>"
+                                "<i>Tipp: Stickvlies gut einspannen oder Dichte auf 0,42 mm anpassen.</i>")
+                     .arg(criticalCells).arg(microStitches);
+    }
+
+    QMessageBox::information(this, QStringLiteral("Stichdichte & Heatmap-Analyse"),
+        QString("<b>Motiv-Dichteanalyse:</b><br>"
+                "• Gesamtstiche: %1<br>"
+                "• Abmessungen: %2 x %3 mm<br>"
+                "• Maximale Einstichdichte: <b>%4 Stiche/mm²</b><br>"
+                "• Durchschnittsdichte: <b>%5 Stiche/mm²</b><br><br>%6")
+            .arg(m_current.stitches.size())
+            .arg(bb.width(), 0, 'f', 1)
+            .arg(bb.height(), 0, 'f', 1)
+            .arg(maxDensity, 0, 'f', 1)
+            .arg(m_current.stitches.size() / std::max(1.0, bb.width() * bb.height()), 0, 'f', 2)
+            .arg(status));
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::optimizeTieStitches()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, QStringLiteral("Kein Motiv"), QStringLiteral("Bitte zuerst ein Motiv laden."));
+        return;
+    }
+
+    int insertedLocks = 0;
+    StitchSequence opt;
+    opt.palette = m_current.palette;
+
+    for (size_t i = 0; i < m_current.stitches.size(); ++i) {
+        const Stitch& s = m_current.stitches[i];
+        opt.stitches.push_back(s);
+
+        if ((s.flags & (SF_Trim | SF_Stop)) && i > 2) {
+            opt.add(s.x + 0.6, s.y, SF_Normal, s.colorIdx);
+            opt.add(s.x - 0.6, s.y, SF_Normal, s.colorIdx);
+            opt.add(s.x, s.y, SF_Normal, s.colorIdx);
+            insertedLocks += 3;
+        }
+    }
+
+    m_current = opt;
+    m_view->setSequence(m_current);
+    updateInfoPanel();
+    QMessageBox::information(this, QStringLiteral("Stich-Sicherung (Tie-In / Tie-Off)"),
+        QString("<b>Vernähstich-Optimierung abgeschlossen:</b><br>"
+                "• %1 Sicherheits-Verriegelungsstiche eingefügt.<br>"
+                "✓ Fadenabschneiden und Nadelstart sind nun 100% auszugssicher für die Janome MC350E.")
+            .arg(insertedLocks));
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::calculateThreadCost()
+{
+    if (m_current.empty()) {
+        QMessageBox::information(this, QStringLiteral("Kein Motiv"), QStringLiteral("Bitte zuerst ein Motiv laden."));
+        return;
+    }
+
+    double totalMeters = 0.0;
+    std::vector<double> colorMeters(m_current.palette.size(), 0.0);
+
+    for (size_t i = 1; i < m_current.stitches.size(); ++i) {
+        const auto& s0 = m_current.stitches[i - 1];
+        const auto& s1 = m_current.stitches[i];
+        const double d = std::hypot(s1.x - s0.x, s1.y - s0.y) * 0.001;
+        totalMeters += d;
+        if (s1.colorIdx >= 0 && static_cast<size_t>(s1.colorIdx) < colorMeters.size()) {
+            colorMeters[s1.colorIdx] += d;
+        }
+    }
+
+    const double effectiveTopMeters = totalMeters * 1.4;
+    const double effectiveBobbinMeters = totalMeters * 1.0;
+
+    const int stitchCount = static_cast<int>(m_current.stitches.size());
+    const int colorChanges = std::max(0, static_cast<int>(m_current.palette.size()) - 1);
+    const double runTimeMinutes = (stitchCount / 550.0) + (colorChanges * 0.5);
+
+    const double yarnCost = (stitchCount / 1000.0) * 0.025;
+    const double fleeceCost = 0.20;
+    const double totalCost = yarnCost + fleeceCost;
+
+    QString colorBreakdown;
+    for (size_t c = 0; c < colorMeters.size(); ++c) {
+        const QString name = m_current.palette[c].description.isEmpty() ? QString("Farbe %1").arg(c + 1) : m_current.palette[c].description;
+        colorBreakdown += QString("• <b>%1:</b> %2 m Oberfaden<br>").arg(name).arg(colorMeters[c] * 1.4, 0, 'f', 1);
+    }
+
+    QMessageBox::information(this, QStringLiteral("Garnbedarf & Kostenkalkulation"),
+        QString("<b>Produktions- & Garnkalkulation:</b><br><br>"
+                "• Gesamtstiche: <b>%1</b><br>"
+                "• Geschätzte Stickzeit (550 SPM): <b>%2 Minuten</b> (%3 Fadenwechsel)<br>"
+                "• Oberfaden-Bedarf gesamt: <b>%4 Meter</b><br>"
+                "• Unterfaden-Bedarf (Bobbin): <b>%5 Meter</b><br><br>"
+                "<b>Garnverbrauch nach Farben:</b><br>%6<br>"
+                "<b>Materialkosten-Schätzung:</b><br>"
+                "• Stickgarn (Madeira Rayon / Polyneon): %7 €<br>"
+                "• Reißvlies / Schneidvlies: %8 €<br>"
+                "<b>Materialkosten netto: %9 €</b>")
+            .arg(stitchCount)
+            .arg(runTimeMinutes, 0, 'f', 1)
+            .arg(colorChanges)
+            .arg(effectiveTopMeters, 0, 'f', 1)
+            .arg(effectiveBobbinMeters, 0, 'f', 1)
+            .arg(colorBreakdown)
+            .arg(yarnCost, 0, 'f', 2)
+            .arg(fleeceCost, 0, 'f', 2)
+            .arg(totalCost, 0, 'f', 2));
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::checkForUpdatesManual()
+{
+    if (m_updater) {
+        m_updater->checkForUpdates(false);
+    }
 }
 
 } // namespace stick

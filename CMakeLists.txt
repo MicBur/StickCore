@@ -100,6 +100,8 @@ add_executable(StickCore WIN32
     src/ui/CrossStitchDialog.h
     src/ui/MultiHoopDialog.cpp
     src/ui/MultiHoopDialog.h
+    src/ui/ArcTextDialog.cpp
+    src/ui/ArcTextDialog.h
     src/codec/JefCodec.cpp
     src/codec/JefCodec.h
     src/library/StitchThumbnail.h
@@ -115,12 +117,18 @@ add_executable(StickCore WIN32
     src/net/QrCode.h
     src/net/QrUploadServer.cpp
     src/net/QrUploadServer.h
+    src/net/AutoUpdater.cpp
+    src/net/AutoUpdater.h
     src/gl/StitchGLWidget.cpp
     src/gl/StitchGLWidget.h
     src/editor/BezierPath.h
     src/editor/PathEditorWidget.cpp
     src/editor/PathEditorWidget.h
 )
+
+if(WIN32)
+    target_sources(StickCore PRIVATE StickCore.rc)
+endif()
 
 target_include_directories(StickCore PRIVATE src)
 
@@ -149,6 +157,7 @@ install(TARGETS StickCore RUNTIME DESTINATION . BUNDLE DESTINATION .)
 add_executable(StickCoreTests
     tests/verify.cpp
     media.qrc
+    fonts.qrc
     src/core/ThreadCatalog.cpp
     src/generators/SatinGenerator.cpp
     src/generators/TatamiFill.cpp

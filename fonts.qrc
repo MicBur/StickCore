@@ -8,5 +8,10 @@
     <file alias="PetitFormalScript-Regular.ttf">media/fonts/PetitFormalScript-Regular.ttf</file>
     <file alias="HerrVonMuellerhoff-Regular.ttf">media/fonts/HerrVonMuellerhoff-Regular.ttf</file>
     <file alias="AlexBrush-Regular.ttf">media/fonts/AlexBrush-Regular.ttf</file>
+    <file alias="Graduate-Regular.ttf">assets/fonts/Graduate-Regular.ttf</file>
+    <file alias="Jersey10-Regular.ttf">assets/fonts/Jersey10-Regular.ttf</file>
+    <file alias="Jersey15-Regular.ttf">assets/fonts/Jersey15-Regular.ttf</file>
+    <file alias="Jersey25-Regular.ttf">assets/fonts/Jersey25-Regular.ttf</file>
+    <file alias="varsity_regular.ttf">assets/fonts/varsity_regular.ttf</file>
 </qresource>
 </RCC>

@@ -32,3 +32,11 @@ deploy/
 _mef_test.*
 chrome-profile/
 build-mingw/
+__pycache__/
+*.pyc
+test_*.png
+test_*.JEF
+current_*.png
+crop_*.png
+grad_*.png
+varsity_*.png

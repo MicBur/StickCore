@@ -192,8 +192,21 @@ bool DstCodec::importFromFile(const QString& path, StitchSequence& out)
 
     if (data.size() < 512 + 3) return false;
 
+    static const QColor kDstDefaultColors[] = {
+        QColor(220,  40,  50),  // Vivid Red
+        QColor( 40, 120, 220),  // Royal Blue
+        QColor(240, 185,  25),  // Gold Yellow
+        QColor( 35, 155,  85),  // Forest Green
+        QColor(245, 245, 245),  // White
+        QColor( 25,  25,  30),  // Black
+        QColor(155,  60, 180),  // Purple
+        QColor(235, 120,  35),  // Tangerine Orange
+        QColor(160, 165, 175)   // Silver Gray
+    };
+    constexpr int numDefs = sizeof(kDstDefaultColors) / sizeof(kDstDefaultColors[0]);
+
     out.clear();
-    out.palette.emplace_back(QColor(40, 40, 40), QStringLiteral("Tajima 1"));
+    out.palette.emplace_back(kDstDefaultColors[0], QStringLiteral("Tajima 1"));
 
     int curColor = 0;
     double curX = 0.0, curY = 0.0;
@@ -214,7 +227,8 @@ bool DstCodec::importFromFile(const QString& path, StitchSequence& out)
 
         if (flags & SF_ColorChange) {
             curColor++;
-            out.palette.emplace_back(QColor(40, 40, 40), QStringLiteral("Farbe %1").arg(curColor + 1));
+            const QColor c = kDstDefaultColors[curColor % numDefs];
+            out.palette.emplace_back(c, QStringLiteral("Farbe %1").arg(curColor + 1));
         }
 
         out.add(curX, curY, flags, curColor);

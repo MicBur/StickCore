@@ -8,5 +8,11 @@
   </qresource>
   <qresource prefix="/svg">
     <file alias="meflogo.svg">media/meflogoplain.svg</file>
+    <file alias="wappen_kiel.svg">assets/wappen_kiel_official.svg</file>
+  </qresource>
+  <qresource prefix="/logo">
+    <file alias="logo.png">media/stickcore_logo.png</file>
+    <file alias="badge.png">media/stickcore_badge.png</file>
+    <file alias="icon.ico">media/stickcore.ico</file>
   </qresource>
 </RCC>

@@ -584,7 +584,7 @@ void StitchGLWidget::setMouseMode(MouseMode mode)
 void StitchGLWidget::setTopDownView()
 {
     m_yaw   = 0.0f;
-    m_pitch = 89.5f;
+    m_pitch = 0.0f;
     m_center = QVector3D(0.0f, 0.0f, 0.0f);
     update();
 }
@@ -888,7 +888,7 @@ void StitchGLWidget::mouseMoveEvent(QMouseEvent* e)
         const QPoint d = e->pos() - m_lastMouse;
         m_lastMouse = e->pos();
         m_yaw   += d.x() * 0.4f;
-        m_pitch  = qBound(2.0f, m_pitch - d.y() * 0.4f, 89.5f);
+        m_pitch  = qBound(-75.0f, m_pitch - d.y() * 0.4f, 75.0f);
         update();
     } else if (m_panning) {
         const QPoint d = e->pos() - m_lastMouse;

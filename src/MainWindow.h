@@ -18,6 +18,9 @@ class QPushButton;
 class QSlider;
 class QDialog;
 
+class QDragEnterEvent;
+class QDropEvent;
+
 namespace stick {
 
 class StitchGLWidget;
@@ -35,8 +38,19 @@ public:
 
     void captureManualScreenshots(const QString& outDir);
 
+public slots:
+    bool loadFile(const QString& filePath);
+    void openEmbroideryFile();
+    void saveFile();
+    void saveFileAs();
+    void convertStitchesToPaths();
+    void addRecentFile(const QString& filePath);
+    void updateRecentFilesMenu();
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private slots:
     void modeChanged(int index);
@@ -63,6 +77,16 @@ private slots:
     void exportDst();
     void exportWorksheet();
     void loadHuntingMotif(int typeIdx, bool editable);
+
+    // Bogen- & College-Schrift Studio (Arc & Varsity Studio)
+    void openArcTextStudio();
+    void makeJerseyNumbers();
+
+    // Flagship Analysis & Optimization Tools
+    void inspectDensityHeatmap();
+    void optimizeTieStitches();
+    void calculateThreadCost();
+    void loadOfficialKielWappen();
 
     // Embird Flagship Assistants
     void smartColorSort();
@@ -99,6 +123,7 @@ private slots:
     void onPositionSpinChanged();
     void onHoopComboChanged(int idx);
     void selectHoop(HoopType type);
+    void checkForUpdatesManual();
 
 private:
     void     setupMenus();
@@ -109,6 +134,7 @@ private:
     void     digitizeWithDialog(const QImage& img, const QString& label);
     void     setStatusForSequence(const QString& prefix = QString());
 
+    class AutoUpdater* m_updater = nullptr;
     PathEditorWidget* m_editor = nullptr;
     StitchGLWidget*   m_view   = nullptr;
     QComboBox*        m_mode   = nullptr;
@@ -127,7 +153,8 @@ private:
     QLabel*           m_scrubLabel  = nullptr;
     QComboBox*        m_speedCombo  = nullptr;
 
-    // View & Movement actions
+    // Menus & Actions
+    QMenu*            m_recentFilesMenu = nullptr;
     QAction*          m_actHoop     = nullptr;
     QMenu*            m_hoopMenu    = nullptr;
     QActionGroup*     m_hoopActionGroup = nullptr;
@@ -152,6 +179,7 @@ private:
     QCheckBox*        m_underlay    = nullptr;
 
     StitchSequence    m_current;
+    QString           m_currentFilePath;
 };
 
 } // namespace stick

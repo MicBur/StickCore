@@ -22,13 +22,16 @@ public:
         Straight,       ///< Classic horizontal baseline
         ArcUp,          ///< Arched upward over top of circle (convex)
         ArcDown,        ///< Arched downward like a smile curve (concave)
-        Circle          ///< Placed around full circle
+        Circle,         ///< Placed around full circle
+        Wave            ///< Harmonious wave / S-curve baseline
     };
 
     enum class StitchStyle {
         Raised,         ///< Tatami fill + embossed satin border (default)
         SatinOutline,   ///< Pure satin band contour
+        PaddedSatin,    ///< 3D-Relief: Dual-pass padding underlay (2.4mm) + cover satin (3.5mm)
         TatamiOnly,     ///< Dense tatami weave fill only
+        BeanStitch,     ///< 3-pass bean stitch contour (plastic triple run)
         RunStitch       ///< Delicate running stitch contour
     };
 
@@ -47,8 +50,10 @@ public:
         double  fillAngleDeg= 45.0;
         TatamiFill::PatternType pattern = TatamiFill::PatternType::StandardTatami;
         bool    raised      = true;   ///< add satin border on top of the fill
-        double  borderWidthMm = 1.8;
-        double  borderPitchMm = 0.40;
+        double  borderWidthMm = 3.5;  ///< width of satin border / cover satin
+        double  borderPitchMm = 0.34; ///< stitch pitch of satin border / cover
+        double  paddingWidthMm = 2.4; ///< width of 3D relief underlay padding (Pass 1)
+        double  paddingPitchMm = 0.48;///< stitch pitch of 3D relief padding (Pass 1)
         int     colorIdx    = 0;
 
         // Janome Digitizer Jr Lettering parameters
