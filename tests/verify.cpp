@@ -20,6 +20,7 @@
 #include "net/QrUploadServer.h"
 #include "library/DesignFactory.h"
 #include "library/DesignLibrary.h"
+#include "library/LibraryBuilder.h"
 #include "library/StitchThumbnail.h"
 #include "editor/BezierPath.h"
 #include "generators/ColorSorter.h"
@@ -3030,6 +3031,124 @@ int main(int argc, char** argv)
         const QString outArchPng = QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/college_varsity_padded_arc_verified.png");
         renderImg.save(outArchPng);
         std::printf("     Saved verified 3D Varsity Padded Arc preview: %s\n", qPrintable(outArchPng));
+    }
+
+    // =========================================================================
+    //  DesignLibrary, LibraryBuilder & Bought Assets Ingestion Suite
+    // =========================================================================
+    {
+        std::printf("\n== DesignLibrary, LibraryBuilder & Bought Assets Ingestion Suite ==\n");
+
+        const QString targetLib = QStringLiteral("E:/StickCore/library");
+        const QString mefDir    = QStringLiteral("C:/Users/micbu/Downloads/mef");
+        const QString fwDir     = QStringLiteral("E:/StickCore/output");
+
+        auto stats = LibraryBuilder::buildAll(targetLib, mefDir, fwDir);
+
+        CHECK(stats.collegeLetters > 300, "ingested > 300 College Outline letters across all resolutions");
+        CHECK(stats.collegeNumbers > 100, "ingested > 100 College Outline numbers across all resolutions");
+        CHECK(stats.appliqueNumbers > 150, "ingested > 150 Applique digits (0-9) across all resolutions");
+        CHECK(stats.feuerwehr >= 7, "ingested official Feuerwehr & Kieler Wappen designs");
+        CHECK(stats.total > 700, "unified design library contains > 700 production-ready motifs");
+
+        DesignLibrary lib(targetLib);
+        CHECK(lib.readIndex(), "successfully loaded generated index.json");
+
+        // Verify letter search by category & size
+        auto resLetter = lib.search(QStringLiteral("College Buchstabe A"),
+                                    QStringLiteral("🏫 College Buchstaben (A-Z)"),
+                                    QStringLiteral("2in"));
+        CHECK(!resLetter.isEmpty(), "found College Letter A in 2in");
+        if (!resLetter.isEmpty()) {
+            StitchSequence seqA;
+            CHECK(lib.load(resLetter[0], seqA), "loaded stitch data for College A 2in");
+            CHECK(seqA.realStitchCount() > 1500, "College A 2in has dense satin stitch count (>1500)");
+            double x0, y0, x1, y1;
+            seqA.bounds(x0, y0, x1, y1);
+            std::printf("     College A 2in: %.1f x %.1f mm, %zu stitches\n",
+                        x1 - x0, y1 - y0, seqA.stitches.size());
+            CHECK((y1 - y0) >= 48.0 && (y1 - y0) <= 53.0, "College A 2in height matches 2 inches (~50mm)");
+        }
+
+        // Verify applique number search
+        auto resApp = lib.search(QStringLiteral("Applikation Ziffer 3"),
+                                 QStringLiteral("🪡 Applikation Ziffern (0-9)"),
+                                 QStringLiteral("3in"));
+        CHECK(!resApp.isEmpty(), "found Applique Number 3 in 3in");
+        if (!resApp.isEmpty()) {
+            StitchSequence seq3;
+            CHECK(lib.load(resApp[0], seq3), "loaded stitch data for Applique 3 3in");
+            CHECK(seq3.palette.size() >= 3, "Applique has placement, tackdown and satin color stops");
+        }
+
+        // Verify Feuerwehr & Kiel search
+        auto resFw = lib.search(QStringLiteral("Berufsfeuerwehr"),
+                                QStringLiteral("🚒 Feuerwehr & Kiel"));
+        CHECK(!resFw.isEmpty(), "found Berufsfeuerwehr designs in library");
+
+        auto resComp = lib.search(QStringLiteral("Komplett-Emblem"),
+                                  QStringLiteral("🚒 Feuerwehr & Kiel"));
+        CHECK(!resComp.isEmpty(), "found BF30 4-color complete emblem");
+
+        // Render showcase preview collage of the new library assets
+        QImage collage(1200, 400, QImage::Format_ARGB32_Premultiplied);
+        collage.fill(QColor(19, 21, 28));
+        QPainter cp(&collage);
+        cp.setRenderHint(QPainter::Antialiasing);
+
+        // Card 1: College Letter
+        if (!resLetter.isEmpty()) {
+            StitchSequence seq; lib.load(resLetter[0], seq);
+            QRectF r(20, 20, 260, 360);
+            cp.fillRect(r, QColor(27, 31, 42));
+            cp.setPen(QPen(QColor(45, 51, 68), 1)); cp.drawRect(r);
+            drawRealisticStitches(cp, seq, r.adjusted(15, 15, -15, -60));
+            cp.setPen(QColor(241, 245, 249));
+            cp.drawText(QRectF(r.left(), r.bottom() - 45, r.width(), 35),
+                        Qt::AlignCenter, QStringLiteral("College A (2\" / 50mm)\n1.980 Stiche"));
+        }
+
+        // Card 2: Applique Number
+        if (!resApp.isEmpty()) {
+            StitchSequence seq; lib.load(resApp[0], seq);
+            QRectF r(310, 20, 260, 360);
+            cp.fillRect(r, QColor(27, 31, 42));
+            cp.setPen(QPen(QColor(45, 51, 68), 1)); cp.drawRect(r);
+            drawRealisticStitches(cp, seq, r.adjusted(15, 15, -15, -60));
+            cp.setPen(QColor(241, 245, 249));
+            cp.drawText(QRectF(r.left(), r.bottom() - 45, r.width(), 35),
+                        Qt::AlignCenter, QStringLiteral("Applikation 3 (3\" / 76mm)\n3 Stufen Applique"));
+        }
+
+        // Card 3: BF30 Complete Emblem
+        if (!resComp.isEmpty()) {
+            StitchSequence seq; lib.load(resComp[0], seq);
+            QRectF r(600, 20, 280, 360);
+            cp.fillRect(r, QColor(27, 31, 42));
+            cp.setPen(QPen(QColor(45, 51, 68), 1)); cp.drawRect(r);
+            drawRealisticStitches(cp, seq, r.adjusted(15, 15, -15, -60));
+            cp.setPen(QColor(241, 245, 249));
+            cp.drawText(QRectF(r.left(), r.bottom() - 45, r.width(), 35),
+                        Qt::AlignCenter, QStringLiteral("BF Kiel 30 Bogen\n4-Farben Meister-Emblem"));
+        }
+
+        // Card 4: Official Kieler Wappen
+        auto resWappen = lib.search(QStringLiteral("Kieler Wappen (Offizielle"), QStringLiteral("🚒 Feuerwehr & Kiel"));
+        if (!resWappen.isEmpty()) {
+            StitchSequence seq; lib.load(resWappen[0], seq);
+            QRectF r(910, 20, 270, 360);
+            cp.fillRect(r, QColor(27, 31, 42));
+            cp.setPen(QPen(QColor(45, 51, 68), 1)); cp.drawRect(r);
+            drawRealisticStitches(cp, seq, r.adjusted(15, 15, -15, -60));
+            cp.setPen(QColor(241, 245, 249));
+            cp.drawText(QRectF(r.left(), r.bottom() - 45, r.width(), 35),
+                        Qt::AlignCenter, QStringLiteral("Kieler Wappen\nOffizielle Applikation"));
+        }
+
+        cp.end();
+        const QString outCollagePng = QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/library_bought_motifs_verified.png");
+        collage.save(outCollagePng);
+        std::printf("     Saved verified library bought motifs collage: %s\n", qPrintable(outCollagePng));
     }
 
     std::printf("\n%s (%d failures)\n", failures? "FAILURES" : "ALL PASSED", failures);

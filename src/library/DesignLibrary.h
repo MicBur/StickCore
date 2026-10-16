@@ -25,6 +25,7 @@ struct LibraryEntry {
     int         stitches = 0;
     int         colors   = 0;
     double      wMm = 0, hMm = 0;
+    QString     sizeTag;    // e.g. "2in", "1.5in", etc.
 };
 
 class DesignLibrary {
@@ -34,29 +35,41 @@ public:
 
     QString baseDir() const { return m_base; }
 
-    /// Create the folder structure and, if the library is new, fill it with
-    /// the built-in starter designs. Returns the number of designs present.
+    /// Create the folder structure and, if the library is new or has updates, fill it with
+    /// the built-in starter designs and bundled library. Returns the number of designs present.
     int ensurePopulated();
 
     QVector<LibraryEntry> all() const { return m_entries; }
     QStringList categoriesPresent() const;
 
-    /// Filter by free text (name + tags + category) and/or a category.
-    QVector<LibraryEntry> search(const QString& query, const QString& category = QString()) const;
+    /// Filter by free text (name + tags + category), category and/or size tag.
+    QVector<LibraryEntry> search(const QString& query,
+                                 const QString& category = QString(),
+                                 const QString& sizeTag = QString()) const;
 
     /// Add a design (writes data + thumbnail + index). Returns its id, or "".
     QString add(const QString& name, const QString& category,
                 const QStringList& tags, const StitchSequence& seq,
-                bool updateIndex = true);
+                bool updateIndex = true,
+                const QString& sizeTag = QString(),
+                const QString& explicitId = QString());
 
     /// Load a design's full stitch data (with colours).
     bool load(const LibraryEntry& e, StitchSequence& out) const;
 
+    /// Write current in-memory index to index.json.
+    bool writeIndex() const;
+
+    /// Read index from disk.
+    bool readIndex();
+
+    /// Synchronize designs from a bundled directory (e.g. deployed with app).
+    int syncFromBundled(const QString& bundledDir);
+
     QString absPath(const QString& rel) const;
+    static QString bundledPath();
 
 private:
-    bool  readIndex();
-    bool  writeIndex() const;
     static QString slug(const QString& s);
 
     QString m_base;

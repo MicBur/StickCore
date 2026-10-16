@@ -26,6 +26,7 @@
 #include "net/AutoUpdater.h"
 #include "library/DesignLibrary.h"
 #include "library/LibraryDialog.h"
+#include "library/LibraryBuilder.h"
 #include "library/DesignFactory.h"
 #include "library/StitchThumbnail.h"
 #include "ui/WelcomeWizard.h"
@@ -459,10 +460,23 @@ void MainWindow::setupMenus()
     textMenu->addAction(QStringLiteral("🔤 Standard-Text sticken…"), QKeySequence(Qt::CTRL | Qt::Key_T), this, &MainWindow::makeText);
     textMenu->addAction(QStringLiteral("✦ Kunstvolles &Monogramm…"), QKeySequence(Qt::CTRL | Qt::Key_M), this, &MainWindow::makeMonogram);
     textMenu->addAction(QStringLiteral("🔢 Trikot- & College-Nummern (00 - 99)…"), this, &MainWindow::makeJerseyNumbers);
+    textMenu->addSeparator();
+    textMenu->addAction(QStringLiteral("🏫 College Stick-Alphabet (A-Z) durchsuchen…"), this, [this]{
+        openLibraryCategory(QStringLiteral("🏫 College Buchstaben (A-Z)"));
+    });
+    textMenu->addAction(QStringLiteral("🔢 College Stick-Zahlen (0-9) durchsuchen…"), this, [this]{
+        openLibraryCategory(QStringLiteral("🔢 College Zahlen (0-9)"));
+    });
+    textMenu->addAction(QStringLiteral("🪡 Applikations-Zahlen (0-9) durchsuchen…"), this, [this]{
+        openLibraryCategory(QStringLiteral("🪡 Applikation Ziffern (0-9)"));
+    });
 
     // --- Aufnäher & Patches ---
     QMenu* patchMenu = menuBar()->addMenu(QStringLiteral("&Aufnäher & Patches"));
     patchMenu->addAction(QStringLiteral("✂ 3-Stufen-&Applikation (Aufnäher)…"), this, &MainWindow::makeApplique);
+    patchMenu->addAction(QStringLiteral("🚒 Berufsfeuerwehr Kiel & Wappen-Motive…"), this, [this]{
+        openLibraryCategory(QStringLiteral("🚒 Feuerwehr & Kiel"));
+    });
     patchMenu->addAction(QStringLiteral("⚓ Offizielles &Kieler Stadtwappen (Aufnäher & Rücken)…"), this, &MainWindow::loadOfficialKielWappen);
     patchMenu->addAction(QStringLiteral("🔲 Heftrahmen hinzufügen (Basting Box zur Fixierung)…"), this, &MainWindow::addBastingBox);
 
@@ -970,10 +984,45 @@ void MainWindow::showWizard()
 // ---------------------------------------------------------------------------
 void MainWindow::openLibrary()
 {
-    LibraryDialog dlg(m_library.get(), this);
+    openLibraryCategory(QString());
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::openLibraryCategory(const QString& category)
+{
+    LibraryDialog dlg(m_library.get(), category, this);
     if (dlg.exec() == QDialog::Accepted && dlg.hasChoice()) {
         m_current = dlg.chosenSequence();
         setCurrentSequence(m_current, QStringLiteral("Bibliothek: %1").arg(dlg.chosenName()));
+    }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::importMotifsToLibrary()
+{
+    const QStringList files = QFileDialog::getOpenFileNames(
+        this,
+        QStringLiteral("JEF-Stickmuster in Bibliothek importieren"),
+        QString(),
+        QStringLiteral("Janome Stickdateien (*.jef *.JEF);;Alle Dateien (*.*)"));
+
+    if (files.isEmpty()) return;
+
+    int imported = 0;
+    for (const QString& fn : files) {
+        QFileInfo fi(fn);
+        const QString name = fi.baseName().replace('_', ' ');
+        const QString id = LibraryBuilder::importJef(*m_library, fn, name,
+                                                    QStringLiteral("Eigene"),
+                                                    { QStringLiteral("eigen"), QStringLiteral("import"), fi.baseName().toLower() });
+        if (!id.isEmpty()) imported++;
+    }
+
+    if (imported > 0) {
+        m_library->writeIndex();
+        statusBar()->showMessage(QStringLiteral("%1 Stickmuster erfolgreich in die Bibliothek importiert.").arg(imported), 6000);
+        QMessageBox::information(this, windowTitle(),
+            QStringLiteral("%1 Stickmuster erfolgreich in deine Bibliothek importiert!").arg(imported));
     }
 }
 

@@ -36,6 +36,8 @@ public:
 
     static QString styleSheet();      ///< the app-wide dark theme
 
+    DesignLibrary* library() const { return m_library.get(); }
+
     void captureManualScreenshots(const QString& outDir);
 
 public slots:
@@ -70,6 +72,8 @@ private slots:
     void exportSizeVariants();
     void phoneUpload();
     void openLibrary();
+    void openLibraryCategory(const QString& category);
+    void importMotifsToLibrary();
     void saveToLibrary();
     void showWizard();
     void maybeShowWizardOnStart();

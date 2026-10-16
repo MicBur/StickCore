@@ -2,6 +2,8 @@
 //  StickCore  –  main.cpp
 // ---------------------------------------------------------------------------
 #include "MainWindow.h"
+#include "library/LibraryBuilder.h"
+#include "library/LibraryDialog.h"
 
 #include <QApplication>
 #include <QSurfaceFormat>
@@ -28,17 +30,45 @@ int main(int argc, char** argv)
     for (const QString& f : fdir.entryList(QStringList() << QStringLiteral("*.ttf")))
         QFontDatabase::addApplicationFont(fdir.filePath(f));
     app.setStyleSheet(stick::MainWindow::styleSheet());
+
+    const QStringList args = app.arguments();
+    const int bi = args.indexOf(QStringLiteral("--build-library"));
+    if (bi >= 0) {
+        QString targetDir = (bi + 1 < args.size() && !args[bi + 1].startsWith(QStringLiteral("--")))
+            ? args[bi + 1]
+            : (QDir::currentPath() + QStringLiteral("/library"));
+        QString mefDir = (bi + 2 < args.size() && !args[bi + 2].startsWith(QStringLiteral("--")))
+            ? args[bi + 2]
+            : QStringLiteral("C:/Users/micbu/Downloads/mef");
+        stick::LibraryBuilder::buildAll(targetDir, mefDir);
+        return 0;
+    }
+
     stick::MainWindow w;
     w.show();
-
-    // Optional: "--shot <file>" grabs the window then quits (for CI/preview).
-    const QStringList args = app.arguments();
     const int mi = args.indexOf(QStringLiteral("--manual-shots"));
     if (mi >= 0 && mi + 1 < args.size()) {
         const QString outDir = args[mi + 1];
         QTimer::singleShot(800, [&w, outDir]() {
             w.captureManualScreenshots(outDir);
             qApp->quit();
+        });
+        return app.exec();
+    }
+
+    const int libi = args.indexOf(QStringLiteral("--shot-library"));
+    if (libi >= 0 && libi + 1 < args.size()) {
+        const QString out = args[libi + 1];
+        const QString cat = (libi + 2 < args.size() && !args[libi + 2].startsWith(QStringLiteral("--")))
+            ? args[libi + 2] : QString();
+        QTimer::singleShot(500, [&w, out, cat]() {
+            auto* dlg = new stick::LibraryDialog(w.library(), cat, &w);
+            dlg->show();
+            qApp->processEvents();
+            QTimer::singleShot(250, [dlg, out]() {
+                dlg->grab().save(out);
+                qApp->quit();
+            });
         });
         return app.exec();
     }

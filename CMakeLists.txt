@@ -109,6 +109,8 @@ add_executable(StickCore WIN32
     src/library/DesignFactory.h
     src/library/DesignLibrary.cpp
     src/library/DesignLibrary.h
+    src/library/LibraryBuilder.cpp
+    src/library/LibraryBuilder.h
     src/library/LibraryDialog.cpp
     src/library/LibraryDialog.h
     src/ui/WelcomeWizard.cpp
@@ -186,6 +188,7 @@ add_executable(StickCoreTests
     src/codec/DstCodec.cpp
     src/library/DesignFactory.cpp
     src/library/DesignLibrary.cpp
+    src/library/LibraryBuilder.cpp
     src/net/QrCode.cpp
     src/net/QrUploadServer.cpp
     ${STICK_OPENCV_QRC}

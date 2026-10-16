@@ -10,12 +10,12 @@ if (!(Test-Path $outputDir)) { New-Item -ItemType Directory -Path $outputDir | O
 
 # 1. Update StickCore.exe from build-local
 Copy-Item "e:\StickCore\build-local\StickCore.exe" "$deployDir\StickCore.exe" -Force
-Write-Host "✓ Copied latest StickCore.exe"
+Write-Host "[OK] Copied latest StickCore.exe"
 
 # 2. Run windeployqt
 Write-Host "Running windeployqt..."
 & "C:\Qt\6.12.0\mingw_64\bin\windeployqt.exe" --release --compiler-runtime "$deployDir\StickCore.exe"
-Write-Host "✓ windeployqt completed"
+Write-Host "[OK] windeployqt completed"
 
 # 3. Create fonts directory and copy all fonts
 $fontsDir = "$deployDir\fonts"
@@ -24,13 +24,20 @@ if (!(Test-Path $fontsDir)) { New-Item -ItemType Directory -Path $fontsDir | Out
 Copy-Item "e:\StickCore\assets\fonts\*.ttf" $fontsDir -Force
 Copy-Item "e:\StickCore\media\fonts\*.ttf" $fontsDir -Force
 $fontCount = (Get-ChildItem $fontsDir -Filter "*.ttf").Count
-Write-Host "✓ Copied $fontCount TrueType fonts into deploy\fonts"
+Write-Host "[OK] Copied $fontCount TrueType fonts into deploy\fonts"
 
 # 4. Copy logo and icon assets
 Copy-Item "e:\StickCore\media\stickcore.ico" "$deployDir\stickcore.ico" -Force
 Copy-Item "e:\StickCore\media\stickcore_logo.png" "$deployDir\stickcore_logo.png" -Force
 Copy-Item "e:\StickCore\media\stickcore_badge.png" "$deployDir\stickcore_badge.png" -Force
-Write-Host "✓ Copied branding & icon assets"
+Write-Host "[OK] Copied branding and icon assets"
+
+# 4b. Copy unified Design Library (750+ motifs, thumbnails and index)
+$deployLibDir = "$deployDir\library"
+if (!(Test-Path $deployLibDir)) { New-Item -ItemType Directory -Path $deployLibDir | Out-Null }
+Copy-Item "e:\StickCore\library\*" $deployLibDir -Recurse -Force
+$scdCount = (Get-ChildItem "$deployLibDir\designs" -Filter "*.scd").Count
+Write-Host "[OK] Copied $scdCount embroidery designs and thumbnails into deploy\library"
 
 # 5. Create 1-Click Font Installer script in deploy
 $fontInstallerScript = @'
@@ -57,7 +64,7 @@ $setupBat = @'
 @echo off
 chcp 65001 >nul
 echo ===================================================
-echo     StickCore Studio v1.0.0 - Setup & Installation
+echo     StickCore Studio v1.0.1 - Setup & Installation
 echo ===================================================
 echo.
 
@@ -67,7 +74,7 @@ if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
 xcopy /E /I /Y "%~dp0*" "%TARGET_DIR%\" >nul
 
 echo [2/3] Registriere Desktop- & Startmenue-Verknuepfungen...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\StickCore Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\StickCore.exe'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.IconLocation = '%TARGET_DIR%\stickcore.ico,0'; $s.Description = 'StickCore Studio — Professionelle Sticksoftware'; $s.Save()"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\StickCore Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\StickCore.exe'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.IconLocation = '%TARGET_DIR%\stickcore.ico,0'; $s.Description = 'StickCore Studio - Professionelle Sticksoftware'; $s.Save()"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $smDir = [Environment]::GetFolderPath('Programs') + '\StickCore'; if (!(Test-Path $smDir)) { New-Item -ItemType Directory -Path $smDir | Out-Null }; $s = $ws.CreateShortcut($smDir + '\StickCore Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\StickCore.exe'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.IconLocation = '%TARGET_DIR%\stickcore.ico,0'; $s.Description = 'StickCore Studio'; $s.Save()"
 
@@ -85,19 +92,22 @@ start "" "%TARGET_DIR%\StickCore.exe"
 '@
 Set-Content -Path "$deployDir\Setup-StickCore.bat" -Value $setupBat -Encoding OEM
 
-# Also create portable launcher
+# Portable launcher
 $runBat = @'
 @echo off
 start "" "%~dp0StickCore.exe" %*
 '@
 Set-Content -Path "$deployDir\StickCore.bat" -Value $runBat -Encoding OEM
 
-# 7. Create ZIP package
-$zipFile = "$outputDir\StickCore-Portable-v1.0.0.zip"
-if (Test-Path $zipFile) { Remove-Item $zipFile -Force }
-Write-Host "Creating ZIP archive: $zipFile..."
-Compress-Archive -Path "$deployDir\*" -DestinationPath $zipFile -Force
-$zipSizeMb = [math]::Round((Get-Item $zipFile).Length / 1MB, 2)
-Write-Host "Created ZIP package: $zipFile ($zipSizeMb MB)" -ForegroundColor Green
+# 7. Create ZIP packages
+$zipFile101 = "$outputDir\StickCore-Portable-v1.0.1.zip"
+$zipFile100 = "$outputDir\StickCore-Portable-v1.0.0.zip"
+if (Test-Path $zipFile101) { Remove-Item $zipFile101 -Force }
+Write-Host "Creating ZIP archive: $zipFile101..."
+Compress-Archive -Path "$deployDir\*" -DestinationPath $zipFile101 -Force
+Copy-Item $zipFile101 $zipFile100 -Force
+$zipLen = (Get-Item $zipFile101).Length
+$zipSizeMb = [math]::Round($zipLen / 1MB, 2)
+Write-Host "Created ZIP package: $zipFile101 ($zipSizeMb MB)" -ForegroundColor Green
 
 Write-Host "=== Package Assembly Complete! ===" -ForegroundColor Cyan

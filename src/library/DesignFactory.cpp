@@ -143,9 +143,16 @@ Design D(const QString& n, const QString& cat, QStringList tags, StitchSequence 
 
 QStringList DesignFactory::categories()
 {
-    return { QStringLiteral("Logos"), QStringLiteral("Formen"),
-             QStringLiteral("Monogramme"), QStringLiteral("Ränder"),
-             QStringLiteral("Feiertage"), QStringLiteral("Symbole") };
+    return { QStringLiteral("🏫 College Buchstaben (A-Z)"),
+             QStringLiteral("🔢 College Zahlen (0-9)"),
+             QStringLiteral("🪡 Applikation Ziffern (0-9)"),
+             QStringLiteral("🚒 Feuerwehr & Kiel"),
+             QStringLiteral("Logos"),
+             QStringLiteral("Formen"),
+             QStringLiteral("Monogramme"),
+             QStringLiteral("Ränder"),
+             QStringLiteral("Feiertage"),
+             QStringLiteral("Symbole") };
 }
 
 std::vector<Design> DesignFactory::starterSet()

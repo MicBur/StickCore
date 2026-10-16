@@ -14,6 +14,7 @@
 #include <QDataStream>
 #include <QUuid>
 #include <QImage>
+#include <QCoreApplication>
 
 namespace stick {
 
@@ -71,7 +72,19 @@ DesignLibrary::DesignLibrary(const QString& baseDir)
         : baseDir;
 }
 
-QString DesignLibrary::absPath(const QString& rel) const { return m_base + QStringLiteral("/") + rel; }
+QString DesignLibrary::bundledPath()
+{
+    return QCoreApplication::applicationDirPath() + QStringLiteral("/library");
+}
+
+QString DesignLibrary::absPath(const QString& rel) const
+{
+    const QString userPath = m_base + QStringLiteral("/") + rel;
+    if (QFile::exists(userPath)) return userPath;
+    const QString bPath = bundledPath() + QStringLiteral("/") + rel;
+    if (QFile::exists(bPath)) return bPath;
+    return userPath;
+}
 
 QString DesignLibrary::slug(const QString& s)
 {
@@ -88,7 +101,11 @@ QString DesignLibrary::slug(const QString& s)
 bool DesignLibrary::readIndex()
 {
     m_entries.clear();
-    QFile f(absPath(QStringLiteral("index.json")));
+    QString idxPath = absPath(QStringLiteral("index.json"));
+    if (!QFile::exists(idxPath)) {
+        idxPath = bundledPath() + QStringLiteral("/index.json");
+    }
+    QFile f(idxPath);
     if (!f.open(QIODevice::ReadOnly)) return false;
     const QJsonArray arr = QJsonDocument::fromJson(f.readAll()).array();
     for (const QJsonValue& v : arr) {
@@ -100,6 +117,15 @@ bool DesignLibrary::readIndex()
         e.file = o["file"].toString(); e.thumb = o["thumb"].toString();
         e.stitches = o["stitches"].toInt(); e.colors = o["colors"].toInt();
         e.wMm = o["w"].toDouble(); e.hMm = o["h"].toDouble();
+        e.sizeTag = o["sizeTag"].toString();
+        if (e.sizeTag.isEmpty()) {
+            for (const QString& t : e.tags) {
+                if (t.endsWith(QStringLiteral("in")) || t.endsWith(QStringLiteral("mm"))) {
+                    e.sizeTag = t;
+                    break;
+                }
+            }
+        }
         m_entries.push_back(e);
     }
     return true;
@@ -115,12 +141,73 @@ bool DesignLibrary::writeIndex() const
         o["file"] = e.file; o["thumb"] = e.thumb;
         o["stitches"] = e.stitches; o["colors"] = e.colors;
         o["w"] = e.wMm; o["h"] = e.hMm;
+        if (!e.sizeTag.isEmpty()) o["sizeTag"] = e.sizeTag;
         arr.append(o);
     }
-    QFile f(absPath(QStringLiteral("index.json")));
+    QDir().mkpath(m_base);
+    QFile f(m_base + QStringLiteral("/index.json"));
     if (!f.open(QIODevice::WriteOnly)) return false;
     f.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
     return true;
+}
+
+int DesignLibrary::syncFromBundled(const QString& bundledDir)
+{
+    const QString bIndex = bundledDir + QStringLiteral("/index.json");
+    if (!QFile::exists(bIndex)) return 0;
+
+    QFile f(bIndex);
+    if (!f.open(QIODevice::ReadOnly)) return 0;
+    const QJsonArray bArr = QJsonDocument::fromJson(f.readAll()).array();
+    f.close();
+
+    QDir().mkpath(m_base + QStringLiteral("/designs"));
+    QDir().mkpath(m_base + QStringLiteral("/thumbs"));
+
+    // Build a set of existing IDs in user library
+    QSet<QString> existingIds;
+    for (const LibraryEntry& e : m_entries) existingIds.insert(e.id);
+
+    int added = 0;
+    for (const QJsonValue& v : bArr) {
+        const QJsonObject o = v.toObject();
+        const QString id = o["id"].toString();
+        if (id.isEmpty()) continue;
+
+        LibraryEntry e;
+        e.id = id; e.name = o["name"].toString();
+        e.category = o["category"].toString();
+        for (const QJsonValue& t : o["tags"].toArray()) e.tags << t.toString();
+        e.file = o["file"].toString(); e.thumb = o["thumb"].toString();
+        e.stitches = o["stitches"].toInt(); e.colors = o["colors"].toInt();
+        e.wMm = o["w"].toDouble(); e.hMm = o["h"].toDouble();
+        e.sizeTag = o["sizeTag"].toString();
+
+        const QString srcFile  = bundledDir + QStringLiteral("/") + e.file;
+        const QString dstFile  = m_base + QStringLiteral("/") + e.file;
+        const QString srcThumb = bundledDir + QStringLiteral("/") + e.thumb;
+        const QString dstThumb = m_base + QStringLiteral("/") + e.thumb;
+
+        if (QFile::exists(srcFile) && !QFile::exists(dstFile)) {
+            QDir().mkpath(QFileInfo(dstFile).dir().path());
+            QFile::copy(srcFile, dstFile);
+        }
+        if (QFile::exists(srcThumb) && !QFile::exists(dstThumb)) {
+            QDir().mkpath(QFileInfo(dstThumb).dir().path());
+            QFile::copy(srcThumb, dstThumb);
+        }
+
+        if (!existingIds.contains(id)) {
+            m_entries.push_back(e);
+            existingIds.insert(id);
+            added++;
+        }
+    }
+
+    if (added > 0) {
+        writeIndex();
+    }
+    return added;
 }
 
 int DesignLibrary::ensurePopulated()
@@ -128,46 +215,69 @@ int DesignLibrary::ensurePopulated()
     QDir().mkpath(absPath(QStringLiteral("designs")));
     QDir().mkpath(absPath(QStringLiteral("thumbs")));
 
-    const bool fresh = !QFile::exists(absPath(QStringLiteral("index.json")));
-    if (fresh) {
+    const QString bDir = bundledPath();
+    const bool haveBundled = QFile::exists(bDir + QStringLiteral("/index.json"));
+    const bool haveUserIndex = QFile::exists(m_base + QStringLiteral("/index.json"));
+
+    if (haveUserIndex) {
+        readIndex();
+        if (haveBundled) {
+            syncFromBundled(bDir);
+        }
+    } else if (haveBundled) {
+        syncFromBundled(bDir);
+        readIndex();
+    } else {
+        // Fresh start without bundled files: generate built-in starter set
         for (const Design& d : DesignFactory::starterSet())
             add(d.name, d.category, d.tags, d.seq, false);
-        writeIndex();   // write once after batch loading
-    } else {
-        readIndex();
+        writeIndex();
     }
     return int(m_entries.size());
 }
 
 QString DesignLibrary::add(const QString& name, const QString& category,
                            const QStringList& tags, const StitchSequence& seq,
-                           bool updateIndex)
+                           bool updateIndex, const QString& sizeTag,
+                           const QString& explicitId)
 {
     if (m_entries.isEmpty() && QFile::exists(absPath(QStringLiteral("index.json"))))
         readIndex();
-    QDir().mkpath(absPath(QStringLiteral("designs")));
-    QDir().mkpath(absPath(QStringLiteral("thumbs")));
+    QDir().mkpath(m_base + QStringLiteral("/designs"));
+    QDir().mkpath(m_base + QStringLiteral("/thumbs"));
 
-    const QString id = slug(name) + QStringLiteral("-") +
-                       QUuid::createUuid().toString(QUuid::Id128).left(6);
+    const QString id = !explicitId.isEmpty() ? explicitId : (slug(name) + QStringLiteral("-") +
+                       QUuid::createUuid().toString(QUuid::Id128).left(6));
     const QString file  = QStringLiteral("designs/%1.scd").arg(id);
     const QString thumb = QStringLiteral("thumbs/%1.png").arg(id);
 
     // data
-    QFile df(absPath(file));
+    QFile df(m_base + QStringLiteral("/") + file);
     if (!df.open(QIODevice::WriteOnly)) return QString();
     df.write(encodeSeq(seq));
     df.close();
 
-    // thumbnail
-    StitchThumbnail::render(seq, 240).save(absPath(thumb), "PNG");
+    // thumbnail (realistic thread on fabric)
+    StitchThumbnail::render(seq, 240, QColor(0xEF, 0xEA, 0xDE), true).save(m_base + QStringLiteral("/") + thumb, "PNG");
 
     LibraryEntry e;
     e.id = id; e.name = name; e.category = category; e.tags = tags;
     e.file = file; e.thumb = thumb;
     e.stitches = int(seq.realStitchCount()); e.colors = int(seq.palette.size());
+    e.sizeTag = sizeTag;
     double x0,y0,x1,y1; if (seq.bounds(x0,y0,x1,y1)) { e.wMm = x1-x0; e.hMm = y1-y0; }
-    m_entries.push_back(e);
+
+    // Replace if same id exists, else append
+    bool found = false;
+    for (LibraryEntry& existing : m_entries) {
+        if (existing.id == id) {
+            existing = e;
+            found = true;
+            break;
+        }
+    }
+    if (!found) m_entries.push_back(e);
+
     if (updateIndex)
         writeIndex();
     return id;
@@ -192,12 +302,16 @@ QStringList DesignLibrary::categoriesPresent() const
     return out;
 }
 
-QVector<LibraryEntry> DesignLibrary::search(const QString& query, const QString& category) const
+QVector<LibraryEntry> DesignLibrary::search(const QString& query,
+                                           const QString& category,
+                                           const QString& sizeTag) const
 {
     const QString q = query.trimmed().toLower();
+    const QString st = sizeTag.trimmed().toLower();
     QVector<LibraryEntry> out;
     for (const LibraryEntry& e : m_entries) {
         if (!category.isEmpty() && e.category != category) continue;
+        if (!st.isEmpty() && e.sizeTag.toLower() != st && !e.tags.contains(st)) continue;
         if (!q.isEmpty()) {
             QString hay = (e.name + " " + e.category + " " + e.tags.join(" ")).toLower();
             if (!hay.contains(q)) continue;
