@@ -14,6 +14,7 @@
 #include "generators/HuntingMotifs.h"
 #include "core/ThreadCatalog.h"
 #include "core/MachineProfile.h"
+#include "core/Geometry.h"
 #include "codec/JefCodec.h"
 #include "codec/DstCodec.h"
 #include "net/QrCode.h"
@@ -653,6 +654,345 @@ static void generateManualAssets(const QString& outDir)
     std::printf("  ok  : generated %s\n", f13.toUtf8().constData());
 }
 
+static void generateKielerWappen()
+{
+    std::printf("== Generating Official Upright Kieler Wappen (Black-First, Janome MC350E Hoop A) ==\n");
+
+    const ThreadColor colBlack(QColor(12, 12, 12), QStringLiteral("Janome Black"), 1);
+    const ThreadColor colWhite(QColor(250, 250, 250), QStringLiteral("Janome White"), 2);
+    const ThreadColor colRed  (QColor(210, 25, 35),  QStringLiteral("Janome Deep Red"), 76);
+
+    // Coordinate transformation helper:
+    // In SVG:
+    //   Shield bounding box: X in [17.101, 659.337] (width 642.236), Y in [16.884, 693.940] (height 677.056)
+    //   Center: Xc = 338.219, Yc = 355.412
+    // For Janome MC350E Hoop A: target width = 75.0 mm.
+    // Scale S = 75.0 / 642.235825 = 0.11677953 mm / SVG unit.
+    // Height = 677.056598 * S = 79.066 mm.
+    // In StickCore / JEF stitches: +Y is UP (top), -Y is DOWN (bottom).
+    // Therefore: y_stitch = -(svgY - 355.41194) * S (the negative sign ensures 100% upright orientation).
+    auto toStitchPoint = [](double svgX, double svgY) -> QPointF {
+        double x = (svgX - 338.21908) * 0.11677953;
+        double y = -(svgY - 355.41194) * 0.11677953;
+        return QPointF(x, y);
+    };
+
+    // Helper: Contour satin stitches (Kettelrand) along a polygon
+    auto makeKettelContour = [](const QVector<QPointF>& inputPts, double widthMm, double pitchMm, int colIdx) -> StitchSequence {
+        StitchSequence seq;
+        if (inputPts.size() < 2) return seq;
+        QVector<QPointF> pts = inputPts;
+        if (std::hypot(pts.first().x() - pts.last().x(), pts.first().y() - pts.last().y()) > 1e-3) {
+            pts.push_back(pts.first());
+        }
+        double totalL = 0;
+        for (int i = 0; i < pts.size() - 1; ++i)
+            totalL += std::hypot(pts[i+1].x() - pts[i].x(), pts[i+1].y() - pts[i].y());
+        if (totalL < 1e-3) return seq;
+        int steps = std::max(4, static_cast<int>(std::llround(totalL / pitchMm)));
+        bool outer = true;
+        for (int i = 0; i <= steps; ++i) {
+            double s = static_cast<double>(i) / steps;
+            double target = s * totalL;
+            double acc = 0;
+            QPointF p0 = pts.first(), p1 = pts.last();
+            QPointF curr = pts.last();
+            for (int j = 0; j < pts.size() - 1; ++j) {
+                double segL = std::hypot(pts[j+1].x() - pts[j].x(), pts[j+1].y() - pts[j].y());
+                if (acc + segL >= target || j == pts.size() - 2) {
+                    double rem = (target - acc) / std::max(1e-6, segL);
+                    rem = std::clamp(rem, 0.0, 1.0);
+                    curr = pts[j] + (pts[j+1] - pts[j]) * rem;
+                    p0 = pts[j];
+                    p1 = pts[j+1];
+                    break;
+                }
+                acc += segL;
+            }
+            QPointF dir = p1 - p0;
+            double dlen = std::hypot(dir.x(), dir.y());
+            QPointF normal(0, 0);
+            if (dlen > 1e-6) normal = QPointF(-dir.y() / dlen, dir.x() / dlen);
+            QPointF pt = curr + normal * (outer ? (widthMm * 0.5) : (-widthMm * 0.5));
+            seq.add(pt.x(), pt.y(), (i == 0) ? SF_Jump : SF_Normal, colIdx);
+            outer = !outer;
+        }
+        return seq;
+    };
+
+    // 1. Shield Geometry
+    const QString shieldD = QStringLiteral(
+        "M 17.101165,16.883642 L 659.33699,16.883642 "
+        "C 649.81982,134.56077 640.62988,245.53262 631.15109,343.82332 "
+        "C 617.56651,451.11662 546.5855,591.33768 338.57938,693.94024 "
+        "C 121.48621,602.66642 57.664746,449.86598 43.258438,343.96904 "
+        "C 30.078052,247.08353 22.568575,95.193505 17.101165,16.883642 z"
+    );
+    QPainterPath shieldPath = SvgPathParser::parsePathData(shieldD);
+    QList<QPolygonF> shieldPolys = shieldPath.toSubpathPolygons();
+    QPolygonF shieldPoly;
+    for (const QPolygonF& sp : shieldPolys) {
+        if (sp.size() > shieldPoly.size()) {
+            shieldPoly.clear();
+            for (const QPointF& pt : sp) shieldPoly << toStitchPoint(pt.x(), pt.y());
+        }
+    }
+
+    // 2. Nesselblatt Geometry (Holstein nettle leaf)
+    const QVector<QPointF> rawNesselPts = {
+        {177.957,10.294}, {151.33,84.175}, {125.078,12.366}, {97.32,85.675}, {70.316,15.925},
+        {16.306,15.925}, {16.306,68.804}, {84.956,97.685}, {15.553,134.437}, {88.697,147.186},
+        {31.686,189.948}, {107.439,192.2}, {56.444,243.948}, {128.457,234.569}, {86.826,289.709},
+        {165.202,269.083}, {134.457,324.221}, {177.957,356.661}, {221.471,324.221}, {190.712,269.083},
+        {269.102,289.709}, {227.458,234.569}, {299.47,243.948}, {248.461,192.2}, {324.213,189.948},
+        {267.217,147.186}, {340.345,134.437}, {270.972,97.685}, {339.591,68.804}, {339.591,15.925},
+        {285.584,15.925}, {258.594,85.675}, {230.848,12.366}, {204.584,84.175}, {177.957,10.294}
+    };
+    QPolygonF nesselPoly;
+    for (const QPointF& pt : rawNesselPts) {
+        double svgX = pt.x() * 1.793022 + 17.7285;
+        double svgY = pt.y() * 1.81357 + 16.2626;
+        nesselPoly << toStitchPoint(svgX, svgY);
+    }
+
+    // 3. Boat Geometry (Kieler Schiff mit Planken)
+    const QString boatD = QStringLiteral(
+        "M -432.55654,322.88989 C -450.42221,317.99325 -470.08987,312.99324 -484.6008,303.52459 C -470.96487,319.23191 -451.34562,335.48332 -432.57805,343.5537 L -432.55654,322.88989 z "
+        "M -349.80319,325.71181 C -360.61332,327.63601 -373.44956,328.64798 -384.93746,328.64798 C -384.93746,328.64798 -408.70934,327.63419 -419.51947,325.71181 L -419.49437,348.43946 C -408.78644,351.40284 -395.9484,352.98065 -384.3852,352.98065 C -374.32814,352.98065 -360.56311,351.40284 -349.83008,348.43946 L -349.80319,325.71181 z "
+        "M -391.0409,317.08283 C -414.83789,316.21052 -440.81161,310.69001 -460.88091,303.25073 L -460.83071,278.96522 C -440.91561,286.33014 -415.11581,291.6312 -391.0678,292.49264 L -391.0409,317.08283 z "
+        "M -474.14389,274.32248 C -488.58131,267.24955 -504.32225,256.93397 -514.35421,247.0355 C -511.07657,257.24771 -505.29586,273.47373 -500.16782,282.53433 C -492.71064,287.89886 -482.90102,294.35336 -474.1421,298.60618 L -474.1421,274.32248 L -474.14389,274.32248 z "
+        "M -350.02911,278.76211 C -360.68862,280.25467 -373.00131,281.06714 -384.43541,281.06714 C -395.89641,281.06714 -408.63224,280.25467 -419.31866,278.76211 L -419.31866,257.65214 C -408.68245,259.08305 -395.92151,259.83025 -384.43541,259.83025 C -372.94931,259.83025 -360.66352,259.08305 -350.02911,257.65214 L -350.02911,278.76211 L -350.02911,278.76211 z "
+        "M -336.74461,322.8645 C -318.92555,317.99145 -299.23279,312.99324 -284.74517,303.52459 C -298.33269,319.23191 -318.00214,335.48332 -336.74461,343.51744 L -336.74461,322.8645 z "
+        "M -378.27996,317.08283 C -354.48477,316.21052 -328.53615,310.69001 -308.46506,303.25073 L -308.51526,278.96522 C -328.40705,286.33014 -354.20506,291.6312 -378.22797,292.49264 L -378.27996,317.08283 z "
+        "M -295.17697,274.32248 C -280.74135,267.24955 -265.00041,256.93397 -254.99355,247.0355 C -258.2694,257.24771 -264.0268,273.47373 -269.17815,282.53433 C -276.63533,287.89886 -286.39654,294.35336 -295.17697,298.60618 L -295.17697,274.32248 z "
+        "M -336.5922,276.54773 L -336.5922,255.61731 C -327.80998,253.76748 -317.89994,250.66809 -310.14154,247.93504 L -310.14154,215.98174 L -293.75331,215.98174 L -293.75331,241.17404 C -266.72709,228.14172 -249.7382,209.37672 -249.6109,188.53335 L -228.84053,188.53335 C -228.54289,192.93671 -228.6164,196.3172 -228.6164,200.82211 C -228.6164,296.82162 -296.90365,375.88967 -384.63623,376.03112 C -471.46691,375.36918 -540.70626,296.82162 -540.70626,200.82211 C -540.70626,196.3172 -540.77977,192.93671 -540.48034,188.53335 L -519.71176,188.53335 C -519.58804,209.37854 -502.59736,228.14172 -475.56935,241.17404 L -475.56935,215.98174 L -459.20623,215.98174 L -459.20623,247.93504 C -451.42272,250.66989 -441.51448,253.76929 -432.70536,255.61731 L -432.70536,276.54773 C -445.24217,273.7766 -458.53026,269.21728 -469.16288,264.57635 C -469.16288,264.57635 -473.77095,262.58686 -476.0194,261.41168 C -479.84929,259.52556 -483.57698,257.50343 -487.08055,255.37611 C -515.08218,239.32782 -527.6943,222.70102 -528.91893,221.37347 C -519.96099,301.22317 -458.70418,363.68796 -384.66133,363.84212 C -309.34364,363.68796 -249.38677,301.22498 -240.37863,221.37347 C -241.62836,222.70102 -254.21717,239.32782 -282.2439,255.37611 C -285.77257,257.50343 -289.45006,259.52556 -293.30506,261.41168 C -295.55709,262.58686 -297.88264,263.75118 -300.28529,264.94269 C -300.2835,264.94452 -324.10559,273.7766 -336.5922,276.54773 z"
+    );
+    QPainterPath boatRawPath = SvgPathParser::parsePathData(boatD);
+    QList<QPolygonF> rawBoatPolys = boatRawPath.toSubpathPolygons();
+    QPolygonF boatOuterHull;
+    QVector<QPolygonF> boatOpenings;
+    double maxBoatArea = 0;
+    for (const QPolygonF& bp : rawBoatPolys) {
+        QPolygonF sp;
+        for (const QPointF& pt : bp) {
+            double svgX = pt.x() + 721.1587;
+            double svgY = pt.y() + 15.16174;
+            sp << toStitchPoint(svgX, svgY);
+        }
+        double a = std::abs(polygonSignedAreaDouble(sp));
+        if (a > maxBoatArea) {
+            maxBoatArea = a;
+            boatOuterHull = sp;
+        }
+    }
+    for (const QPolygonF& bp : rawBoatPolys) {
+        QPolygonF sp;
+        for (const QPointF& pt : bp) {
+            double svgX = pt.x() + 721.1587;
+            double svgY = pt.y() + 15.16174;
+            sp << toStitchPoint(svgX, svgY);
+        }
+        if (sp != boatOuterHull) {
+            boatOpenings.push_back(sp);
+        }
+    }
+
+    // --- Generate Stitch Components ---
+
+    // A. Boat stitches (COLOR 0 = BLACK)
+    QVector<QPolygonF> boatRegion;
+    boatRegion.push_back(boatOuterHull);
+    for (const QPolygonF& op : boatOpenings) boatRegion.push_back(op);
+
+    TatamiFill::Params tpBoat;
+    tpBoat.fillAngleDeg = 45.0;
+    tpBoat.rowSpacingMm = 0.38;
+    tpBoat.maxStitchMm = 3.5;
+    tpBoat.underlay = true;
+    tpBoat.colorIdx = 0; // Black
+    StitchSequence seqBoatFill = TatamiFill::generate(boatRegion, tpBoat);
+
+    QVector<QPointF> hullPts;
+    for (const QPointF& pt : boatOuterHull) hullPts.push_back(pt);
+    StitchSequence seqHullOutline = makeKettelContour(hullPts, 1.1, 0.38, 0);
+
+    StitchSequence seqBoatOpenings;
+    for (const QPolygonF& op : boatOpenings) {
+        QVector<QPointF> opPts;
+        for (const QPointF& pt : op) opPts.push_back(pt);
+        StitchSequence sb = makeKettelContour(opPts, 0.75, 0.38, 0);
+        seqBoatOpenings.stitches.insert(seqBoatOpenings.stitches.end(), sb.stitches.begin(), sb.stitches.end());
+    }
+
+    // B. Nesselblatt stitches (COLOR 1 = WHITE)
+    QVector<QPointF> nesselPts;
+    for (const QPointF& pt : nesselPoly) nesselPts.push_back(pt);
+    StitchSequence seqNesselKettel = makeKettelContour(nesselPts, 1.8, 0.38, 1); // 1.8 mm white satin border
+    StitchSequence seqNesselContour = makeKettelContour(nesselPts, 1.2, 0.38, 1);
+
+    QVector<QPolygonF> nesselRegion;
+    nesselRegion.push_back(nesselPoly);
+    nesselRegion.push_back(boatOuterHull); // Disjoint cutout: white does NOT sew over the black boat!
+    TatamiFill::Params tpNessel;
+    tpNessel.fillAngleDeg = 135.0;
+    tpNessel.rowSpacingMm = 0.38;
+    tpNessel.maxStitchMm = 3.5;
+    tpNessel.underlay = true;
+    tpNessel.colorIdx = 1; // White
+    StitchSequence seqNesselFill = TatamiFill::generate(nesselRegion, tpNessel);
+
+    // C. Shield stitches (COLOR 2 = RED)
+    QVector<QPointF> shieldPts;
+    for (const QPointF& pt : shieldPoly) shieldPts.push_back(pt);
+    StitchSequence seqShieldKettel = makeKettelContour(shieldPts, 2.5, 0.38, 2); // 2.5 mm 3D Kettelrand
+
+    QVector<QPolygonF> shieldRegion;
+    shieldRegion.push_back(shieldPoly);
+    shieldRegion.push_back(nesselPoly); // Disjoint cutout: red does NOT sew over the white Nesselblatt!
+    TatamiFill::Params tpShield;
+    tpShield.fillAngleDeg = 0.0;
+    tpShield.rowSpacingMm = 0.40;
+    tpShield.maxStitchMm = 4.0;
+    tpShield.underlay = true;
+    tpShield.colorIdx = 2; // Red
+    StitchSequence seqShieldFill = TatamiFill::generate(shieldRegion, tpShield);
+
+    // Helper to center sequence
+    auto centerSeq = [](StitchSequence& s) {
+        double x0, y0, x1, y1;
+        if (s.bounds(x0, y0, x1, y1)) {
+            double cx = 0.5 * (x0 + x1);
+            double cy = 0.5 * (y0 + y1);
+            s.translate(-cx, -cy);
+        }
+    };
+
+    // =========================================================================
+    // DESIGN 1: Kettelrand & Satin-Konturen (Patch Style, Hoop A)
+    // =========================================================================
+    StitchSequence seqKettel;
+    seqKettel.palette.push_back(colBlack); // Color 0: Black
+    seqKettel.palette.push_back(colWhite); // Color 1: White
+    seqKettel.palette.push_back(colRed);   // Color 2: Red
+
+    // 1. Color 0 (Black): Boat fill + hull outline + openings
+    seqKettel.stitches.insert(seqKettel.stitches.end(), seqBoatFill.stitches.begin(), seqBoatFill.stitches.end());
+    seqKettel.stitches.insert(seqKettel.stitches.end(), seqHullOutline.stitches.begin(), seqHullOutline.stitches.end());
+    seqKettel.stitches.insert(seqKettel.stitches.end(), seqBoatOpenings.stitches.begin(), seqBoatOpenings.stitches.end());
+
+    // Color stop 1 -> White
+    if (!seqKettel.stitches.empty() && !seqNesselKettel.stitches.empty()) {
+        seqNesselKettel.stitches.front().flags = SF_ColorChange;
+    }
+    // 2. Color 1 (White): 1.8mm satin border around Nesselblatt
+    seqKettel.stitches.insert(seqKettel.stitches.end(), seqNesselKettel.stitches.begin(), seqNesselKettel.stitches.end());
+
+    // Color stop 2 -> Red
+    if (!seqKettel.stitches.empty() && !seqShieldKettel.stitches.empty()) {
+        seqShieldKettel.stitches.front().flags = SF_ColorChange;
+    }
+    // 3. Color 2 (Red): 2.5mm 3D Kettelrand around shield
+    seqKettel.stitches.insert(seqKettel.stitches.end(), seqShieldKettel.stitches.begin(), seqShieldKettel.stitches.end());
+    centerSeq(seqKettel);
+
+    // =========================================================================
+    // DESIGN 2: Meister-Vollstick (Full Tatami + Satin Borders, Hoop A)
+    // =========================================================================
+    StitchSequence seqVoll;
+    seqVoll.palette.push_back(colBlack); // Color 0: Black
+    seqVoll.palette.push_back(colWhite); // Color 1: White
+    seqVoll.palette.push_back(colRed);   // Color 2: Red
+
+    // 1. Color 0 (Black): Boat fill + hull outline + openings
+    seqVoll.stitches.insert(seqVoll.stitches.end(), seqBoatFill.stitches.begin(), seqBoatFill.stitches.end());
+    seqVoll.stitches.insert(seqVoll.stitches.end(), seqHullOutline.stitches.begin(), seqHullOutline.stitches.end());
+    seqVoll.stitches.insert(seqVoll.stitches.end(), seqBoatOpenings.stitches.begin(), seqBoatOpenings.stitches.end());
+
+    // Color stop 1 -> White
+    if (!seqVoll.stitches.empty() && !seqNesselFill.stitches.empty()) {
+        seqNesselFill.stitches.front().flags = SF_ColorChange;
+    }
+    // 2. Color 1 (White): Nesselblatt tatami fill + 1.2mm satin outline
+    seqVoll.stitches.insert(seqVoll.stitches.end(), seqNesselFill.stitches.begin(), seqNesselFill.stitches.end());
+    seqVoll.stitches.insert(seqVoll.stitches.end(), seqNesselContour.stitches.begin(), seqNesselContour.stitches.end());
+
+    // Color stop 2 -> Red
+    if (!seqVoll.stitches.empty() && !seqShieldFill.stitches.empty()) {
+        seqShieldFill.stitches.front().flags = SF_ColorChange;
+    }
+    // 3. Color 2 (Red): Red shield tatami background + 2.5mm 3D Kettelrand
+    seqVoll.stitches.insert(seqVoll.stitches.end(), seqShieldFill.stitches.begin(), seqShieldFill.stitches.end());
+    seqVoll.stitches.insert(seqVoll.stitches.end(), seqShieldKettel.stitches.begin(), seqShieldKettel.stitches.end());
+    centerSeq(seqVoll);
+
+    // Verify bounds & stitch counts
+    double kX0, kY0, kX1, kY1;
+    seqKettel.bounds(kX0, kY0, kX1, kY1);
+    double vX0, vY0, vX1, vY1;
+    seqVoll.bounds(vX0, vY0, vX1, vY1);
+
+    std::printf("  Design 1 (Kettel-Kontur): W=%.1f mm, H=%.1f mm, %zu stitches\n",
+                kX1 - kX0, kY1 - kY0, seqKettel.realStitchCount());
+    std::printf("  Design 2 (Meister-Vollstick): W=%.1f mm, H=%.1f mm, %zu stitches\n",
+                vX1 - vX0, vY1 - vY0, seqVoll.realStitchCount());
+
+    // Export to all destinations:
+    const QStringList targetDirs = {
+        QStringLiteral("F:/"),
+        QStringLiteral("F:/EMB/MyDesign"),
+        QStringLiteral("F:/EmbF5/MyDesign"),
+        QStringLiteral("F:/MyDesign"),
+        QStringLiteral("F:/fw"),
+        QStringLiteral("C:/Users/micbu/Downloads"),
+        QStringLiteral("E:/StickCore/output")
+    };
+
+    for (const QString& dirPath : targetDirs) {
+        QDir d(dirPath);
+        if (!d.exists() && dirPath.startsWith(QStringLiteral("F:/"))) {
+            d.mkpath(QStringLiteral("."));
+        }
+        if (d.exists()) {
+            // Write long names
+            JefCodec::exportToFile(d.filePath(QStringLiteral("01_Kieler_Wappen_Schwarz_Start_Kettel_HoopA.jef")), seqKettel, HoopType::HoopA_126x110);
+            JefCodec::exportToFile(d.filePath(QStringLiteral("02_Kieler_Wappen_Schwarz_Start_Vollstick_HoopA.jef")), seqVoll, HoopType::HoopA_126x110);
+            // Write 8.3 short names for classic Janome MC350E display
+            JefCodec::exportToFile(d.filePath(QStringLiteral("KIEL_KTL.JEF")), seqKettel, HoopType::HoopA_126x110);
+            JefCodec::exportToFile(d.filePath(QStringLiteral("KIEL_VOL.JEF")), seqVoll, HoopType::HoopA_126x110);
+            std::printf("  [Exported] -> %s (Kettel + Vollstick in long & 8.3 short names)\n", qPrintable(dirPath));
+        }
+    }
+
+    // Overwrite legacy files in output
+    JefCodec::exportToFile(QStringLiteral("E:/StickCore/output/04_Kieler_Wappen_Offiziell_Kettel_Konturen.jef"), seqKettel, HoopType::HoopA_126x110);
+    JefCodec::exportToFile(QStringLiteral("E:/StickCore/output/04_Kieler_Wappen_Offiziell_Applique.jef"), seqVoll, HoopType::HoopA_126x110);
+
+    // Update DesignLibrary
+    DesignLibrary lib(QStringLiteral("E:/StickCore/library"));
+    lib.readIndex();
+    lib.add(QStringLiteral("Kieler Wappen (Kettelrand & Konturen)"),
+            QStringLiteral("🚒 Feuerwehr & Kiel"),
+            { QStringLiteral("feuerwehr"), QStringLiteral("kiel"), QStringLiteral("wappen"), QStringLiteral("kettelrand") },
+            seqKettel, false, QString(), QStringLiteral("kieler-wappen-kettel-konturen"));
+    lib.add(QStringLiteral("Kieler Wappen (Offizielle Applikation)"),
+            QStringLiteral("🚒 Feuerwehr & Kiel"),
+            { QStringLiteral("feuerwehr"), QStringLiteral("kiel"), QStringLiteral("wappen"), QStringLiteral("vollstick") },
+            seqVoll, false, QString(), QStringLiteral("kieler-wappen-offiziell-applique"));
+    lib.writeIndex();
+    std::printf("  [Library] Updated index.json & .scd designs\n");
+
+    // Render realistic stitch thumbnails to artifacts & library
+    QImage thumbKettel = StitchThumbnail::render(seqKettel, 800, QColor(24, 26, 32), true);
+    thumbKettel.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/kieler_wappen_kettel_verified_upright.png"), "PNG");
+    thumbKettel.save(QStringLiteral("E:/StickCore/library/thumbs/kieler-wappen-kettel-konturen.png"), "PNG");
+
+    QImage thumbVoll = StitchThumbnail::render(seqVoll, 800, QColor(24, 26, 32), true);
+    thumbVoll.save(QStringLiteral("C:/Users/micbu/.gemini/antigravity/brain/e572641d-70d6-45b5-8c91-c97f358a4f6c/kieler_wappen_vollstick_verified_upright.png"), "PNG");
+    thumbVoll.save(QStringLiteral("E:/StickCore/library/thumbs/kieler-wappen-offiziell-applique.png"), "PNG");
+
+    std::printf("  [Rendered] Saved verified upright thumbnails!\n");
+}
+
 int main(int argc, char** argv)
 {
     QGuiApplication app(argc, argv);   // needed for font glyph outlines
@@ -683,6 +1023,10 @@ int main(int argc, char** argv)
                 ? QString::fromUtf8(argv[i+1])
                 : QStringLiteral("docs/manual_assets");
             generateManualAssets(outDir);
+            return 0;
+        }
+        if (arg == QStringLiteral("--kiel-wappen") || arg == QStringLiteral("--generate-kiel-wappen")) {
+            generateKielerWappen();
             return 0;
         }
     }

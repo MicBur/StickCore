@@ -1,8 +1,9 @@
 IDI_ICON1 ICON DISCARDABLE "stickcore.ico"
+1 24 "StickCore.manifest"
 
 1 VERSIONINFO
-FILEVERSION 1,0,0,0
-PRODUCTVERSION 1,0,0,0
+FILEVERSION 1,1,0,0
+PRODUCTVERSION 1,1,0,0
 FILEOS 0x40004
 FILETYPE 0x1
 BEGIN
@@ -10,14 +11,14 @@ BEGIN
     BEGIN
         BLOCK "040704b0"
         BEGIN
-            VALUE "CompanyName", "StickCore"
-            VALUE "FileDescription", "StickCore - Professionelle Sticksoftware"
-            VALUE "FileVersion", "1.0.0.0"
+            VALUE "CompanyName", "Modewerkstatt & StickCore"
+            VALUE "FileDescription", "StickCore Studio - Professionelle Sticksoftware"
+            VALUE "FileVersion", "1.1.0.0"
             VALUE "InternalName", "StickCore"
             VALUE "LegalCopyright", "Copyright (C) 2026 MicBur"
             VALUE "OriginalFilename", "StickCore.exe"
-            VALUE "ProductName", "StickCore"
-            VALUE "ProductVersion", "1.0.0.0"
+            VALUE "ProductName", "StickCore Studio"
+            VALUE "ProductVersion", "1.1.0.0"
         END
     END
     BLOCK "VarFileInfo"

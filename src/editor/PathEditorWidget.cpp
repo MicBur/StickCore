@@ -1616,20 +1616,25 @@ void PathEditorWidget::setupUi()
     // Top control bar
     auto* tb = new QWidget(this);
     tb->setStyleSheet(QStringLiteral(
-        "background:#181b22; border-bottom:1px solid #2c313d; padding:4px 8px;"));
+        "QWidget { background:#181b22; border-bottom:1px solid #2c313d; } "
+        "QToolButton { background:#20242e; color:#cbd5e1; border:1px solid #2f3545; border-radius:5px; padding:3px 5px; font-size:11px; font-weight:600; } "
+        "QToolButton:hover { background:#282e3d; color:#ffffff; border-color:#2dd4bf; } "
+        "QToolButton:checked { background:#134e4a; color:#5eead4; border:1px solid #2dd4bf; }"));
     auto* tbLay = new QHBoxLayout(tb);
     tbLay->setContentsMargins(6, 4, 6, 4);
-    tbLay->setSpacing(6);
+    tbLay->setSpacing(4);
 
     // Mode Toggle Buttons
     m_btnStitches = new QToolButton(tb);
-    m_btnStitches->setText(QStringLiteral("🧵 2D Stickbild"));
+    m_btnStitches->setText(QStringLiteral("Stiche"));
+    m_btnStitches->setMinimumWidth(56);
     m_btnStitches->setCheckable(true);
     m_btnStitches->setChecked(true);
     m_btnStitches->setToolTip(QStringLiteral("2D-Stickbild anzeigen (Fadenstiche, Einstichpunkte, Janome-Rahmen)"));
 
     m_btnPaths = new QToolButton(tb);
-    m_btnPaths->setText(QStringLiteral("✏ Bézier Pfade"));
+    m_btnPaths->setText(QStringLiteral("Pfade"));
+    m_btnPaths->setMinimumWidth(52);
     m_btnPaths->setCheckable(true);
     m_btnPaths->setChecked(false);
     m_btnPaths->setToolTip(QStringLiteral("Bézier-Vektorpuffer bearbeiten (Satin-Rails & Tatami-Polygone zeichnen)"));
@@ -1650,22 +1655,18 @@ void PathEditorWidget::setupUi()
     tbLay->addWidget(m_btnStitches);
     tbLay->addWidget(m_btnPaths);
 
-    // Separator line
-    auto* sep1 = new QFrame(tb);
-    sep1->setFrameShape(QFrame::VLine);
-    sep1->setStyleSheet(QStringLiteral("color:#2c313d;"));
-    tbLay->addWidget(sep1);
-
     // Toggles: Needle points, Jumps, Hoop
     m_btnPoints = new QToolButton(tb);
-    m_btnPoints->setText(QStringLiteral("• Punkte"));
+    m_btnPoints->setText(QStringLiteral("Punkte"));
+    m_btnPoints->setMinimumWidth(56);
     m_btnPoints->setCheckable(true);
     m_btnPoints->setChecked(true);
     m_btnPoints->setToolTip(QStringLiteral("Nadel-Einstichpunkte ein-/ausblenden"));
     connect(m_btnPoints, &QToolButton::toggled, this, [this](bool c){ m_canvas->setShowNeedlePoints(c); });
 
     m_btnJumps = new QToolButton(tb);
-    m_btnJumps->setText(QStringLiteral("⤹ Sprünge"));
+    m_btnJumps->setText(QStringLiteral("Sprünge"));
+    m_btnJumps->setMinimumWidth(64);
     m_btnJumps->setCheckable(true);
     m_btnJumps->setChecked(true);
     m_btnJumps->setToolTip(QStringLiteral("Sprungstiche (gestrichelte Linien) ein-/ausblenden"));
@@ -1675,16 +1676,11 @@ void PathEditorWidget::setupUi()
     m_btnHoop->setText(QStringLiteral("⭕ Rahmen"));
     m_btnHoop->setCheckable(true);
     m_btnHoop->setChecked(true);
-    m_btnHoop->setToolTip(QStringLiteral("Janome-Stickrahmen in 2D ein-/ausblenden"));
+    m_btnHoop->setVisible(false);
     connect(m_btnHoop, &QToolButton::toggled, this, [this](bool c){ m_canvas->setShowHoop(c); });
 
     m_hoopCombo = new QComboBox(tb);
-    m_hoopCombo->setStyleSheet(QStringLiteral(
-        "QComboBox { background:#20242e; color:#e2e8f0; border:1px solid #374151; "
-        "border-radius:4px; padding:2px 8px; font-size:11px; min-width:145px; } "
-        "QComboBox::drop-down { border:none; width:16px; } "
-        "QComboBox QAbstractItemView { background:#1e222b; color:#e2e8f0; selection-background-color:#0284c7; }"));
-    m_hoopCombo->setToolTip(QStringLiteral("Stickrahmen direkt auf der 2D-Leinwand auswählen"));
+    m_hoopCombo->setVisible(false);
     const auto& mp = MachineProfile::current();
     for (HoopType t : mp.hoops) {
         const HoopSpec hs = hoopSpec(t);
@@ -1702,30 +1698,22 @@ void PathEditorWidget::setupUi()
 
     tbLay->addWidget(m_btnPoints);
     tbLay->addWidget(m_btnJumps);
-    tbLay->addWidget(m_btnHoop);
-    tbLay->addWidget(m_hoopCombo);
 
     m_btnFitHoop = new QToolButton(tb);
     m_btnFitHoop->setText(QStringLiteral("📐 Einpassen"));
-    m_btnFitHoop->setStyleSheet(QStringLiteral("QToolButton { color:#38bdf8; font-weight:bold; }"));
-    m_btnFitHoop->setToolTip(QStringLiteral("Objekt / Pfade proportional an den gewählten Stickrahmen anpassen & Stiche neu berechnen"));
+    m_btnFitHoop->setVisible(false);
     connect(m_btnFitHoop, &QToolButton::clicked, this, &PathEditorWidget::fitToHoopRequested);
-    tbLay->addWidget(m_btnFitHoop);
-
-    // Separator line
-    auto* sep2 = new QFrame(tb);
-    sep2->setFrameShape(QFrame::VLine);
-    sep2->setStyleSheet(QStringLiteral("color:#2c313d;"));
-    tbLay->addWidget(sep2);
 
     // Zoom buttons
     m_btnFit = new QToolButton(tb);
-    m_btnFit->setText(QStringLiteral("⌖ Einpassen"));
-    m_btnFit->setToolTip(QStringLiteral("Motiv & Rahmen optimal im Fenster einpassen"));
+    m_btnFit->setText(QStringLiteral("Fit"));
+    m_btnFit->setMinimumWidth(40);
+    m_btnFit->setToolTip(QStringLiteral("Motiv & Rahmen optimal im 2D-Fenster einpassen"));
     connect(m_btnFit, &QToolButton::clicked, this, &PathEditorWidget::fitInView);
 
     m_btnZoom100 = new QToolButton(tb);
     m_btnZoom100->setText(QStringLiteral("1:1"));
+    m_btnZoom100->setMinimumWidth(40);
     m_btnZoom100->setToolTip(QStringLiteral("100% Originalgröße"));
     connect(m_btnZoom100, &QToolButton::clicked, this, &PathEditorWidget::resetZoom100);
 
@@ -1736,14 +1724,16 @@ void PathEditorWidget::setupUi()
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     tbLay->addWidget(spacer);
 
-    // Vorlage Dimmer (opacity slider)
-    m_dimLabel = new QLabel(QStringLiteral("🖼 Vorlage:"), tb);
-    m_dimLabel->setStyleSheet(QStringLiteral("color:#8b93a4; font-size:11px;"));
+    // Vorlage Dimmer (opacity slider, only visible when background image is loaded)
+    m_dimLabel = new QLabel(QStringLiteral("🖼"), tb);
+    m_dimLabel->setStyleSheet(QStringLiteral("color:#8b93a4; font-size:11px; border:none;"));
+    m_dimLabel->setVisible(false);
     m_dimSlider = new QSlider(Qt::Horizontal, tb);
     m_dimSlider->setRange(0, 100);
     m_dimSlider->setValue(45);
-    m_dimSlider->setFixedWidth(80);
+    m_dimSlider->setFixedWidth(60);
     m_dimSlider->setToolTip(QStringLiteral("Helligkeit/Transparenz der Bildvorlage"));
+    m_dimSlider->setVisible(false);
     connect(m_dimSlider, &QSlider::valueChanged, this, [this](int val){
         m_canvas->setBackgroundOpacity(val / 100.0);
     });

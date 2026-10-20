@@ -1,32 +1,46 @@
 # -*- coding: utf-8 -*-
 """
-StickCore - Export für Janome MC350E USB-Stick
-Erstellt den Ordner 'fw' mit 8-Zeichen DOS-Dateinamen (8.3 Format)
-für den 30-34 cm Bogen "BERUFSFEUERWEHR KIEL" in 4 Teilschritten für Rahmen A:
+StickCore - Komplett-Projekt-Export für Janome MC350E USB-Stick
+Erstellt das gesamte Rücken-/Ärmel-Projekt mit Fadenkreuzen (Passkreuzen)
+im 8.3 DOS-Dateinamen-Format für Rahmen A (126 x 110 mm):
 
-Optimierungen:
-1. Schrift eine Nummer größer: 24.0 mm Kappenhöhe (ca. 1 Inch)
-2. Höhere Plastizität (3D-Relief-Effekt) Buchstabe für Buchstabe:
-   - Schritt A: Unterleger-Füllstich (Tatami parallel zur Grundlinie)
-   - Schritt B: Deck-Füllstich (Tatami im 90°-Kreuzwinkel, größere Stichweite 3.8 mm für seidigen Glanz)
-   - Schritt C: Saubere Kantenverriegelung entlang der Buchstabenumrisse
-3. Kein Farbwechsel für das Passkreuz: Alles in 1 Garnfarbe (Feuerwehrrot)
-4. Fadenkreuze mit kleinen 1.0 mm Stichen und 3-facher Mitten-Verriegelung (kann sich nicht mehr herausziehen!)
+1. OBERER BOGEN: "BERUFSFEUERWEHR KIEL" (24.0 mm Varsity, 3D-Plastisch, +Fadenkreuz)
+   - BF30_1.JEF  (Schritt 1: BERUFS + Passkreuz 1 nachlaufend)
+   - BF30_2.JEF  (Schritt 2: Passkreuz 1 vorlaufend + FEUER + Passkreuz 2 nachlaufend)
+   - BF30_3.JEF  (Schritt 3: Passkreuz 2 vorlaufend + WEHR + Passkreuz 3 nachlaufend)
+   - BF30_4.JEF  (Schritt 4: Passkreuz 3 vorlaufend + KIEL)
+   - BF30_ALL.JEF (Komplett-Vorschau Oberer Bogen)
 
-Dateinamen (<= 8 Zeichen):
-1. BF30_1.JEF  (Schritt 1: BERUFS + Passkreuz 1 nachlaufend)
-2. BF30_2.JEF  (Schritt 2: Passkreuz 1 vorlaufend + FEUER + Passkreuz 2 nachlaufend)
-3. BF30_3.JEF  (Schritt 3: Passkreuz 2 vorlaufend + WEHR + Passkreuz 3 nachlaufend)
-4. BF30_4.JEF  (Schritt 4: Passkreuz 3 vorlaufend + KIEL)
+2. MITTE / ÄRMEL-WAPPEN:
+   - WWWAP.JEF   (Ärmel-/Brustwappen 66.2 x 70.3 mm, 15.126 Stiche, 3 Farben)
+   - KIEL_VOL.JEF, KIEL_KTL.JEF, KIEL_BLK.JEF, 30_MITTE.JEF
+
+3. UNTERER GEGENBOGEN: "NACHTWACHE II" (24.0 mm Varsity, 3D-Plastisch, +Fadenkreuz)
+   - NW30_1.JEF  (Schritt 1: NACHT + Passkreuz 1 nachlaufend)
+   - NW30_2.JEF  (Schritt 2: Passkreuz 1 vorlaufend + WACH + Passkreuz 2 nachlaufend)
+   - NW30_3.JEF  (Schritt 3: Passkreuz 2 vorlaufend + E II)
+   - NW30_ALL.JEF (Komplett-Vorschau Unterer Gegenbogen NACHTWACHE II)
+
+   Zusätzlich als Variante mit arabischer Ziffer "NACHTWACHE 2":
+   - NW2_1.JEF   (Schritt 1: NACHT + Passkreuz 1 nachlaufend)
+   - NW2_2.JEF   (Schritt 2: Passkreuz 1 vorlaufend + WACH + Passkreuz 2 nachlaufend)
+   - NW2_3.JEF   (Schritt 3: Passkreuz 2 vorlaufend + E 2)
+   - NW2_ALL.JEF (Komplett-Vorschau Unterer Gegenbogen NACHTWACHE 2)
 
 Zielorte:
+- F:\\ (Wurzelverzeichnis USB-Stick)
 - F:\\fw\\
 - F:\\EmbF5\\fw\\
+- F:\\EmbF5\\MyDesign\\
+- F:\\EMB\\MyDesign\\
+- F:\\MyDesign\\
 - E:\\StickCore\\output\\fw\\
+- E:\\StickCore\\output\\EmbF5\\MyDesign\\
 """
 
 import os
 import math
+import shutil
 import struct
 import datetime
 from PIL import Image, ImageDraw
@@ -51,79 +65,6 @@ def sample_poly(pts, s):
                     pts[i][1] + (pts[i+1][1] - pts[i][1]) * rem)
         acc += d
     return pts[-1]
-
-def make_run_stitch(pts, stitch_len_mm=1.4):
-    """Erzeugt saubere Geradstiche entlang einer Kontur."""
-    if len(pts) < 2: return []
-    L = poly_length(pts)
-    steps = max(2, int(round(L / stitch_len_mm)))
-    res = []
-    for i in range(steps + 1):
-        p = sample_poly(pts, i / steps)
-        kind = 'JUMP' if i == 0 else 'NORMAL'
-        res.append((kind, p[0], p[1]))
-    return res
-
-def multi_poly_tatami(polys, pitch_mm=0.40, stitch_len_mm=3.5, angle_deg=0.0):
-    """
-    Erzeugt einen lückenlosen Scanline-Füllstich (Tatami) über geschlossene
-    Polygone inklusive aller Innenlöcher (Even-Odd-Regel).
-    """
-    rad = math.radians(-angle_deg)
-    cos_a, sin_a = math.cos(rad), math.sin(rad)
-    cos_back, sin_back = math.cos(-rad), math.sin(-rad)
-
-    rot_polys = []
-    for poly in polys:
-        rp = [(p[0] * cos_a - p[1] * sin_a, p[0] * sin_a + p[1] * cos_a) for p in poly]
-        if rp[0] != rp[-1]:
-            rp.append(rp[0])
-        rot_polys.append(rp)
-
-    all_y = [p[1] for rp in rot_polys for p in rp]
-    if not all_y:
-        return []
-    min_y, max_y = min(all_y), max(all_y)
-
-    y = min_y + pitch_mm * 0.5
-    y_lines = []
-    while y <= max_y:
-        y_lines.append(y)
-        y += pitch_mm
-
-    stitches = []
-    forward = True
-    for y_val in y_lines:
-        xs = []
-        for rp in rot_polys:
-            for i in range(len(rp) - 1):
-                p1, p2 = rp[i], rp[i+1]
-                if (p1[1] <= y_val < p2[1]) or (p2[1] <= y_val < p1[1]):
-                    t = (y_val - p1[1]) / (p2[1] - p1[1])
-                    ix = p1[0] + t * (p2[0] - p1[0])
-                    xs.append(ix)
-        xs.sort()
-
-        segments = []
-        for j in range(0, len(xs) - 1, 2):
-            if xs[j+1] - xs[j] > 0.05:
-                segments.append((xs[j], xs[j+1]))
-
-        if not forward:
-            segments.reverse()
-
-        for seg_idx, seg in enumerate(segments):
-            x_start, x_end = seg if forward else (seg[1], seg[0])
-            dist = abs(x_end - x_start)
-            steps = max(1, int(round(dist / stitch_len_mm)))
-            for s_i in range(steps + 1):
-                cur_x = x_start + (x_end - x_start) * (s_i / steps)
-                orig_x = cur_x * cos_back - y_val * sin_back
-                orig_y = cur_x * sin_back + y_val * cos_back
-                kind = 'JUMP' if (len(stitches) == 0 or (s_i == 0 and seg_idx > 0)) else 'NORMAL'
-                stitches.append((kind, orig_x, orig_y))
-        forward = not forward
-    return stitches
 
 def make_secure_crosshair_stitches(cx, cy, arm_len=4.0, step_mm=1.0):
     """
@@ -169,22 +110,6 @@ def make_secure_crosshair_stitches(cx, cy, arm_len=4.0, step_mm=1.0):
 def write_verified_jef(path, raw_commands, palette_codes, hoop_code=0):
     """
     Schreibt eine 100% standardkonforme Janome MC350E JEF-Datei.
-    Byte-für-Byte verifiziert:
-    - 0x00: Stitch Offset (0x74 + colorCount * 8)
-    - 0x04: Version (0x14)
-    - 0x08: Datum 14 Bytes
-    - 0x16: 0x64
-    - 0x17: 0x00
-    - 0x18: Farbanzahl
-    - 0x1C: Stichzähler (CountField)
-    - 0x20: Hoop-Code (0 für Rahmen A 126x110 mm)
-    - 0x24: distLeft   (-minX in 0.1 mm)
-    - 0x28: distTop    ( maxY in 0.1 mm)
-    - 0x2C: distRight  ( maxX in 0.1 mm)
-    - 0x30: distBottom (-minY in 0.1 mm)
-    - 0x34: 16 x -1 (64 Bytes unbenutzt)
-    - 0x74: Thread-Codes (colorCount * 4 Bytes)
-    - Per-Color Attributes (colorCount * 4 Bytes: 0x0D)
     """
     k_fixed_header = 0x74
     k_version = 0x14
@@ -232,7 +157,7 @@ def write_verified_jef(path, raw_commands, palette_codes, hoop_code=0):
             encode_delta(dx, dy, 0)
         cur_x, cur_y = tx, ty
 
-    # Design-Abschluss: Zurück zum Zentrum + End-Befehl
+    # Design-Abschluss: End-Befehl
     body.extend(bytes([0x80, 0x10, 0x00, 0x00]))
     count_field += 1
 
@@ -257,7 +182,9 @@ def write_verified_jef(path, raw_commands, palette_codes, hoop_code=0):
     for _ in palette_codes:
         header.extend(struct.pack('<i', k_color_attrib))
 
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with open(path, 'wb') as f:
         f.write(header)
         f.write(body)
@@ -271,7 +198,8 @@ cmap = font.getBestCmap()
 
 def get_glyph_conts(ch):
     gname = cmap.get(ord(ch))
-    if not gname or gname not in glyph_set: return [], 0.0
+    if not gname or gname not in glyph_set:
+        return [], 0.0
     pen = RecordingPen()
     glyph_set[gname].draw(pen)
     conts = []; curr = []
@@ -287,6 +215,11 @@ def get_glyph_conts(ch):
                 conts.append(curr); curr = []
     if curr: conts.append(curr)
     adv = float(hmtx[gname][0])
+    # In varsity_regular.ttf haben Ziffern ('0'..'9') 3 Doppel-Konturen;
+    # Kontur 2 (verschoben um -39,-39) hat exakt dieselbe y=0..622 Einzelkontur-Höhe wie 'a'..'z'.
+    if ch.isdigit() and len(conts) >= 3:
+        single_cont = [(x - 39.0, y - 39.0) for (x, y) in conts[2]]
+        return [single_cont], adv - 78.0
     return conts, adv
 
 def layout_arc_text(text, cap_h_mm=24.0, arc_r_mm=210.0, arc_down=False, letter_sp_mm=1.5):
@@ -310,6 +243,8 @@ def layout_arc_text(text, cap_h_mm=24.0, arc_r_mm=210.0, arc_down=False, letter_
     characters = []
     for ch, conts, adv in items:
         w_mm = adv * scale
+        left_s = cursor_mm
+        right_s = cursor_mm + w_mm
         center_s = cursor_mm + w_mm * 0.5
         cursor_mm += w_mm + letter_sp_mm
 
@@ -339,12 +274,23 @@ def layout_arc_text(text, cap_h_mm=24.0, arc_r_mm=210.0, arc_down=False, letter_
 
         characters.append({
             'char': ch,
+            'left_s': left_s,
+            'right_s': right_s,
             'center_s': center_s,
             'pos': (X, Y),
             'rot': rot,
             'polys': poly_list
         })
     return characters
+
+def get_gap_pos(c_left, c_right, arc_r_mm=234.0, arc_down=True):
+    """Berechnet den exakten Mittelpunkt der Lücke zwischen zwei Buchstaben auf der Bogen-Grundlinie."""
+    gap_s = 0.5 * (c_left['right_s'] + c_right['left_s'])
+    theta = gap_s / arc_r_mm
+    if not arc_down:
+        return (arc_r_mm * math.sin(theta), arc_r_mm * math.cos(theta) - arc_r_mm)
+    else:
+        return (arc_r_mm * math.sin(theta), arc_r_mm - arc_r_mm * math.cos(theta))
 
 def make_kettel_outline(pts, width_mm=2.4, pitch_mm=0.35):
     """Erzeugt einen gleichmäßigen Satinstich / Zickzack-Kettelrand entlang eines Pfades."""
@@ -371,18 +317,14 @@ def make_kettel_outline(pts, width_mm=2.4, pitch_mm=0.35):
 
 def build_plastic_char_stitches(char_item):
     """
-    Stickt jeden Buchstaben wie beim Versuch davor als Varsity-Outline,
-    jedoch Buchstabe für Buchstabe mit doppelter Lage für massiven 3D-Relief-Effekt:
+    Stickt jeden Buchstaben als Varsity-Outline mit doppelter Lage für massiven 3D-Relief-Effekt:
     1. Pass 1: Vorstick / Unterleger-Raupe (Breite 2.4 mm, Pitch 0.48 mm)
     2. Pass 2: Deckraupe mit größerer Stichweite (Breite 3.5 mm, Stichabstand 0.34 mm)
-       -> Umschließt den 2.4 mm Unterleger und wölbt sich plastisch auf!
     """
     cmds = []
     for poly in char_item['polys']:
-        # Pass 1: 2.4 mm Raupe
         st_under = make_kettel_outline(poly, width_mm=2.4, pitch_mm=0.48)
         cmds.extend(st_under)
-        # Pass 2: 3.5 mm Raupe mit 0.34 mm Stichabstand direkt darüber
         st_cover = make_kettel_outline(poly, width_mm=3.5, pitch_mm=0.34)
         cmds.extend(st_cover)
     return cmds
@@ -390,30 +332,28 @@ def build_plastic_char_stitches(char_item):
 def build_part_commands(chars_in_part, crosshairs_before=[], crosshairs_after=[]):
     """
     Erzeugt die vollständige Stichfolge für einen Teilschritt:
-    - Vorlaufende Passkreuze (mit kleinen 1mm Stichen und Mittenverriegelung)
+    - Vorlaufende Passkreuze (1.0 mm Stiche + Mittenverriegelung)
     - Buchstabe für Buchstabe plastisch: 2.4 mm Unterleger + 3.5 mm Deckraupe (0.34 mm)
     - Nachlaufende Passkreuze
-    - ALLES in 1 Garnfarbe (Feuerwehrrot, kein Farbwechsel / kein Maschinenstopp)
+    - ALLES in 1 Garnfarbe (Feuerwehrrot, kein Farbwechsel)
     """
     uncentered_cmds = []
 
-    # 1. Vorlaufende Passkreuze
     for ch in crosshairs_before:
         for op, x, y in make_secure_crosshair_stitches(ch[0], ch[1], arm_len=4.0, step_mm=1.0):
             uncentered_cmds.append((op, x, y))
 
-    # 2. Buchstabe für Buchstabe (Pass 1 Unterleger 1.0 mm -> Pass 2 Deckraupe 2.4 mm)
     for c in chars_in_part:
+        if not c['polys']:
+            continue
         char_raw_stitches = build_plastic_char_stitches(c)
         for op, x, y in char_raw_stitches:
             uncentered_cmds.append((op, x, y))
 
-    # 3. Nachlaufende Passkreuze
     for ch in crosshairs_after:
         for op, x, y in make_secure_crosshair_stitches(ch[0], ch[1], arm_len=4.0, step_mm=1.0):
             uncentered_cmds.append((op, x, y))
 
-    # Exakte Zentrierung im Rahmen A (0,0)
     norm_xs = [c[1] for c in uncentered_cmds if c[0] == 'NORMAL']
     norm_ys = [c[2] for c in uncentered_cmds if c[0] == 'NORMAL']
     min_x, max_x = min(norm_xs), max(norm_xs)
@@ -428,33 +368,73 @@ def build_part_commands(chars_in_part, crosshairs_before=[], crosshairs_after=[]
         final_cmds.append((op, int(round((x - cx) * 10.0)), int(round((y - cy) * 10.0))))
 
     pal = [JANOME_DEEP_RED]
-    return final_cmds, pal, (w_mm, h_mm)
+    return final_cmds, pal, (w_mm, h_mm), (cx, cy)
+
+def parse_jef_stitches(jef_path):
+    with open(jef_path, 'rb') as f:
+        data = f.read()
+    st_offset, = struct.unpack('<I', data[0:4])
+    color_count, = struct.unpack('<I', data[24:28])
+    pal_codes = [struct.unpack('<I', data[0x74 + i*4 : 0x74 + (i+1)*4])[0] for i in range(color_count)]
+    pos = st_offset; x, y = 0, 0; pts = []; color_idx = 0
+    while pos < len(data):
+        b0 = data[pos]; b1 = data[pos+1]; pos += 2
+        if b0 == 0x80:
+            if b1 == 0x01:
+                dx = struct.unpack('b', bytes([data[pos]]))[0]
+                dy = struct.unpack('b', bytes([data[pos+1]]))[0]
+                pos += 2; x += dx; y += dy
+                color_idx += 1
+                pts.append(('COLOR_STOP', x, y, color_idx))
+            elif b1 == 0x02:
+                dx = struct.unpack('b', bytes([data[pos]]))[0]
+                dy = struct.unpack('b', bytes([data[pos+1]]))[0]
+                pos += 2; x += dx; y += dy
+                pts.append(('JUMP', x, y, color_idx))
+            elif b1 == 0x10:
+                break
+        else:
+            dx = struct.unpack('b', bytes([b0]))[0]
+            dy = struct.unpack('b', bytes([b1]))[0]
+            x += dx; y += dy
+            pts.append(('NORMAL', x, y, color_idx))
+    return pts, pal_codes
 
 def main():
-    print("==================================================================")
-    print(" StickCore - Janome MC350E USB-Export (3D-Plastisch, 1 Farbe)")
-    print("==================================================================")
+    print("=========================================================================")
+    print(" StickCore - Komplett-Projekt Export (Oberbogen + Wappen + Gegenbogen)")
+    print("=========================================================================")
 
     potential_dirs = [
+        r"F:\\",
+        r"F:\fw",
+        r"F:\EmbF5\fw",
         r"F:\EmbF5\MyDesign",
         r"F:\Embf5\MyDesign",
         r"F:\EMB\MyDesign",
         r"F:\MyDesign",
-        r"F:\EmbF5\fw",
-        r"F:\fw",
-        r"E:\StickCore\output\EmbF5\MyDesign",
-        r"E:\StickCore\output\fw"
+        r"E:\StickCore\output\fw",
+        r"E:\StickCore\output\EmbF5\MyDesign"
     ]
     target_dirs = []
+    seen_norm = set()
     for d in potential_dirs:
         drive = os.path.splitdrive(d)[0]
         if not drive or os.path.exists(drive + "\\"):
             os.makedirs(d, exist_ok=True)
-            target_dirs.append(d)
+            norm_d = os.path.normcase(os.path.abspath(d))
+            if norm_d not in seen_norm:
+                seen_norm.add(norm_d)
+                target_dirs.append(d)
         else:
-            print(f"  [INFO] Laufwerk {drive} aktuell nicht verbunden (Stick an Nähmaschine?). Überspringe {d}.")
+            print(f"  [INFO] Laufwerk {drive} aktuell nicht verbunden. Überspringe {d}.")
 
-    # Größere Schrift: 24.0 mm Kappenhöhe, Radius 210 mm (~34 cm Gesamtbogen)
+    # Descriptive folders (where long filenames are also saved for PC clarity)
+    long_name_dirs = [d for d in target_dirs if os.path.basename(os.path.normpath(d)).lower() == 'fw']
+
+    # =========================================================================
+    # 1. OBERER BOGEN: "BERUFSFEUERWEHR KIEL" (24.0 mm, R=210 mm, arc_down=False)
+    # =========================================================================
     chars_top30 = layout_arc_text(
         "berufsfeuerwehr kiel",
         cap_h_mm=24.0,
@@ -463,116 +443,289 @@ def main():
         letter_sp_mm=1.5
     )
 
-    # 4 Teilschritte
-    part1_chars = chars_top30[0:6]    # BERUFS
-    part2_chars = chars_top30[6:11]   # FEUER
-    part3_chars = chars_top30[11:15]  # WEHR
-    part4_chars = chars_top30[16:20]  # KIEL
+    top_part1 = chars_top30[0:6]    # BERUFS
+    top_part2 = chars_top30[6:11]   # FEUER
+    top_part3 = chars_top30[11:15]  # WEHR
+    top_part4 = chars_top30[16:20]  # KIEL
 
-    # Passkreuz-Positionen (auf dem Bogen zentriert zwischen den Wörtern)
-    ch1_x = 0.5 * (chars_top30[5]['pos'][0] + chars_top30[6]['pos'][0])
-    ch1_y = 0.5 * (chars_top30[5]['pos'][1] + chars_top30[6]['pos'][1])
+    top_ch1 = (
+        0.5 * (chars_top30[5]['pos'][0] + chars_top30[6]['pos'][0]),
+        0.5 * (chars_top30[5]['pos'][1] + chars_top30[6]['pos'][1])
+    )
+    top_ch2 = (
+        0.5 * (chars_top30[10]['pos'][0] + chars_top30[11]['pos'][0]),
+        0.5 * (chars_top30[10]['pos'][1] + chars_top30[11]['pos'][1])
+    )
+    top_ch3 = (
+        0.5 * (chars_top30[14]['pos'][0] + chars_top30[16]['pos'][0]),
+        0.5 * (chars_top30[14]['pos'][1] + chars_top30[16]['pos'][1])
+    )
 
-    ch2_x = 0.5 * (chars_top30[10]['pos'][0] + chars_top30[11]['pos'][0])
-    ch2_y = 0.5 * (chars_top30[10]['pos'][1] + chars_top30[11]['pos'][1])
-
-    ch3_x = 0.5 * (chars_top30[14]['pos'][0] + chars_top30[16]['pos'][0])
-    ch3_y = 0.5 * (chars_top30[14]['pos'][1] + chars_top30[16]['pos'][1])
-
-    steps = [
-        ("BF30_1.JEF", part1_chars, [], [(ch1_x, ch1_y)], "1. BERUFS"),
-        ("BF30_2.JEF", part2_chars, [(ch1_x, ch1_y)], [(ch2_x, ch2_y)], "2. FEUER"),
-        ("BF30_3.JEF", part3_chars, [(ch2_x, ch2_y)], [(ch3_x, ch3_y)], "3. WEHR"),
-        ("BF30_4.JEF", part4_chars, [(ch3_x, ch3_y)], [], "4. KIEL")
+    top_steps = [
+        ("BF30_1.JEF", "01_OBEN_Bogen_Berufsfeuerwehr_Kiel_Teil_1_BERUFS.JEF", top_part1, [], [top_ch1], "1. BERUFS", 0),
+        ("BF30_2.JEF", "01_OBEN_Bogen_Berufsfeuerwehr_Kiel_Teil_2_FEUER.JEF",  top_part2, [top_ch1], [top_ch2], "2. FEUER", 0),
+        ("BF30_3.JEF", "01_OBEN_Bogen_Berufsfeuerwehr_Kiel_Teil_3_WEHR.JEF",   top_part3, [top_ch2], [top_ch3], "3. WEHR", 0),
+        ("BF30_4.JEF", "01_OBEN_Bogen_Berufsfeuerwehr_Kiel_Teil_4_KIEL.JEF",   top_part4, [top_ch3], [], "4. KIEL", 0),
     ]
 
-    for fname, ch_list, ch_before, ch_after, label in steps:
-        cmds, pal, dims = build_part_commands(ch_list, ch_before, ch_after)
-        print(f"\nGeneriere {fname} ({label}):")
-        print(f"  Buchstaben: {len(ch_list)}, Befehle: {len(cmds)}, Farben: {len(pal)}")
-        print(f"  Maße: {dims[0]:.1f} x {dims[1]:.1f} mm (Rahmen A <= 126x110 mm: {'PASST' if dims[0]<=126 and dims[1]<=110 else 'ZU GROSS!'})")
-
+    print("\n--- [1/3] OBERER BOGEN: BERUFSFEUERWEHR KIEL (24 mm Varsity + Fadenkreuz) ---")
+    top_offsets = []
+    for fname, long_name, ch_list, ch_before, ch_after, label, h_code in top_steps:
+        cmds, pal, dims, center_xy = build_part_commands(ch_list, ch_before, ch_after)
+        top_offsets.append(center_xy)
+        fits = "PASST (Rahmen A)" if (dims[0] <= 126.0 and dims[1] <= 110.0) else "GROSS"
+        print(f"  {fname:12s} ({label:12s}): {dims[0]:5.1f} x {dims[1]:5.1f} mm | {len(cmds):4d} Stiche | {fits}")
         for d in target_dirs:
-            out_file = os.path.join(d, fname)
-            write_verified_jef(out_file, cmds, pal, hoop_code=0)
-            print(f"  -> Gespeichert in: {out_file}")
+            write_verified_jef(os.path.join(d, fname), cmds, pal, hoop_code=h_code)
+        for d in long_name_dirs:
+            write_verified_jef(os.path.join(d, long_name), cmds, pal, hoop_code=h_code)
 
-    print("\n--- Verifiziere und rendere JEF-Dateien direkt von Festplatte/Stick ---")
-    brain_dir = r"C:\Users\micbu\.gemini\antigravity\brain\e572641d-70d6-45b5-8c91-c97f358a4f6c"
+    # Komplett-Vorschau Oberer Bogen (BF30_ALL.JEF)
+    cmds_top_all, pal_top_all, dims_top_all, _ = build_part_commands(
+        [c for c in chars_top30 if c['polys']], [], [top_ch1, top_ch2, top_ch3]
+    )
+    for d in target_dirs:
+        write_verified_jef(os.path.join(d, "BF30_ALL.JEF"), cmds_top_all, pal_top_all, hoop_code=2)
 
-    def parse_jef_stitches(jef_path):
-        with open(jef_path, 'rb') as f:
-            data = f.read()
-        st_offset, = struct.unpack('<I', data[0:4])
-        pos = st_offset; x, y = 0, 0; pts = []
-        while pos < len(data):
-            b0 = data[pos]; b1 = data[pos+1]; pos += 2
-            if b0 == 0x80:
-                if b1 in (0x01, 0x02):
-                    dx = struct.unpack('b', bytes([data[pos]]))[0]
-                    dy = struct.unpack('b', bytes([data[pos+1]]))[0]
-                    pos += 2; x += dx; y += dy
-                    pts.append(('JUMP', x, y))
-                elif b1 == 0x10: break
-            else:
-                dx = struct.unpack('b', bytes([b0]))[0]
-                dy = struct.unpack('b', bytes([b1]))[0]
-                x += dx; y += dy
-                pts.append(('NORMAL', x, y))
-        return pts
+    # =========================================================================
+    # 2. UNTERER GEGENBOGEN: "NACHTWACHE II" (24.0 mm, R=234 mm, arc_down=True)
+    #    Konzentrisch zum oberen Bogen (Oberkante Buchstaben R=210 mm, Grundlinie R=234 mm)
+    # =========================================================================
+    chars_bot_ii = layout_arc_text(
+        "nachtwache ii",
+        cap_h_mm=24.0,
+        arc_r_mm=234.0,
+        arc_down=True,
+        letter_sp_mm=4.2
+    )
 
-    # Rendere Gesamtansicht der 4 Schritte
-    im_tot = Image.new('RGB', (1600, 850), (20, 22, 26))
-    draw_tot = ImageDraw.Draw(im_tot)
-    draw_tot.text((800, 30), "PLASTISCHER BOGEN (24 MM SCHRIFT): BERUFSFEUERWEHR KIEL", fill=(245, 245, 250), anchor="mm")
-    draw_tot.text((800, 58), "Buchstabe-für-Buchstabe: Pass 1 (2.4 mm Raupe) + Pass 2 (3.5 mm Raupe mit 0.34 mm Stichabstand) | 1 Garnfarbe | Verriegeltes 1mm Passkreuz", fill=(160, 165, 180), anchor="mm")
+    bot_ii_part1 = chars_bot_ii[0:5]                           # NACHT
+    bot_ii_part2 = chars_bot_ii[5:9]                           # WACH
+    bot_ii_part3 = [chars_bot_ii[9], chars_bot_ii[11], chars_bot_ii[12]]  # E II
 
-    colors_step = [
-        (235, 45, 55),   # 1. Rot
-        (45, 165, 245),  # 2. Blau
-        (245, 185, 35),  # 3. Gold/Gelb
-        (65, 210, 110)   # 4. Grün
+    bot_ii_ch1 = get_gap_pos(chars_bot_ii[4], chars_bot_ii[5], arc_r_mm=234.0, arc_down=True)
+    bot_ii_ch2 = get_gap_pos(chars_bot_ii[8], chars_bot_ii[9], arc_r_mm=234.0, arc_down=True)
+
+    bot_ii_steps = [
+        ("NW30_1.JEF", "03_UNTEN_Gegenbogen_Nachtwache_II_Teil_1_NACHT.JEF", bot_ii_part1, [], [bot_ii_ch1], "1. NACHT", 0),
+        ("NW30_2.JEF", "03_UNTEN_Gegenbogen_Nachtwache_II_Teil_2_WACH.JEF",  bot_ii_part2, [bot_ii_ch1], [bot_ii_ch2], "2. WACH", 0),
+        ("NW30_3.JEF", "03_UNTEN_Gegenbogen_Nachtwache_II_Teil_3_E_II.JEF",  bot_ii_part3, [bot_ii_ch2], [], "3. E II", 0),
     ]
-    scale_tot = 3.6
-    base_x, base_y = 800, 520
 
-    # Offsets der 4 Teile in globalen Koordinaten
-    step_offsets = []
-    for fname, ch_list, ch_b, ch_a, lbl in steps:
-        all_p = [pt for c in ch_list for poly in c['polys'] for pt in poly]
-        for ch in ch_b:
-            all_p.extend([(ch[0]-4, ch[1]), (ch[0]+4, ch[1]), (ch[0], ch[1]-4), (ch[0], ch[1]+4)])
-        for ch in ch_a:
-            all_p.extend([(ch[0]-4, ch[1]), (ch[0]+4, ch[1]), (ch[0], ch[1]-4), (ch[0], ch[1]+4)])
-        cx = 0.5 * (min(p[0] for p in all_p) + max(p[0] for p in all_p))
-        cy = 0.5 * (min(p[1] for p in all_p) + max(p[1] for p in all_p))
-        step_offsets.append((cx, cy))
+    print("\n--- [2/3] UNTERER GEGENBOGEN: NACHTWACHE II (24 mm Varsity + Fadenkreuz) ---")
+    bot_ii_offsets = []
+    for fname, long_name, ch_list, ch_before, ch_after, label, h_code in bot_ii_steps:
+        cmds, pal, dims, center_xy = build_part_commands(ch_list, ch_before, ch_after)
+        bot_ii_offsets.append(center_xy)
+        fits = "PASST (Rahmen A)" if (dims[0] <= 126.0 and dims[1] <= 110.0) else "GROSS"
+        print(f"  {fname:12s} ({label:12s}): {dims[0]:5.1f} x {dims[1]:5.1f} mm | {len(cmds):4d} Stiche | {fits}")
+        for d in target_dirs:
+            write_verified_jef(os.path.join(d, fname), cmds, pal, hoop_code=h_code)
+        for d in long_name_dirs:
+            write_verified_jef(os.path.join(d, long_name), cmds, pal, hoop_code=h_code)
 
-    for idx, (fname, _, _, _, lbl) in enumerate(steps):
-        col = colors_step[idx]
-        jef_file = os.path.join(target_dirs[-1], fname)
-        st_pts = parse_jef_stitches(jef_file)
-        cx_off, cy_off = step_offsets[idx]
+    # Komplett-Vorschau Unterer Gegenbogen NACHTWACHE II (NW30_ALL.JEF)
+    cmds_bot_ii_all, pal_bot_ii_all, dims_bot_ii_all, _ = build_part_commands(
+        [c for c in chars_bot_ii if c['polys']], [], [bot_ii_ch1, bot_ii_ch2]
+    )
+    for d in target_dirs:
+        write_verified_jef(os.path.join(d, "NW30_ALL.JEF"), cmds_bot_ii_all, pal_bot_ii_all, hoop_code=2)
+
+    # Zusätzlich "NACHTWACHE 2" (mit arabischer 2) als NW2_1..3.JEF bereitstellen
+    chars_bot_2 = layout_arc_text(
+        "nachtwache 2",
+        cap_h_mm=24.0,
+        arc_r_mm=234.0,
+        arc_down=True,
+        letter_sp_mm=4.2
+    )
+    bot_2_part1 = chars_bot_2[0:5]                 # NACHT
+    bot_2_part2 = chars_bot_2[5:9]                 # WACH
+    bot_2_part3 = [chars_bot_2[9], chars_bot_2[11]] # E 2
+    bot_2_ch1 = get_gap_pos(chars_bot_2[4], chars_bot_2[5], arc_r_mm=234.0, arc_down=True)
+    bot_2_ch2 = get_gap_pos(chars_bot_2[8], chars_bot_2[9], arc_r_mm=234.0, arc_down=True)
+    bot_2_steps = [
+        ("NW2_1.JEF", "03_UNTEN_Gegenbogen_Nachtwache_2_Teil_1_NACHT.JEF", bot_2_part1, [], [bot_2_ch1], "1. NACHT", 0),
+        ("NW2_2.JEF", "03_UNTEN_Gegenbogen_Nachtwache_2_Teil_2_WACH.JEF",  bot_2_part2, [bot_2_ch1], [bot_2_ch2], "2. WACH", 0),
+        ("NW2_3.JEF", "03_UNTEN_Gegenbogen_Nachtwache_2_Teil_3_E_2.JEF",   bot_2_part3, [bot_2_ch2], [], "3. E 2", 0),
+    ]
+    print("\n--- [Optional] UNTERER GEGENBOGEN: NACHTWACHE 2 (Arabische 2) ---")
+    for fname, long_name, ch_list, ch_before, ch_after, label, h_code in bot_2_steps:
+        cmds, pal, dims, _ = build_part_commands(ch_list, ch_before, ch_after)
+        print(f"  {fname:12s} ({label:12s}): {dims[0]:5.1f} x {dims[1]:5.1f} mm | {len(cmds):4d} Stiche")
+        for d in target_dirs:
+            write_verified_jef(os.path.join(d, fname), cmds, pal, hoop_code=h_code)
+        for d in long_name_dirs:
+            write_verified_jef(os.path.join(d, long_name), cmds, pal, hoop_code=h_code)
+
+    cmds_bot_2_all, pal_bot_2_all, _, _ = build_part_commands(
+        [c for c in chars_bot_2 if c['polys']], [], [bot_2_ch1, bot_2_ch2]
+    )
+    for d in target_dirs:
+        write_verified_jef(os.path.join(d, "NW2_ALL.JEF"), cmds_bot_2_all, pal_bot_2_all, hoop_code=2)
+
+    # =========================================================================
+    # 3. MITTE / ÄRMEL-WAPPEN: WWWAP.JEF + KIEL WAPPEN + 30 MITTE KOPIEREN
+    # =========================================================================
+    print("\n--- [3/3] ÄRMEL- UND BRUST-WAPPEN (WWWAP.JEF & MITTE-DATEIEN) SYNCHRONISIEREN ---")
+    wappen_files = [
+        (r"E:\StickCore\output\fw\WWWAP.JEF", "WWWAP.JEF", "02_MITTE_Aermelwappen_WWWAP.JEF"),
+        (r"E:\StickCore\output\fw\KIEL_VOL.JEF", "KIEL_VOL.JEF", None),
+        (r"E:\StickCore\output\fw\KIEL_KTL.JEF", "KIEL_KTL.JEF", None),
+        (r"E:\StickCore\output\fw\KIEL_BLK.JEF", "KIEL_BLK.JEF", None),
+        (r"E:\StickCore\output\fw\30_MITTE.JEF", "30_MITTE.JEF", None),
+    ]
+    for src_path, short_name, extra_long_name in wappen_files:
+        if os.path.exists(src_path):
+            for d in target_dirs:
+                dst = os.path.join(d, short_name)
+                if os.path.normcase(os.path.abspath(src_path)) != os.path.normcase(os.path.abspath(dst)):
+                    shutil.copy2(src_path, dst)
+            if extra_long_name:
+                for d in long_name_dirs:
+                    dst_long = os.path.join(d, extra_long_name)
+                    if os.path.normcase(os.path.abspath(src_path)) != os.path.normcase(os.path.abspath(dst_long)):
+                        shutil.copy2(src_path, dst_long)
+            print(f"  [OK] {short_name} -> in alle {len(target_dirs)} Zielordner (inkl. USB-Stick) kopiert.")
+
+    # =========================================================================
+    # 4. VORSCHAU-BILDER DES GESAMTEN PROJEKTS RENDERN
+    # =========================================================================
+    brain_dir = r"C:\Users\micbu\.gemini\antigravity\brain\e572641d-70d6-45b5-8c91-c97f358a4f6c"
+    os.makedirs(brain_dir, exist_ok=True)
+    src_verify_dir = r"E:\StickCore\output\fw"
+
+    # A) Detail-Vorschau Gegenbogen NACHTWACHE II
+    im_nw = Image.new('RGB', (1600, 720), (20, 22, 26))
+    draw_nw = ImageDraw.Draw(im_nw)
+    draw_nw.text((800, 30), "UNTERER GEGENBOGEN (24 MM VARSITY): NACHTWACHE II", fill=(245, 245, 250), anchor="mm")
+    draw_nw.text((800, 58), "Exakt gleiche Schrift & Größe wie BERUFSFEUERWEHR KIEL | 3D-Plastisch (2.4mm + 3.5mm @ 0.34mm) | Verriegeltes 1mm Fadenkreuz", fill=(160, 165, 180), anchor="mm")
+
+    colors_nw = [
+        (235, 45, 55),   # 1. NACHT (Rot)
+        (45, 165, 245),  # 2. WACH (Blau)
+        (245, 185, 35),  # 3. E II (Gold)
+    ]
+    scale_nw = 4.2
+    base_nw_x, base_nw_y = 800, 460
+
+    for idx, (fname, _, _, _, _, lbl, _) in enumerate(bot_ii_steps):
+        col = colors_nw[idx]
+        jef_file = os.path.join(src_verify_dir, fname)
+        st_pts, _ = parse_jef_stitches(jef_file)
+        cx_off, cy_off = bot_ii_offsets[idx]
 
         for i in range(len(st_pts) - 1):
-            op1, x1, y1 = st_pts[i]
-            op2, x2, y2 = st_pts[i+1]
+            op1, x1, y1, _ = st_pts[i]
+            op2, x2, y2, _ = st_pts[i+1]
             if op2 == 'NORMAL':
-                # JEF: +Y ist UP -> Bild: +Y ist DOWN
-                p1_scr = (base_x + (cx_off * 10.0 + x1) * 0.1 * scale_tot,
-                          base_y - (cy_off * 10.0 + y1) * 0.1 * scale_tot)
-                p2_scr = (base_x + (cx_off * 10.0 + x2) * 0.1 * scale_tot,
-                          base_y - (cy_off * 10.0 + y2) * 0.1 * scale_tot)
-                draw_tot.line([p1_scr, p2_scr], fill=col, width=1)
+                p1_scr = (base_nw_x + (cx_off * 10.0 + x1) * 0.1 * scale_nw,
+                          base_nw_y - (cy_off * 10.0 + y1) * 0.1 * scale_nw)
+                p2_scr = (base_nw_x + (cx_off * 10.0 + x2) * 0.1 * scale_nw,
+                          base_nw_y - (cy_off * 10.0 + y2) * 0.1 * scale_nw)
+                draw_nw.line([p1_scr, p2_scr], fill=col, width=2)
 
-        leg_x = 120 + idx * 360
-        draw_tot.rectangle([leg_x - 15, 790 - 8, leg_x + 15, 790 + 8], fill=col)
-        draw_tot.text((leg_x + 25, 790), f"{fname}: {lbl}", fill=(220, 220, 230), anchor="lm")
+        leg_x = 240 + idx * 420
+        draw_nw.rectangle([leg_x - 15, 660 - 8, leg_x + 15, 660 + 8], fill=col)
+        draw_nw.text((leg_x + 25, 660), f"{fname}: {lbl}", fill=(220, 220, 230), anchor="lm")
 
-    out_tot_png = os.path.join(brain_dir, "fw_bf30_verified_upright_preview.png")
-    im_tot.save(out_tot_png)
-    print(f"  [OK] Gesamt-Vorschau gespeichert: {out_tot_png}")
-    print("\n[FERTIG] Alle Dateien erfolgreich erzeugt!")
+    # Markiere die beiden Passkreuze im Bild
+    for ch_idx, (chx, chy) in enumerate([bot_ii_ch1, bot_ii_ch2], start=1):
+        px = base_nw_x + chx * scale_nw
+        py = base_nw_y - chy * scale_nw
+        r_mark = 22
+        draw_nw.ellipse([px - r_mark, py - r_mark, px + r_mark, py + r_mark], outline=(80, 255, 120), width=2)
+        draw_nw.text((px, py + 34), f"Fadenkreuz {ch_idx}", fill=(80, 255, 120), anchor="mm")
+
+    out_nw_png = os.path.join(brain_dir, "fw_nw30_gegenbogen_preview.png")
+    im_nw.save(out_nw_png)
+
+    # B) Gesamtprojekt-Übersicht (Oberer Bogen + WWWAP.JEF Wappen + Unterer Gegenbogen NACHTWACHE II)
+    im_proj = Image.new('RGB', (1600, 1300), (18, 20, 24))
+    draw_proj = ImageDraw.Draw(im_proj)
+    draw_proj.text((800, 32), "KOMPLETT-PROJEKT MIT FADENKREUZ (JANOME MC350E - RAHMEN A)", fill=(245, 245, 250), anchor="mm")
+    draw_proj.text((800, 60), "Oben: BERUFSFEUERWEHR KIEL (BF30_1..4.JEF)  |  Mitte: Ärmelwappen (WWWAP.JEF)  |  Unten: NACHTWACHE II (NW30_1..3.JEF)", fill=(165, 175, 195), anchor="mm")
+
+    scale_p = 3.5
+    center_px = 800
+    top_arc_origin_y = 260    # Scheitelpunkt oberer Bogen (Y=0 in top_arc coords)
+    wappen_origin_y  = 640    # Zentrum WWWAP.JEF
+    bot_arc_origin_y = 1040   # Scheitelpunkt unterer Bogen (Y=0 in bot_arc coords)
+
+    # 1. Zeichne Oberen Bogen (BF30_1..4.JEF)
+    colors_top = [(235, 50, 55), (55, 170, 245), (245, 190, 40), (70, 215, 115)]
+    for idx, (fname, _, _, _, _, lbl, _) in enumerate(top_steps):
+        col = colors_top[idx]
+        st_pts, _ = parse_jef_stitches(os.path.join(src_verify_dir, fname))
+        cx_off, cy_off = top_offsets[idx]
+        for i in range(len(st_pts) - 1):
+            op1, x1, y1, _ = st_pts[i]
+            op2, x2, y2, _ = st_pts[i+1]
+            if op2 == 'NORMAL':
+                p1 = (center_px + (cx_off * 10.0 + x1) * 0.1 * scale_p,
+                      top_arc_origin_y - (cy_off * 10.0 + y1) * 0.1 * scale_p)
+                p2 = (center_px + (cx_off * 10.0 + x2) * 0.1 * scale_p,
+                      top_arc_origin_y - (cy_off * 10.0 + y2) * 0.1 * scale_p)
+                draw_proj.line([p1, p2], fill=col, width=2)
+
+    for ch_idx, (chx, chy) in enumerate([top_ch1, top_ch2, top_ch3], start=1):
+        px = center_px + chx * scale_p
+        py = top_arc_origin_y - chy * scale_p
+        draw_proj.ellipse([px - 18, py - 18, px + 18, py + 18], outline=(80, 255, 120), width=2)
+        draw_proj.text((px, py - 26), f"FK {ch_idx}", fill=(80, 255, 120), anchor="mm")
+
+    # 2. Zeichne Ärmelwappen WWWAP.JEF in der Mitte
+    wwwap_path = os.path.join(src_verify_dir, "WWWAP.JEF")
+    if os.path.exists(wwwap_path):
+        st_w, _ = parse_jef_stitches(wwwap_path)
+        w_colors = [(220, 35, 45), (242, 242, 246), (35, 38, 44)]
+        for i in range(len(st_w) - 1):
+            op1, x1, y1, c1 = st_w[i]
+            op2, x2, y2, c2 = st_w[i+1]
+            if op2 == 'NORMAL':
+                col = w_colors[c2 % len(w_colors)]
+                p1 = (center_px + x1 * 0.1 * scale_p, wappen_origin_y - y1 * 0.1 * scale_p)
+                p2 = (center_px + x2 * 0.1 * scale_p, wappen_origin_y - y2 * 0.1 * scale_p)
+                draw_proj.line([p1, p2], fill=col, width=1)
+        draw_proj.text((center_px, wappen_origin_y + 155), "WWWAP.JEF (Ärmel-/Brustwappen: 66.2 x 70.3 mm, 15.126 Stiche)", fill=(220, 225, 235), anchor="mm")
+
+    # 3. Zeichne Unteren Gegenbogen (NW30_1..3.JEF)
+    for idx, (fname, _, _, _, _, lbl, _) in enumerate(bot_ii_steps):
+        col = colors_nw[idx]
+        st_pts, _ = parse_jef_stitches(os.path.join(src_verify_dir, fname))
+        cx_off, cy_off = bot_ii_offsets[idx]
+        for i in range(len(st_pts) - 1):
+            op1, x1, y1, _ = st_pts[i]
+            op2, x2, y2, _ = st_pts[i+1]
+            if op2 == 'NORMAL':
+                p1 = (center_px + (cx_off * 10.0 + x1) * 0.1 * scale_p,
+                      bot_arc_origin_y - (cy_off * 10.0 + y1) * 0.1 * scale_p)
+                p2 = (center_px + (cx_off * 10.0 + x2) * 0.1 * scale_p,
+                      bot_arc_origin_y - (cy_off * 10.0 + y2) * 0.1 * scale_p)
+                draw_proj.line([p1, p2], fill=col, width=2)
+
+    for ch_idx, (chx, chy) in enumerate([bot_ii_ch1, bot_ii_ch2], start=1):
+        px = center_px + chx * scale_p
+        py = bot_arc_origin_y - chy * scale_p
+        draw_proj.ellipse([px - 18, py - 18, px + 18, py + 18], outline=(80, 255, 120), width=2)
+        draw_proj.text((px, py + 26), f"FK {ch_idx}", fill=(80, 255, 120), anchor="mm")
+
+    # Legende unten
+    draw_proj.text((800, 1175), "OBERER BOGEN:   BF30_1.JEF (1. BERUFS)  ->  BF30_2.JEF (2. FEUER)  ->  BF30_3.JEF (3. WEHR)  ->  BF30_4.JEF (4. KIEL)", fill=(230, 230, 240), anchor="mm")
+    draw_proj.text((800, 1210), "MITTE WAPPEN:   WWWAP.JEF (Ärmelwappen 66x70 mm)   |   KIEL_VOL.JEF / KIEL_KTL.JEF   |   30_MITTE.JEF (Zahl 30)", fill=(230, 230, 240), anchor="mm")
+    draw_proj.text((800, 1245), "UNTERER BOGEN:  NW30_1.JEF (1. NACHT)   ->  NW30_2.JEF (2. WACH)   ->  NW30_3.JEF (3. E II)  [+ NW2_1..3.JEF für 'NACHTWACHE 2']", fill=(230, 230, 240), anchor="mm")
+
+    out_proj_png = os.path.join(brain_dir, "fw_complete_project_preview.png")
+    im_proj.save(out_proj_png)
+
+    # Kopiere Vorschaubilder auch auf den Stick in F:\fw und E:\StickCore\output\fw
+    for d in long_name_dirs:
+        shutil.copy2(out_proj_png, os.path.join(d, "PROJEKT_KOMPLETT_UEBERSICHT.png"))
+        shutil.copy2(out_nw_png, os.path.join(d, "GEGENBOGEN_NACHTWACHE_II_DETAIL.png"))
+
+    print(f"\n  [OK] Detail-Vorschau Gegenbogen: {out_nw_png}")
+    print(f"  [OK] Komplett-Projekt-Vorschau:  {out_proj_png}")
+    print("\n[FERTIG] Gesamtes Projekt erfolgreich auf USB-Stick (F:\\) und Festplatte gespeichert!")
 
 if __name__ == '__main__':
     main()

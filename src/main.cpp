@@ -2,10 +2,12 @@
 //  StickCore  –  main.cpp
 // ---------------------------------------------------------------------------
 #include "MainWindow.h"
+#include "codec/JefCodec.h"
 #include "library/LibraryBuilder.h"
 #include "library/LibraryDialog.h"
 
 #include <QApplication>
+#include <QDoubleSpinBox>
 #include <QSurfaceFormat>
 #include <QTimer>
 #include <QFontDatabase>
@@ -67,6 +69,26 @@ int main(int argc, char** argv)
             qApp->processEvents();
             QTimer::singleShot(250, [dlg, out]() {
                 dlg->grab().save(out);
+                qApp->quit();
+            });
+        });
+        return app.exec();
+    }
+
+    const int sdi = args.indexOf(QStringLiteral("--shot-density"));
+    if (sdi >= 0 && sdi + 3 < args.size()) {
+        const QString outStd   = args[sdi + 1];
+        const QString outDense = args[sdi + 2];
+        const QString outJef   = args[sdi + 3];
+        QTimer::singleShot(850, [&w, outStd, outDense, outJef]() {
+            w.grab().save(outStd);
+            if (auto* spin = w.findChild<QDoubleSpinBox*>(QStringLiteral("DensitySpin"))) {
+                spin->setValue(0.28);
+            }
+            qApp->processEvents();
+            QTimer::singleShot(350, [&w, outDense, outJef]() {
+                w.grab().save(outDense);
+                stick::JefCodec::exportToFile(outJef, w.currentSequence(), stick::HoopType::HoopB_140x200);
                 qApp->quit();
             });
         });

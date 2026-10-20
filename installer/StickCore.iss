@@ -3,7 +3,7 @@
 ; ISCC after placing the windeployqt output in the "deploy" folder.
 
 #define AppName "StickCore"
-#define AppVersion "1.0.1"
+#define AppVersion "1.0.2"
 #define AppPublisher "MicBur"
 #define AppURL "https://github.com/MicBur/StickCore"
 #define AppExeName "StickCore.exe"

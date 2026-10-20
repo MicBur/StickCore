@@ -576,6 +576,7 @@ void ArcTextDialog::regenerateStitches()
     tp.paddingPitchMm  = m_paddingPitch->value();
     tp.raised          = (tp.style == TextDigitizer::StitchStyle::Raised);
 
+    m_currentParams = tp;
     m_currentSeq = TextDigitizer::generate(tp);
     m_currentSeq.palette = { ThreadCatalog::snap(QColor(180, 30, 45)) }; // Cardinal Red / Gold
 

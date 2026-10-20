@@ -9,9 +9,9 @@
 #include <QPushButton>
 #include <QAbstractButton>
 #include <QProgressDialog>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
-#include <QProcess>
 #include <QSettings>
 #include <QRegularExpression>
 
@@ -55,7 +55,7 @@ void AutoUpdater::checkForUpdates(bool silentIfUpToDate)
 
     QUrl apiUrl(QStringLiteral("https://api.github.com/repos/MicBur/StickCore/releases/latest"));
     QNetworkRequest req(apiUrl);
-    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("StickCore-DesktopApp/1.0.0"));
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("StickCore-DesktopApp/1.1.0"));
     req.setRawHeader("Accept", "application/vnd.github.v3+json");
 
     if (!m_token.isEmpty()) {
@@ -100,27 +100,15 @@ void AutoUpdater::onReleaseReply(QNetworkReply* reply)
     m_newVersion = cleanVersion(tagName);
     m_releaseNotes = obj.value(QStringLiteral("body")).toString();
 
-    // Look for installer asset (.exe or .zip)
-    m_downloadUrl = QUrl();
+    m_downloadUrl = QUrl(obj.value(QStringLiteral("html_url")).toString());
     const QJsonArray assets = obj.value(QStringLiteral("assets")).toArray();
     for (const auto& a : assets) {
         const QJsonObject ao = a.toObject();
         const QString name = ao.value(QStringLiteral("name")).toString();
-        if (name.endsWith(QStringLiteral(".exe"), Qt::CaseInsensitive)) {
+        if (name.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive) ||
+            name.endsWith(QStringLiteral(".exe"), Qt::CaseInsensitive)) {
             m_downloadUrl = QUrl(ao.value(QStringLiteral("browser_download_url")).toString());
             break;
-        }
-    }
-
-    // Fallback if no .exe was found, check for zip
-    if (m_downloadUrl.isEmpty()) {
-        for (const auto& a : assets) {
-            const QJsonObject ao = a.toObject();
-            const QString name = ao.value(QStringLiteral("name")).toString();
-            if (name.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive)) {
-                m_downloadUrl = QUrl(ao.value(QStringLiteral("browser_download_url")).toString());
-                break;
-            }
         }
     }
 
@@ -142,25 +130,21 @@ void AutoUpdater::onReleaseReply(QNetworkReply* reply)
             "<div style='background:#171a21; color:#dbe0e9; padding:10px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #2c313d;'>"
             "%3"
             "</div><br>"
-            "Möchten Sie das Update jetzt automatisch herunterladen und installieren?")
+            "Möchten Sie die offizielle Release-Seite zum Herunterladen öffnen?")
             .arg(m_newVersion)
             .arg(CURRENT_VERSION)
             .arg(notesHtml.isEmpty() ? QStringLiteral("Reguläre System- & Stabilitätsaktualisierung.") : notesHtml));
 
-        QPushButton* btnUpdate = box.addButton(QStringLiteral("Jetzt aktualisieren"), QMessageBox::AcceptRole);
+        QPushButton* btnUpdate = box.addButton(QStringLiteral("Im Browser öffnen"), QMessageBox::AcceptRole);
         box.addButton(QStringLiteral("Später"), QMessageBox::RejectRole);
         box.setDefaultButton(btnUpdate);
         box.exec();
 
         if (box.clickedButton() == static_cast<QAbstractButton*>(btnUpdate)) {
-            if (m_downloadUrl.isValid()) {
-                const QString fileName = m_downloadUrl.fileName().isEmpty() ? QStringLiteral("StickCoreSetup.exe") : m_downloadUrl.fileName();
-                startDownload(m_downloadUrl, fileName);
-            } else {
-                QMessageBox::warning(m_parent,
-                    QStringLiteral("Download-Fehler"),
-                    QStringLiteral("In diesem Release wurde keine passende Setup-Datei gefunden."));
-            }
+            const QUrl targetUrl = m_downloadUrl.isValid()
+                ? m_downloadUrl
+                : QUrl(QStringLiteral("https://github.com/MicBur/StickCore/releases"));
+            QDesktopServices::openUrl(targetUrl);
         }
     } else {
         if (!m_silent) {
@@ -172,121 +156,28 @@ void AutoUpdater::onReleaseReply(QNetworkReply* reply)
     }
 }
 
-void AutoUpdater::startDownload(const QUrl& url, const QString& targetFileName)
+void AutoUpdater::startDownload(const QUrl& url, const QString& /*targetFileName*/)
 {
-    m_downloadTarget = QDir::tempPath() + QStringLiteral("/") + targetFileName;
-
-    QFile file(m_downloadTarget);
-    if (file.exists()) file.remove();
-
-    QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("StickCore-DesktopApp/1.0.0"));
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    if (!m_token.isEmpty()) {
-        req.setRawHeader("Authorization", QString("token %1").arg(m_token).toUtf8());
+    if (url.isValid()) {
+        QDesktopServices::openUrl(url);
     }
-
-    if (m_downloadReply) {
-        m_downloadReply->abort();
-        m_downloadReply->deleteLater();
-    }
-
-    m_downloadReply = m_net.get(req);
-
-    if (m_progressDialog) {
-        delete m_progressDialog;
-    }
-
-    m_progressDialog = new QProgressDialog(
-        QStringLiteral("StickCore Update wird heruntergeladen..."),
-        QStringLiteral("Abbrechen"),
-        0, 100, m_parent);
-    m_progressDialog->setWindowTitle(QStringLiteral("Update herunterladen"));
-    m_progressDialog->setWindowModality(Qt::WindowModal);
-    m_progressDialog->setMinimumDuration(100);
-    m_progressDialog->setValue(0);
-
-    connect(m_progressDialog, &QProgressDialog::canceled, this, [this]() {
-        if (m_downloadReply) m_downloadReply->abort();
-    });
-
-    connect(m_downloadReply, &QNetworkReply::downloadProgress, this, &AutoUpdater::onDownloadProgress);
-    connect(m_downloadReply, &QNetworkReply::readyRead, this, &AutoUpdater::onDownloadData);
-    connect(m_downloadReply, &QNetworkReply::finished, this, &AutoUpdater::onDownloadFinished);
 }
 
 void AutoUpdater::onDownloadData()
 {
-    if (!m_downloadReply) return;
-    QFile file(m_downloadTarget);
-    if (file.open(QIODevice::Append)) {
-        file.write(m_downloadReply->readAll());
-        file.close();
-    }
 }
 
 void AutoUpdater::onDownloadProgress(qint64 bytesReceived, qint64 bytesTotal)
 {
     emit downloadProgress(bytesReceived, bytesTotal);
-    if (m_progressDialog) {
-        if (bytesTotal > 0) {
-            const int percent = static_cast<int>((bytesReceived * 100) / bytesTotal);
-            m_progressDialog->setMaximum(100);
-            m_progressDialog->setValue(percent);
-            m_progressDialog->setLabelText(
-                QStringLiteral("StickCore Update wird heruntergeladen: %1 MB / %2 MB (%3%)")
-                    .arg(bytesReceived / 1048576.0, 0, 'f', 1)
-                    .arg(bytesTotal / 1048576.0, 0, 'f', 1)
-                    .arg(percent));
-        } else {
-            m_progressDialog->setMaximum(0);
-            m_progressDialog->setLabelText(
-                QStringLiteral("StickCore Update wird heruntergeladen: %1 MB...")
-                    .arg(bytesReceived / 1048576.0, 0, 'f', 1));
-        }
-    }
 }
 
 void AutoUpdater::onDownloadFinished()
 {
-    if (m_progressDialog) {
-        m_progressDialog->close();
-        m_progressDialog->deleteLater();
-        m_progressDialog = nullptr;
+    if (m_downloadReply) {
+        m_downloadReply->deleteLater();
+        m_downloadReply = nullptr;
     }
-
-    if (!m_downloadReply) return;
-
-    if (m_downloadReply->error() == QNetworkReply::NoError) {
-        emit updateReadyToInstall(m_downloadTarget);
-
-        QMessageBox::StandardButton reply = QMessageBox::question(m_parent,
-            QStringLiteral("Update bereit zur Installation"),
-            QStringLiteral("Das Update wurde erfolgreich heruntergeladen.<br><br>"
-                           "StickCore wird nun beendet und die Installation gestartet.<br><br>"
-                           "Jetzt fortfahren?"),
-            QMessageBox::Yes | QMessageBox::No);
-
-        if (reply == QMessageBox::Yes) {
-            // Start detached installer
-            const bool started = QProcess::startDetached(m_downloadTarget, QStringList());
-            if (started) {
-                QApplication::quit();
-            } else {
-                QMessageBox::warning(m_parent,
-                    QStringLiteral("Fehler beim Starten"),
-                    QStringLiteral("Der Installer konnte nicht gestartet werden.<br>Datei liegt unter: %1")
-                        .arg(m_downloadTarget));
-            }
-        }
-    } else if (m_downloadReply->error() != QNetworkReply::OperationCanceledError) {
-        QMessageBox::warning(m_parent,
-            QStringLiteral("Download fehlgeschlagen"),
-            QStringLiteral("Fehler beim Herunterladen: %1").arg(m_downloadReply->errorString()));
-    }
-
-    m_downloadReply->deleteLater();
-    m_downloadReply = nullptr;
 }
 
 QString AutoUpdater::cleanVersion(const QString& v)

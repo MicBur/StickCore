@@ -1,15 +1,15 @@
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== StickCore: Assembling Local Release Package ===" -ForegroundColor Cyan
+Write-Host "=== StickCore: Assembling Local Release Package & Installer ===" -ForegroundColor Cyan
 
-$deployDir = "e:\StickCore\deploy"
-$outputDir = "e:\StickCore\Output"
+$deployDir = "E:\StickCore\deploy"
+$outputDir = "E:\StickCore\output"
 
 if (!(Test-Path $deployDir)) { New-Item -ItemType Directory -Path $deployDir | Out-Null }
 if (!(Test-Path $outputDir)) { New-Item -ItemType Directory -Path $outputDir | Out-Null }
 
 # 1. Update StickCore.exe from build-local
-Copy-Item "e:\StickCore\build-local\StickCore.exe" "$deployDir\StickCore.exe" -Force
+Copy-Item "E:\StickCore\build-local\StickCore.exe" "$deployDir\StickCore.exe" -Force
 Write-Host "[OK] Copied latest StickCore.exe"
 
 # 2. Run windeployqt
@@ -21,23 +21,39 @@ Write-Host "[OK] windeployqt completed"
 $fontsDir = "$deployDir\fonts"
 if (!(Test-Path $fontsDir)) { New-Item -ItemType Directory -Path $fontsDir | Out-Null }
 
-Copy-Item "e:\StickCore\assets\fonts\*.ttf" $fontsDir -Force
-Copy-Item "e:\StickCore\media\fonts\*.ttf" $fontsDir -Force
+Copy-Item "E:\StickCore\assets\fonts\*.ttf" $fontsDir -Force
+Copy-Item "E:\StickCore\media\fonts\*.ttf" $fontsDir -Force
 $fontCount = (Get-ChildItem $fontsDir -Filter "*.ttf").Count
 Write-Host "[OK] Copied $fontCount TrueType fonts into deploy\fonts"
 
 # 4. Copy logo and icon assets
-Copy-Item "e:\StickCore\media\stickcore.ico" "$deployDir\stickcore.ico" -Force
-Copy-Item "e:\StickCore\media\stickcore_logo.png" "$deployDir\stickcore_logo.png" -Force
-Copy-Item "e:\StickCore\media\stickcore_badge.png" "$deployDir\stickcore_badge.png" -Force
+Copy-Item "E:\StickCore\media\stickcore.ico" "$deployDir\stickcore.ico" -Force
+Copy-Item "E:\StickCore\media\stickcore_logo.png" "$deployDir\stickcore_logo.png" -Force
+Copy-Item "E:\StickCore\media\stickcore_badge.png" "$deployDir\stickcore_badge.png" -Force
 Write-Host "[OK] Copied branding and icon assets"
 
-# 4b. Copy unified Design Library (750+ motifs, thumbnails and index)
+# 4b. Copy unified Design Library (900+ motifs, thumbnails and index)
 $deployLibDir = "$deployDir\library"
 if (!(Test-Path $deployLibDir)) { New-Item -ItemType Directory -Path $deployLibDir | Out-Null }
-Copy-Item "e:\StickCore\library\*" $deployLibDir -Recurse -Force
+Copy-Item "E:\StickCore\library\*" $deployLibDir -Recurse -Force
 $scdCount = (Get-ChildItem "$deployLibDir\designs" -Filter "*.scd").Count
 Write-Host "[OK] Copied $scdCount embroidery designs and thumbnails into deploy\library"
+
+# 4c. Copy JEF embroidery files into deploy\output
+$deployOutDir = "$deployDir\output"
+if (!(Test-Path $deployOutDir)) { New-Item -ItemType Directory -Path $deployOutDir | Out-Null }
+Get-ChildItem "E:\StickCore\output" -Filter "*.jef" -File | ForEach-Object {
+    Copy-Item $_.FullName "$deployOutDir\$($_.Name)" -Force
+}
+foreach ($sub in @("fw", "EmbF5", "mef_jef")) {
+    if (Test-Path "E:\StickCore\output\$sub") {
+        $destSub = Join-Path $deployOutDir $sub
+        if (!(Test-Path $destSub)) { New-Item -ItemType Directory -Path $destSub | Out-Null }
+        Copy-Item "E:\StickCore\output\$sub\*" $destSub -Recurse -Force
+    }
+}
+$jefCount = (Get-ChildItem $deployOutDir -Recurse -Include "*.jef", "*.JEF" -File).Count
+Write-Host "[OK] Copied $jefCount JEF embroidery files into deploy\output"
 
 # 5. Create 1-Click Font Installer script in deploy
 $fontInstallerScript = @'
@@ -59,12 +75,12 @@ Write-Host "Alle Schriften erfolgreich installiert!" -ForegroundColor Green
 '@
 Set-Content -Path "$deployDir\Install-Fonts.ps1" -Value $fontInstallerScript -Encoding UTF8
 
-# 6. Create 1-Click Desktop App Setup script for Daniela
+# 6. Create 1-Click Desktop App Setup script
 $setupBat = @'
 @echo off
 chcp 65001 >nul
 echo ===================================================
-echo     StickCore Studio v1.0.1 - Setup & Installation
+echo     StickCore Studio v1.0.2 - Setup & Installation
 echo ===================================================
 echo.
 
@@ -99,15 +115,35 @@ start "" "%~dp0StickCore.exe" %*
 '@
 Set-Content -Path "$deployDir\StickCore.bat" -Value $runBat -Encoding OEM
 
-# 7. Create ZIP packages
-$zipFile101 = "$outputDir\StickCore-Portable-v1.0.1.zip"
-$zipFile100 = "$outputDir\StickCore-Portable-v1.0.0.zip"
-if (Test-Path $zipFile101) { Remove-Item $zipFile101 -Force }
-Write-Host "Creating ZIP archive: $zipFile101..."
-Compress-Archive -Path "$deployDir\*" -DestinationPath $zipFile101 -Force
-Copy-Item $zipFile101 $zipFile100 -Force
-$zipLen = (Get-Item $zipFile101).Length
-$zipSizeMb = [math]::Round($zipLen / 1MB, 2)
-Write-Host "Created ZIP package: $zipFile101 ($zipSizeMb MB)" -ForegroundColor Green
+# 7. Build Inno Setup Installer (StickCoreSetup.exe)
+$iscc = "C:\Users\micbu\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
+if (!(Test-Path $iscc)) {
+    $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+}
+if (Test-Path $iscc) {
+    $setupExe = "$outputDir\StickCoreSetup.exe"
+    $rootSetupExe = "E:\StickCore\StickCoreSetup.exe"
+    if (Test-Path $setupExe) { Remove-Item $setupExe -Force }
+    if (Test-Path $rootSetupExe) { Remove-Item $rootSetupExe -Force }
+    Write-Host "Building Windows Installer (StickCoreSetup.exe) with Inno Setup 6..." -ForegroundColor Cyan
+    & $iscc "E:\StickCore\installer\StickCore.iss"
+    if (Test-Path $setupExe) {
+        Copy-Item $setupExe $rootSetupExe -Force
+        & "C:\Program Files\Windows Defender\MpCmdRun.exe" -Scan -ScanType 3 -File $setupExe
+        $setupMb = [math]::Round((Get-Item $setupExe).Length / 1MB, 2)
+        Write-Host "[OK] Created Installer: $setupExe ($setupMb MB)" -ForegroundColor Green
+    }
+}
 
-Write-Host "=== Package Assembly Complete! ===" -ForegroundColor Cyan
+# 8. Create Portable ZIP packages
+$zipFile102 = "$outputDir\StickCore-Portable-v1.0.2.zip"
+$zipFile101 = "$outputDir\StickCore-Portable-v1.0.1.zip"
+if (Test-Path $zipFile102) { Remove-Item $zipFile102 -Force }
+Write-Host "Creating ZIP archive: $zipFile102..."
+Compress-Archive -Path "$deployDir\*" -DestinationPath $zipFile102 -Force
+Copy-Item $zipFile102 $zipFile101 -Force
+$zipLen = (Get-Item $zipFile102).Length
+$zipSizeMb = [math]::Round($zipLen / 1MB, 2)
+Write-Host "[OK] Created ZIP package: $zipFile102 ($zipSizeMb MB)" -ForegroundColor Green
+
+Write-Host "=== Package & Installer Assembly Complete! ===" -ForegroundColor Cyan

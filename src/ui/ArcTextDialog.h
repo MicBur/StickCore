@@ -59,6 +59,9 @@ public:
     /// Generated stitch sequence for the current settings
     StitchSequence resultSequence() const { return m_currentSeq; }
 
+    /// TextDigitizer parameters used to generate the sequence
+    const TextDigitizer::Params& textParams() const { return m_currentParams; }
+
     /// Multi-hoop result if multi-hoop was enabled
     MultiHoopSplitter::MultiResult multiHoopResult() const { return m_multiResult; }
     bool isMultiHoopActive() const;
@@ -113,6 +116,7 @@ private:
     QPushButton*        m_applyBtn        = nullptr;
 
     // State
+    TextDigitizer::Params          m_currentParams;
     StitchSequence                 m_currentSeq;
     MultiHoopSplitter::MultiResult m_multiResult;
     bool                           m_updating = false;

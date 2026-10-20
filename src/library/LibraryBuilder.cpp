@@ -106,8 +106,18 @@ LibraryBuilder::Stats LibraryBuilder::buildAll(const QString& targetDir,
 
     // 1. Starter Set
     std::cout << "-> Adding built-in starter designs..." << std::endl;
+    const auto existingEntries = lib.all();
     for (const Design& d : DesignFactory::starterSet()) {
-        lib.add(d.name, d.category, d.tags, d.seq, false);
+        bool alreadyThere = false;
+        for (const auto& ex : existingEntries) {
+            if (ex.name == d.name && ex.category == d.category) {
+                alreadyThere = true;
+                break;
+            }
+        }
+        if (!alreadyThere) {
+            lib.add(d.name, d.category, d.tags, d.seq, false);
+        }
         stats.starter++;
     }
 
@@ -285,6 +295,39 @@ LibraryBuilder::Stats LibraryBuilder::buildAll(const QString& targetDir,
           QStringLiteral("Feuerwehr Jubiläum 30 (Applikation Mitte)"),
           QStringLiteral("feuerwehr-zahl-30-applique-mef"),
           { QStringLiteral("30"), QStringLiteral("zahl"), QStringLiteral("applikation"), QStringLiteral("mef"), QStringLiteral("daniela") });
+
+    // Ärmel- & Brustwappen WWWAP.JEF
+    addFw(fwBases + QStringLiteral("/WWWAP.JEF"),
+          QStringLiteral("Ärmel- & Brustwappen Kiel (WWWAP)"),
+          QStringLiteral("feuerwehr-kiel-wwwap-wappen"),
+          { QStringLiteral("wwwap"), QStringLiteral("wappen"), QStringLiteral("ärmelwappen"), QStringLiteral("brustwappen"), QStringLiteral("nesselblatt") });
+
+    // Komplett-Bogen Oberer Bogen (BF30_ALL.JEF)
+    addFw(fwBases + QStringLiteral("/BF30_ALL.JEF"),
+          QStringLiteral("Oberer Bogen Berufsfeuerwehr Kiel (Komplett mit Fadenkreuz)"),
+          QStringLiteral("feuerwehr-kiel-bf30-all"),
+          { QStringLiteral("bf30"), QStringLiteral("berufsfeuerwehr"), QStringLiteral("oberbogen"), QStringLiteral("fadenkreuz"), QStringLiteral("komplett") });
+
+    // Unterer Gegenbogen NACHTWACHE II (NW30_1..3.JEF & NW30_ALL.JEF)
+    addFw(fwBases + QStringLiteral("/NW30_1.JEF"),
+          QStringLiteral("Gegenbogen Nachtwache II (Teil 1 - NACHT + Fadenkreuz)"),
+          QStringLiteral("feuerwehr-kiel-nw30-teil1"),
+          { QStringLiteral("nw30"), QStringLiteral("nachtwache"), QStringLiteral("gegenbogen"), QStringLiteral("teil1"), QStringLiteral("fadenkreuz") });
+
+    addFw(fwBases + QStringLiteral("/NW30_2.JEF"),
+          QStringLiteral("Gegenbogen Nachtwache II (Teil 2 - WACH + Fadenkreuz)"),
+          QStringLiteral("feuerwehr-kiel-nw30-teil2"),
+          { QStringLiteral("nw30"), QStringLiteral("nachtwache"), QStringLiteral("gegenbogen"), QStringLiteral("teil2"), QStringLiteral("fadenkreuz") });
+
+    addFw(fwBases + QStringLiteral("/NW30_3.JEF"),
+          QStringLiteral("Gegenbogen Nachtwache II (Teil 3 - E II + Fadenkreuz)"),
+          QStringLiteral("feuerwehr-kiel-nw30-teil3"),
+          { QStringLiteral("nw30"), QStringLiteral("nachtwache"), QStringLiteral("gegenbogen"), QStringLiteral("teil3"), QStringLiteral("fadenkreuz") });
+
+    addFw(fwBases + QStringLiteral("/NW30_ALL.JEF"),
+          QStringLiteral("Gegenbogen Nachtwache II (Komplett mit Fadenkreuz)"),
+          QStringLiteral("feuerwehr-kiel-nw30-all"),
+          { QStringLiteral("nw30"), QStringLiteral("nachtwache"), QStringLiteral("gegenbogen"), QStringLiteral("komplett"), QStringLiteral("fadenkreuz") });
 
     // Finalize index
     lib.writeIndex();

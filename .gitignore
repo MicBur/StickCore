@@ -24,8 +24,10 @@ cmake-build-*/
 # Installer distribution & deployment outputs (build artifacts)
 installer/deploy/
 installer/Output/
-Output/
 deploy/
+*.zip
+output/shot_*.png
+output/ui_*.png
 
 # Temporary profiles, logs & test outputs
 *.log

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "core/StitchTypes.h"
+#include "generators/TextDigitizer.h"
 #include <QMainWindow>
 #include <QPointer>
 #include <memory>
@@ -37,6 +38,7 @@ public:
     static QString styleSheet();      ///< the app-wide dark theme
 
     DesignLibrary* library() const { return m_library.get(); }
+    const StitchSequence& currentSequence() const { return m_current; }
 
     void captureManualScreenshots(const QString& outDir);
 
@@ -112,6 +114,9 @@ private slots:
     void rotate90(bool clockwise = true);
     void rotateFree();
     void setCurrentSequence(const StitchSequence& s, const QString& label = QString());
+    void applyDensityToLoadedDesign();
+    void onDocTabChanged(int index);
+    void onDocTabCloseRequested(int index);
 
     // Studio Player / Transport slots
     void togglePlayback();
@@ -130,6 +135,19 @@ private slots:
     void checkForUpdatesManual();
 
 private:
+    struct OpenDocEntry {
+        QString               title;
+        QString               filePath;
+        StitchSequence        baseSeq;
+        StitchSequence        currentSeq;
+        double                baseDensityMm    = 0.38;
+        double                currentDensityMm = 0.38;
+        double                basePullMm       = 0.20;
+        double                currentPullMm    = 0.20;
+        bool                  hasTextParams    = false;
+        TextDigitizer::Params textParams;
+    };
+
     void     setupMenus();
     QWidget* buildCenterView();
     QWidget* buildInfoPanel();
@@ -137,8 +155,20 @@ private:
     void     digitizeFrom(const QImage& img, const QString& label);
     void     digitizeWithDialog(const QImage& img, const QString& label);
     void     setStatusForSequence(const QString& prefix = QString());
+    void     registerOrUpdateOpenTab(const QString& title, const QString& filePath, const StitchSequence& seq);
+    static double detectSequenceBaseDensity(const StitchSequence& seq);
+    StitchSequence rebuildSequenceWithDensity(const StitchSequence& baseSeq,
+                                              double baseDensityMm,
+                                              double targetDensityMm,
+                                              double pullDeltaMm,
+                                              double maxStitchMm) const;
 
     class AutoUpdater* m_updater = nullptr;
+    class QTabBar*    m_docTabBar = nullptr;
+    QVector<OpenDocEntry> m_openDocs;
+    bool              m_switchingDocTab = false;
+    bool              m_applyingDensity = false;
+
     PathEditorWidget* m_editor = nullptr;
     StitchGLWidget*   m_view   = nullptr;
     QComboBox*        m_mode   = nullptr;
@@ -176,14 +206,21 @@ private:
     QLabel*           m_timeEstLabel     = nullptr;
     QListWidget*      m_threadList  = nullptr;
     QDoubleSpinBox*   m_density     = nullptr;
+    QSlider*          m_densitySlider = nullptr;
+    QLabel*           m_densityStateLabel = nullptr;
     QDoubleSpinBox*   m_fillAngleSpin = nullptr;
     QComboBox*        m_patternCombo  = nullptr;
     QDoubleSpinBox*   m_pull        = nullptr;
     QDoubleSpinBox*   m_maxStitch   = nullptr;
     QCheckBox*        m_underlay    = nullptr;
 
-    StitchSequence    m_current;
-    QString           m_currentFilePath;
+    StitchSequence        m_baseSequence;
+    double                m_baseDensityMm = 0.38;
+    double                m_basePullMm    = 0.15;
+    bool                  m_hasTextParams = false;
+    TextDigitizer::Params m_currentTextParams;
+    StitchSequence        m_current;
+    QString               m_currentFilePath;
 };
 
 } // namespace stick

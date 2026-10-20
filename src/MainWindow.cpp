@@ -85,6 +85,9 @@
 #include <QIcon>
 #include <QSlider>
 #include <QPushButton>
+#include <QToolButton>
+#include <QTabBar>
+#include <QSignalBlocker>
 #include <QBuffer>
 #include <QKeyEvent>
 #include <QDragEnterEvent>
@@ -168,11 +171,24 @@ QMenu { background:#1b1e26; color:#dbe0e9; border:1px solid #2c313d; padding:4px
 QMenu::item { padding:6px 24px; border-radius:4px; }
 QMenu::item:selected { background:#2dd4bf; color:#04201c; }
 QMenu::separator { height:1px; background:#2c313d; margin:4px 8px; }
-QToolBar { background:#1b1e26; border:0; border-bottom:1px solid #2c313d; spacing:4px; padding:5px 8px; }
+QToolBar { background:#1b1e26; border:0; border-bottom:1px solid #2c313d; spacing:6px; padding:6px 10px; }
 QToolButton { color:#dbe0e9; background:#232732; border:1px solid #2c313d; border-radius:7px; padding:6px 11px; }
 QToolButton:hover { background:#2b3040; border-color:#2dd4bf; }
 QToolButton:pressed { background:#333a4c; }
+QToolButton:checked { background:#173635; color:#2dd4bf; border-color:#2dd4bf; font-weight:600; }
 QToolBar QLabel { color:#8b93a4; padding:0 4px; }
+#DocTabBarWall { background:#151821; border-bottom:1px solid #2c313d; padding:4px 10px 0px 10px; }
+QTabBar { background:transparent; }
+QTabBar::tab {
+    background:#1c202b; color:#94a3b8; border:1px solid #2c313d; border-bottom:0;
+    border-top-left-radius:7px; border-top-right-radius:7px;
+    padding:6px 14px; margin-right:4px; font-weight:600;
+}
+QTabBar::tab:hover { background:#252a38; color:#e2e8f0; }
+QTabBar::tab:selected {
+    background:#222836; color:#2dd4bf; border-color:#2dd4bf;
+    border-bottom:2px solid #2dd4bf;
+}
 QComboBox, QDoubleSpinBox, QSpinBox, QLineEdit {
     background:#232732; color:#dbe0e9; border:1px solid #2c313d; border-radius:7px; padding:4px 8px; }
 QComboBox::drop-down { border:0; width:18px; }
@@ -195,7 +211,10 @@ QDialog { background:#1b1e26; }
 QMessageBox { background:#1b1e26; }
 QPushButton { background:#2dd4bf; color:#04201c; border:0; border-radius:7px; padding:7px 13px; font-weight:600; }
 QPushButton:hover { background:#3ee0cc; }
+#PresetBtn { background:#232732; color:#dbe0e9; border:1px solid #2c313d; border-radius:6px; padding:5px 8px; font-size:12px; font-weight:600; }
+#PresetBtn:hover { background:#2b3040; border-color:#2dd4bf; color:#2dd4bf; }
 #TransportBar { background:#171a21; border-top:1px solid #2c313d; padding:6px 12px; }
+#ViewportHeader { background:#161922; border-bottom:1px solid #2c313d; padding:4px 10px; }
 #TransportBtn { background:#232732; color:#dbe0e9; border:1px solid #2c313d; border-radius:6px; padding:5px 10px; font-weight:600; min-width:28px; }
 #TransportBtn:hover { background:#2b3040; border-color:#2dd4bf; }
 #TransportBtn:pressed { background:#333a4c; }
@@ -236,10 +255,28 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     connect(m_editor, &PathEditorWidget::designMoved, this, [this](double dx, double dy){
         m_view->setSequence(m_editor->sequence());
         m_current = m_editor->sequence();
+        for (Stitch& s : m_baseSequence.stitches) {
+            s.x += dx;
+            s.y += dy;
+        }
+        if (m_docTabBar) {
+            const int tabIdx = m_docTabBar->currentIndex();
+            if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+                m_openDocs[tabIdx].currentSeq = m_current;
+                m_openDocs[tabIdx].baseSeq    = m_baseSequence;
+            }
+        }
         updateInfoPanel();
     });
     connect(m_editor, &PathEditorWidget::hoopSelected, this, &MainWindow::selectHoop);
     connect(m_editor, &PathEditorWidget::fitToHoopRequested, this, &MainWindow::fitDesignToHoop);
+
+    // Keep m_mode available for vector drawing mode switching
+    m_mode = new QComboBox;
+    m_mode->addItem(QStringLiteral("Satin (2 Rails)"));
+    m_mode->addItem(QStringLiteral("Tatami (Polygon)"));
+    m_mode->hide();
+    connect(m_mode, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::modeChanged);
 
     QWidget* centerView = buildCenterView();
     QWidget* panel = buildInfoPanel();
@@ -255,105 +292,100 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     split->setStretchFactor(1, 6);
     split->setStretchFactor(2, 2);
 
-    const int edW = std::min(360, static_cast<int>(initW * 0.28));
-    const int pnlW = std::min(280, static_cast<int>(initW * 0.22));
+    const int edW = std::min(350, static_cast<int>(initW * 0.27));
+    const int pnlW = std::min(310, static_cast<int>(initW * 0.24));
     const int cntW = initW - edW - pnlW;
     split->setSizes({ edW, cntW, pnlW });
-    setCentralWidget(split);
+
+    // Open-Documents Tab Bar above the main workspace
+    auto* centralWrapper = new QWidget(this);
+    m_mode->setParent(centralWrapper);
+    auto* centralLay = new QVBoxLayout(centralWrapper);
+    centralLay->setContentsMargins(0, 0, 0, 0);
+    centralLay->setSpacing(0);
+
+    auto* tabBarWall = new QWidget(centralWrapper);
+    tabBarWall->setObjectName(QStringLiteral("DocTabBarWall"));
+    auto* tabWallLay = new QHBoxLayout(tabBarWall);
+    tabWallLay->setContentsMargins(8, 2, 8, 0);
+    tabWallLay->setSpacing(8);
+
+    auto* tabTitleLbl = new QLabel(QStringLiteral("📂 Geöffnete Dateien:"), tabBarWall);
+    tabTitleLbl->setStyleSheet(QStringLiteral("color:#8b93a4; font-size:11px; font-weight:700; padding-bottom:4px;"));
+    tabWallLay->addWidget(tabTitleLbl);
+
+    m_docTabBar = new QTabBar(tabBarWall);
+    m_docTabBar->setTabsClosable(true);
+    m_docTabBar->setMovable(false);
+    m_docTabBar->setExpanding(false);
+    m_docTabBar->setDrawBase(false);
+    connect(m_docTabBar, &QTabBar::currentChanged, this, &MainWindow::onDocTabChanged);
+    connect(m_docTabBar, &QTabBar::tabCloseRequested, this, &MainWindow::onDocTabCloseRequested);
+    tabWallLay->addWidget(m_docTabBar, 1);
+
+    auto* btnAddTab = new QToolButton(tabBarWall);
+    btnAddTab->setText(QStringLiteral("➕ JEF öffnen…"));
+    btnAddTab->setToolTip(QStringLiteral("Weitere Stickdatei (.jef, .dst, .svg) als Tab öffnen"));
+    btnAddTab->setStyleSheet(QStringLiteral("QToolButton { padding:3px 10px; margin-bottom:3px; font-size:12px; }"));
+    connect(btnAddTab, &QToolButton::clicked, this, &MainWindow::openEmbroideryFile);
+    tabWallLay->addWidget(btnAddTab);
+
+    centralLay->addWidget(tabBarWall);
+    centralLay->addWidget(split, 1);
+    setCentralWidget(centralWrapper);
 
     setupMenus();
 
-    // Studio Quick Toolbar (Streamlined & Clean for Laptop Ergonomics)
+    // -----------------------------------------------------------------------
+    // Aufgeräumte Haupt-Toolbar (Keine überladenen Knöpfe mehr rechts oben!)
+    // -----------------------------------------------------------------------
     QToolBar* tb = addToolBar(QStringLiteral("StudioToolbar"));
     tb->setMovable(false);
 
-    tb->addAction(QStringLiteral("📂 Öffnen…"), this, &MainWindow::openEmbroideryFile);
-    tb->addAction(QStringLiteral("💾 Speichern"), this, &MainWindow::saveFile);
-    tb->addAction(QStringLiteral("JEF Export"),  this, &MainWindow::exportJef);
+    tb->addAction(QStringLiteral("📂 Öffnen"),     this, &MainWindow::openEmbroideryFile);
+    tb->addAction(QStringLiteral("💾 Speichern"),  this, &MainWindow::saveFile);
+    tb->addAction(QStringLiteral("📤 JEF Export"), this, &MainWindow::exportJef);
+    tb->addAction(QStringLiteral("📚 Bibliothek"), this, &MainWindow::openLibrary);
     tb->addSeparator();
 
-    tb->addWidget(new QLabel(QStringLiteral(" Modus ")));
-    m_mode = new QComboBox(this);
-    m_mode->addItem(QStringLiteral("Satin (2 Rails)"));
-    m_mode->addItem(QStringLiteral("Tatami (Polygon)"));
-    connect(m_mode, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::modeChanged);
-    tb->addWidget(m_mode);
+    tb->addAction(QStringLiteral("⚓ Kieler Wappen"), this, &MainWindow::loadOfficialKielWappen);
+    tb->addAction(QStringLiteral("🌟 Bogen-Schrift"), this, &MainWindow::openArcTextStudio);
+    tb->addAction(QStringLiteral("📐 Einpassen"),     this, &MainWindow::fitDesignToHoop);
 
-    tb->addAction(QStringLiteral("⚡ Berechnen ▶"), this, &MainWindow::generate);
-    tb->addAction(QStringLiteral("🔀 Vektorisieren"), this, &MainWindow::convertStitchesToPaths);
-    tb->addAction(QStringLiteral("📐 Einpassen"),  this, &MainWindow::fitDesignToHoop);
-    tb->addSeparator();
+    auto* actCalc = tb->addAction(QStringLiteral("⚡ Dichte berechnen ▶"), this, &MainWindow::generate);
+    actCalc->setToolTip(QStringLiteral("Wendet die gewählte Fadendichte (Stichabstand) und den Zugausgleich sofort auf das aktuelle Motiv an (F5)"));
 
-    auto* moveGroup = new QActionGroup(this);
-    m_actOrbitMode = tb->addAction(QStringLiteral("🔄 3D"), this, [this]{
-        m_view->setMouseMode(StitchGLWidget::MouseMode::Orbit);
-        statusBar()->showMessage(QStringLiteral("Mausmodus: 3D Orbit-Kamera (Linksklick dreht, Shift+Klick verschiebt Motiv)."), 4000);
-    });
-    m_actOrbitMode->setCheckable(true);
-    m_actOrbitMode->setChecked(true);
-    m_actOrbitMode->setToolTip(QStringLiteral("3D-Kamera mit Maus frei rotieren (O)"));
-    moveGroup->addAction(m_actOrbitMode);
+    auto* spacer = new QWidget;
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    tb->addWidget(spacer);
 
-    m_actMoveMode = tb->addAction(QStringLiteral("✥ Bewegen"), this, [this]{
-        m_view->setMouseMode(StitchGLWidget::MouseMode::MoveDesign);
-        statusBar()->showMessage(QStringLiteral("Mausmodus: Motiv verschieben (Linksklick zieht das Motiv im Rahmen)."), 4000);
-    });
-    m_actMoveMode->setCheckable(true);
-    m_actMoveMode->setToolTip(QStringLiteral("Motiv mit Maus im Rahmen verschieben (V)"));
-    moveGroup->addAction(m_actMoveMode);
-
-    m_actTopDown = tb->addAction(QStringLiteral("👁 2D/3D"), this, &MainWindow::toggleViewPreset);
-    m_actTopDown->setToolTip(QStringLiteral("Zwischen 2D-Draufsicht und 3D-Perspektive umschalten (Strg+D)"));
-
-    m_actHoop = tb->addAction(QStringLiteral("⭕ Rahmen"), this, &MainWindow::toggleHoopVisible);
-    m_actHoop->setCheckable(true);
-    m_actHoop->setChecked(true);
-    m_actHoop->setToolTip(QStringLiteral("Stickrahmen und Zentrier-Fadenkreuz ein-/ausblenden (H)"));
-
-    auto* centerAct = tb->addAction(QStringLiteral("⌖ Mitte"), this, &MainWindow::centerCurrentDesign);
-    centerAct->setToolTip(QStringLiteral("Motiv genau im Rahmen zentrieren (Strg+0)"));
-    tb->addSeparator();
-
-    // Studio Star Features
-    tb->addAction(QStringLiteral("🌟 Bogen-Schrift…"), this, &MainWindow::openArcTextStudio);
-    tb->addAction(QStringLiteral("🔤 Text…"),             this, &MainWindow::makeText);
-    tb->addAction(QStringLiteral("✂ Applikation…"),    this, &MainWindow::makeApplique);
-    tb->addSeparator();
-
-    // Side-Panel Toggles (Maximum workspace on laptops!)
-    auto* actToggleEditor = tb->addAction(QStringLiteral("✏ Editor"), this, [this](bool checked){
+    // Rechts außen: Nur noch 2 klare Ansicht-Schalter für die Seitenleisten
+    auto* actToggleEditor = tb->addAction(QStringLiteral("✏ 2D-Editor"), this, [this](bool checked){
         m_editor->setVisible(checked);
     });
     actToggleEditor->setCheckable(true);
     actToggleEditor->setChecked(true);
-    actToggleEditor->setToolTip(QStringLiteral("2D-Vektoreditor links ein-/ausblenden"));
+    actToggleEditor->setToolTip(QStringLiteral("Linken 2D-Editor ein-/ausblenden"));
 
     auto* actTogglePanel = tb->addAction(QStringLiteral("📋 Eigenschaften"), this, [panel](bool checked){
         panel->setVisible(checked);
     });
     actTogglePanel->setCheckable(true);
     actTogglePanel->setChecked(true);
-    actTogglePanel->setToolTip(QStringLiteral("Eigenschaften- und Garnleiste rechts ein-/ausblenden"));
-
-    auto* spacer = new QWidget; spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    tb->addWidget(spacer);
-    tb->addAction(QStringLiteral("📚 Bibliothek"), this, &MainWindow::openLibrary);
-    tb->addAction(QStringLiteral("📄 Druckblatt"), this, &MainWindow::exportWorksheet);
+    actTogglePanel->setToolTip(QStringLiteral("Rechte Leiste (Fadendichte, Rahmen, Garne) ein-/ausblenden"));
 
     setAcceptDrops(true);
-    statusBar()->showMessage(QStringLiteral("StickCore Studio bereit — für %1 eingerichtet. Rahmen eingeblendet.").arg(mp.name));
-    loadSatinDemo();
+    statusBar()->showMessage(QStringLiteral("StickCore Studio bereit — für %1 eingerichtet.").arg(mp.name));
 
     m_updater = new AutoUpdater(this);
-    QTimer::singleShot(3500, this, [this]() {
-        if (m_updater) m_updater->checkForUpdates(true);
-    });
 
     // Command-line file loading and demo hooks
     const QStringList a = qApp->arguments();
     bool loadedFromCli = false;
     for (int i = 1; i < a.size(); ++i) {
-        if (!a[i].startsWith(QLatin1Char('-')) && QFile::exists(a[i])) {
+        if (a[i].startsWith(QLatin1Char('-')))
+            break;
+        if (QFile::exists(a[i])) {
             const QString cliPath = a[i];
             QTimer::singleShot(100, this, [this, cliPath]{ loadFile(cliPath); });
             loadedFromCli = true;
@@ -366,10 +398,48 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         const QString which = a[di + 1];
         if (which == QLatin1String("text")) {
             TextDigitizer::Params tp; tp.text = QStringLiteral("StickCore"); tp.heightMm = 22; tp.raised = true;
+            m_hasTextParams = true;
+            m_currentTextParams = tp;
+            m_currentFilePath.clear();
             m_current = TextDigitizer::generate(tp);
             m_current.palette = { ThreadCatalog::snap(QColor(150, 40, 60)) };
-            m_editor->clearAll(); m_view->setSequence(m_current); m_view->showAll();
-            setStatusForSequence(QStringLiteral("Text"));
+            m_editor->clearAll();
+            setCurrentSequence(m_current, QStringLiteral("Text: StickCore"));
+        } else if (which == QLatin1String("arctext")) {
+            const QString volPath = QFile::exists(QStringLiteral("E:/StickCore/output/KIEL_VOL.JEF"))
+                ? QStringLiteral("E:/StickCore/output/KIEL_VOL.JEF")
+                : QStringLiteral("C:/Users/micbu/Downloads/KIEL_VOL.JEF");
+            if (QFile::exists(volPath)) {
+                loadFile(volPath);
+            }
+            TextDigitizer::Params tp;
+            tp.text            = QStringLiteral("STICKCORE STUDIO");
+            tp.family          = QStringLiteral("Varsity");
+            tp.bold            = true;
+            tp.heightMm        = 28.0;
+            tp.baseline        = TextDigitizer::Baseline::ArcUp;
+            tp.arcRadiusMm     = 65.0;
+            tp.letterSpacingMm = 2.0;
+            tp.style           = TextDigitizer::StitchStyle::PaddedSatin;
+            tp.borderWidthMm   = 3.4;
+            tp.borderPitchMm   = 0.34;
+            tp.paddingWidthMm  = 2.3;
+            tp.paddingPitchMm  = 0.50;
+            tp.underlay        = true;
+            StitchSequence seq = TextDigitizer::generate(tp);
+            seq.palette = {
+                ThreadCatalog::snap(QColor(218, 178, 85)),
+                ThreadCatalog::snap(QColor(180, 140, 50))
+            };
+            if (m_editor) {
+                m_editor->clearAll();
+                m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+            }
+            m_currentFilePath.clear();
+            m_hasTextParams = true;
+            m_currentTextParams = tp;
+            const QString tabTitle = QStringLiteral("Bogen-Schrift: %1").arg(tp.text);
+            setCurrentSequence(seq, tabTitle);
         } else if (which == QLatin1String("image") && di + 2 < a.size()) {
             QImage img(a[di + 2]);
             if (!img.isNull()) digitizeFrom(img, QStringLiteral("Bild"));
@@ -382,8 +452,32 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         } else if (which == QLatin1String("monogram")) {
             makeMonogram();
         }
-    } else if (!loadedFromCli && !a.contains(QStringLiteral("--manual-shots")) && !a.contains(QStringLiteral("--shot"))) {
-        QTimer::singleShot(0, this, &MainWindow::maybeShowWizardOnStart);
+    } else if (!loadedFromCli) {
+        // Lade direkt die erstellten Kieler Wappen JEF-Dateien als geöffnete Tabs, falls vorhanden
+        const QString appOut = QCoreApplication::applicationDirPath() + QStringLiteral("/output");
+        QString ktlPath = appOut + QStringLiteral("/KIEL_KTL.JEF");
+        if (!QFile::exists(ktlPath)) {
+            ktlPath = QFile::exists(QStringLiteral("E:/StickCore/output/KIEL_KTL.JEF"))
+                ? QStringLiteral("E:/StickCore/output/KIEL_KTL.JEF")
+                : QStringLiteral("C:/Users/micbu/Downloads/KIEL_KTL.JEF");
+        }
+        QString volPath = appOut + QStringLiteral("/KIEL_VOL.JEF");
+        if (!QFile::exists(volPath)) {
+            volPath = QFile::exists(QStringLiteral("E:/StickCore/output/KIEL_VOL.JEF"))
+                ? QStringLiteral("E:/StickCore/output/KIEL_VOL.JEF")
+                : QStringLiteral("C:/Users/micbu/Downloads/KIEL_VOL.JEF");
+        }
+
+        bool loadedDefaultJef = false;
+        if (QFile::exists(ktlPath)) {
+            loadedDefaultJef |= loadFile(ktlPath);
+        }
+        if (QFile::exists(volPath)) {
+            loadedDefaultJef |= loadFile(volPath);
+        }
+        if (!loadedDefaultJef) {
+            loadSatinDemo();
+        }
     }
 }
 
@@ -397,6 +491,8 @@ void MainWindow::setupMenus()
     auto* newAct = fileMenu->addAction(QStringLiteral("&Neues Motiv"), QKeySequence::New, this, [this]{
         m_editor->clearAll();
         m_current.clear();
+        m_baseSequence.clear();
+        m_hasTextParams = false;
         m_currentFilePath.clear();
         m_view->setSequence(m_current);
         updateInfoPanel();
@@ -633,6 +729,67 @@ QWidget* MainWindow::buildCenterView()
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(0);
 
+    // Compact 3D Viewport Header Bar (keeps 3D camera tools on the 3D view itself)
+    auto* vh = new QWidget(container);
+    vh->setObjectName(QStringLiteral("ViewportHeader"));
+    auto* vhLay = new QHBoxLayout(vh);
+    vhLay->setContentsMargins(8, 3, 8, 3);
+    vhLay->setSpacing(4);
+
+    auto* vhTitle = new QLabel(QStringLiteral("🧵 3D-Echtzeit-Vorschau"), vh);
+    vhTitle->setStyleSheet(QStringLiteral("color:#8b93a4; font-size:11px; font-weight:700;"));
+    vhLay->addWidget(vhTitle);
+    vhLay->addStretch(1);
+
+    auto* moveGroup = new QActionGroup(this);
+    m_actOrbitMode = new QAction(QStringLiteral("🔄 3D-Drehen"), this);
+    m_actOrbitMode->setCheckable(true);
+    m_actOrbitMode->setChecked(true);
+    m_actOrbitMode->setToolTip(QStringLiteral("3D-Kamera mit Maus frei rotieren"));
+    connect(m_actOrbitMode, &QAction::triggered, this, [this]{
+        m_view->setMouseMode(StitchGLWidget::MouseMode::Orbit);
+        statusBar()->showMessage(QStringLiteral("Mausmodus: 3D Orbit-Kamera (Linksklick dreht, Shift+Klick verschiebt Motiv)."), 4000);
+    });
+    moveGroup->addAction(m_actOrbitMode);
+
+    m_actMoveMode = new QAction(QStringLiteral("✥ Verschieben"), this);
+    m_actMoveMode->setCheckable(true);
+    m_actMoveMode->setToolTip(QStringLiteral("Motiv mit Maus im Rahmen verschieben"));
+    connect(m_actMoveMode, &QAction::triggered, this, [this]{
+        m_view->setMouseMode(StitchGLWidget::MouseMode::MoveDesign);
+        statusBar()->showMessage(QStringLiteral("Mausmodus: Motiv verschieben (Linksklick zieht das Motiv im Rahmen)."), 4000);
+    });
+    moveGroup->addAction(m_actMoveMode);
+
+    m_actTopDown = new QAction(QStringLiteral("👁 2D/3D"), this);
+    m_actTopDown->setToolTip(QStringLiteral("Zwischen 2D-Draufsicht und 3D-Perspektive umschalten (Strg+D)"));
+    connect(m_actTopDown, &QAction::triggered, this, &MainWindow::toggleViewPreset);
+
+    m_actHoop = new QAction(QStringLiteral("⭕ Rahmen"), this);
+    m_actHoop->setCheckable(true);
+    m_actHoop->setChecked(true);
+    m_actHoop->setToolTip(QStringLiteral("Stickrahmen und Zentrier-Fadenkreuz ein-/ausblenden (H)"));
+    connect(m_actHoop, &QAction::triggered, this, &MainWindow::toggleHoopVisible);
+
+    auto makeVpBtn = [&](QAction* act) {
+        auto* b = new QToolButton(vh);
+        b->setDefaultAction(act);
+        b->setStyleSheet(QStringLiteral("QToolButton { padding:3px 8px; font-size:11px; border-radius:5px; }"));
+        vhLay->addWidget(b);
+    };
+    makeVpBtn(m_actOrbitMode);
+    makeVpBtn(m_actMoveMode);
+    makeVpBtn(m_actTopDown);
+    makeVpBtn(m_actHoop);
+
+    auto* btnCenterVp = new QToolButton(vh);
+    btnCenterVp->setText(QStringLiteral("⌖ Mitte"));
+    btnCenterVp->setToolTip(QStringLiteral("Motiv genau im Rahmen zentrieren (Strg+0)"));
+    btnCenterVp->setStyleSheet(QStringLiteral("QToolButton { padding:3px 8px; font-size:11px; border-radius:5px; }"));
+    connect(btnCenterVp, &QToolButton::clicked, this, &MainWindow::centerCurrentDesign);
+    vhLay->addWidget(btnCenterVp);
+
+    lay->addWidget(vh);
     lay->addWidget(m_view, 1);
 
     // Transport Bar under 3D Viewport
@@ -703,6 +860,18 @@ QWidget* MainWindow::buildCenterView()
         for (Stitch& s : m_current.stitches) {
             s.x += dx;
             s.y += dy;
+        }
+        for (Stitch& s : m_baseSequence.stitches) {
+            s.x += dx;
+            s.y += dy;
+        }
+        if (m_editor) m_editor->setSequence(m_current);
+        if (m_docTabBar) {
+            const int tabIdx = m_docTabBar->currentIndex();
+            if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+                m_openDocs[tabIdx].currentSeq = m_current;
+                m_openDocs[tabIdx].baseSeq    = m_baseSequence;
+            }
         }
         updateInfoPanel();
     });
@@ -801,6 +970,16 @@ void MainWindow::onThreadItemDoubleClicked(QListWidgetItem* item)
     ThreadPickDialog dlg(m_current.palette[idx], this);
     if (dlg.exec() == QDialog::Accepted) {
         m_current.palette[idx] = dlg.selectedThread();
+        if (idx < int(m_baseSequence.palette.size())) {
+            m_baseSequence.palette[idx] = dlg.selectedThread();
+        }
+        if (m_docTabBar) {
+            const int tabIdx = m_docTabBar->currentIndex();
+            if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+                m_openDocs[tabIdx].currentSeq.palette = m_current.palette;
+                m_openDocs[tabIdx].baseSeq.palette    = m_baseSequence.palette;
+            }
+        }
         m_editor->setSequence(m_current);
         m_view->setSequence(m_current);
         updateInfoPanel();
@@ -826,6 +1005,8 @@ void MainWindow::makeApplique()
     AppliqueGenerator::Params ap;
     ap.satinWidthMm = 3.2;
     ap.satinPitchMm = m_density->value();
+    m_hasTextParams = false;
+    m_currentFilePath.clear();
     m_current = AppliqueGenerator::generate(poly, ap);
     setCurrentSequence(m_current, QStringLiteral("Applikation"));
     statusBar()->showMessage(
@@ -992,6 +1173,12 @@ void MainWindow::openLibraryCategory(const QString& category)
 {
     LibraryDialog dlg(m_library.get(), category, this);
     if (dlg.exec() == QDialog::Accepted && dlg.hasChoice()) {
+        if (m_editor) {
+            m_editor->clearAll();
+            m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+        }
+        m_hasTextParams = false;
+        m_currentFilePath.clear();
         m_current = dlg.chosenSequence();
         setCurrentSequence(m_current, QStringLiteral("Bibliothek: %1").arg(dlg.chosenName()));
     }
@@ -1058,22 +1245,170 @@ QWidget* MainWindow::buildInfoPanel()
 
     auto* panel = new QWidget;
     panel->setObjectName(QStringLiteral("InfoPanel"));
-    panel->setMinimumWidth(280);
+    panel->setMinimumWidth(285);
     auto* outer = new QVBoxLayout(panel);
     outer->setContentsMargins(14, 14, 14, 14);
-    outer->setSpacing(14);
+    outer->setSpacing(12);
 
     // --- Machine card ---
     auto* mach = new QFrame; mach->setObjectName(QStringLiteral("Card"));
-    auto* ml = new QVBoxLayout(mach); ml->setContentsMargins(14,12,14,12); ml->setSpacing(3);
+    auto* ml = new QVBoxLayout(mach); ml->setContentsMargins(12,10,12,10); ml->setSpacing(2);
     auto* mn = new QLabel(mp.name); mn->setProperty("role","machine");
     ml->addWidget(mn);
     ml->addWidget(new QLabel(QStringLiteral("%1 · max %2 × %3 mm · %4 St./min")
         .arg(mp.format).arg(mp.maxWidthMm,0,'f',0).arg(mp.maxHeightMm,0,'f',0).arg(mp.maxSpeedSpm)));
     outer->addWidget(mach);
 
+    // --- Interactive Thread Density & Stitch Properties (Top Priority for JEF & Vector) ---
+    outer->addWidget(sectionTitle(QStringLiteral("Fadendichte & Sticheigenschaften (JEF / Vektor)")));
+    auto* densCard = new QFrame;
+    densCard->setObjectName(QStringLiteral("Card"));
+    auto* densLay = new QVBoxLayout(densCard);
+    densLay->setContentsMargins(12, 10, 12, 10);
+    densLay->setSpacing(8);
+
+    auto* form = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignLeft);
+    form->setSpacing(6);
+
+    m_density = new QDoubleSpinBox;
+    m_density->setObjectName(QStringLiteral("DensitySpin"));
+    m_density->setRange(0.20, 1.20);
+    m_density->setSingleStep(0.02);
+    m_density->setDecimals(2);
+    m_density->setKeyboardTracking(false);
+    m_density->setValue(mp.satinDensityMm);
+    m_density->setSuffix(QStringLiteral(" mm"));
+    m_density->setToolTip(QStringLiteral("Reihen-/Stichabstand in mm (für JEF-Dateien & Vektorpfade).\n"
+        "Kleinerer Wert = dichtere Füllung & mehr Stiche (z. B. 0,28 mm).\n"
+        "Größerer Wert = lockerere Füllung & weniger Stiche (z. B. 0,50 mm)."));
+
+    m_densitySlider = new QSlider(Qt::Horizontal);
+    m_densitySlider->setRange(20, 80); // 0.20 mm to 0.80 mm
+    m_densitySlider->setValue(int(std::round(mp.satinDensityMm * 100.0)));
+    m_densitySlider->setToolTip(QStringLiteral("Fadendichte live verschieben: Links = dichter (0,20 mm) · Rechts = lockerer (0,80 mm)"));
+
+    // Quick preset buttons for density
+    auto* presetRow = new QHBoxLayout;
+    presetRow->setSpacing(4);
+    auto* btnDense = new QPushButton(QStringLiteral("0,28 Dicht"));
+    btnDense->setObjectName(QStringLiteral("PresetBtn"));
+    btnDense->setToolTip(QStringLiteral("Sehr dichte Vollstick-Deckung (0,28 mm Reihenabstand)"));
+    auto* btnStd = new QPushButton(QStringLiteral("0,38 Std."));
+    btnStd->setObjectName(QStringLiteral("PresetBtn"));
+    btnStd->setToolTip(QStringLiteral("Klassische Janome-Standarddichte (0,38 mm Reihenabstand)"));
+    auto* btnLight = new QPushButton(QStringLiteral("0,50 Locker"));
+    btnLight->setObjectName(QStringLiteral("PresetBtn"));
+    btnLight->setToolTip(QStringLiteral("Lockere, garnsparende Dichte für dünne Stoffe (0,50 mm)"));
+    presetRow->addWidget(btnDense);
+    presetRow->addWidget(btnStd);
+    presetRow->addWidget(btnLight);
+
+    m_pull = new QDoubleSpinBox;
+    m_pull->setRange(0.00, 0.60);
+    m_pull->setSingleStep(0.05);
+    m_pull->setKeyboardTracking(false);
+    m_pull->setValue(mp.pullCompMm);
+    m_pull->setSuffix(QStringLiteral(" mm"));
+    m_pull->setToolTip(QStringLiteral("Zugausgleich: Verbreitert Satinraupen & Füllflächen seitlich gegen Stoffzusammenzug."));
+
+    m_maxStitch = new QDoubleSpinBox;
+    m_maxStitch->setRange(1.5, 7.0);
+    m_maxStitch->setSingleStep(0.5);
+    m_maxStitch->setKeyboardTracking(false);
+    m_maxStitch->setValue(4.0);
+    m_maxStitch->setSuffix(QStringLiteral(" mm"));
+    m_maxStitch->setToolTip(QStringLiteral("Maximale Stichlänge in mm. Längere Stiche werden automatisch unterteilt."));
+
+    m_fillAngleSpin = new QDoubleSpinBox;
+    m_fillAngleSpin->setRange(0.0, 360.0);
+    m_fillAngleSpin->setSingleStep(15.0);
+    m_fillAngleSpin->setValue(45.0);
+    m_fillAngleSpin->setSuffix(QStringLiteral("°"));
+
+    m_patternCombo = new QComboBox;
+    for (auto pt : { TatamiFill::PatternType::StandardTatami, TatamiFill::PatternType::Brick,
+                     TatamiFill::PatternType::Twill, TatamiFill::PatternType::Basketweave,
+                     TatamiFill::PatternType::Honeycomb, TatamiFill::PatternType::ContourEcho }) {
+        m_patternCombo->addItem(TatamiFill::patternName(pt), int(pt));
+    }
+
+    m_underlay = new QCheckBox(QStringLiteral("Unterlage sticken (empfohlen)"));
+    m_underlay->setChecked(true);
+
+    form->addRow(QStringLiteral("<b>Fadendichte:</b>"), m_density);
+    densLay->addLayout(form);
+    densLay->addWidget(m_densitySlider);
+    densLay->addLayout(presetRow);
+
+    auto* formAdv = new QFormLayout;
+    formAdv->setLabelAlignment(Qt::AlignLeft);
+    formAdv->setSpacing(6);
+    formAdv->addRow(QStringLiteral("Zugausgleich:"), m_pull);
+    formAdv->addRow(QStringLiteral("Max. Stichlänge:"), m_maxStitch);
+    formAdv->addRow(QStringLiteral("Füllwinkel:"), m_fillAngleSpin);
+    formAdv->addRow(QStringLiteral("Füllmuster:"), m_patternCombo);
+    densLay->addLayout(formAdv);
+    densLay->addWidget(m_underlay);
+
+    m_densityStateLabel = new QLabel(QStringLiteral("Basis-Dichte: 0,38 mm"));
+    m_densityStateLabel->setWordWrap(true);
+    m_densityStateLabel->setStyleSheet(QStringLiteral("color:#2dd4bf; font-size:11px; font-weight:600;"));
+    densLay->addWidget(m_densityStateLabel);
+
+    auto* btnApplyDensity = new QPushButton(QStringLiteral("🔄 Fadendichte anwenden (F5)"));
+    btnApplyDensity->setObjectName(QStringLiteral("PrimaryBtn"));
+    btnApplyDensity->setToolTip(QStringLiteral("Berechnet alle Satin- & Tatami-Flächen der geöffneten JEF-Datei sofort mit der gewählten Fadendichte neu"));
+    connect(btnApplyDensity, &QPushButton::clicked, this, &MainWindow::generate);
+    densLay->addWidget(btnApplyDensity);
+
+    outer->addWidget(densCard);
+
+    // Connect density controls for live JEF / vector recalculation
+    connect(m_density, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        if (m_densitySlider) {
+            QSignalBlocker b(m_densitySlider);
+            m_densitySlider->setValue(std::clamp(int(std::round(val * 100.0)), 20, 80));
+        }
+        generate();
+    });
+    connect(m_densitySlider, &QSlider::valueChanged, this, [this](int sliderVal) {
+        const double mm = sliderVal / 100.0;
+        if (m_density) {
+            QSignalBlocker b(m_density);
+            m_density->setValue(mm);
+        }
+        generate();
+    });
+    connect(btnDense, &QPushButton::clicked, this, [this]{ m_density->setValue(0.28); });
+    connect(btnStd,   &QPushButton::clicked, this, [this]{ m_density->setValue(0.38); });
+    connect(btnLight, &QPushButton::clicked, this, [this]{ m_density->setValue(0.50); });
+    connect(m_pull, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double){ generate(); });
+    connect(m_maxStitch, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double){ generate(); });
+
+    // --- Design size / fit ---
+    outer->addWidget(sectionTitle(QStringLiteral("Design & Metriken")));
+    m_sizeLabel = new QLabel(QStringLiteral("—"));
+    m_fitsLabel = new QLabel(QStringLiteral(" "));
+    m_threadUsageLabel = new QLabel(QStringLiteral(" "));
+    m_threadUsageLabel->setStyleSheet(QStringLiteral("color:#8b93a4; font-size:12px;"));
+    m_timeEstLabel = new QLabel(QStringLiteral(" "));
+    m_timeEstLabel->setStyleSheet(QStringLiteral("color:#2dd4bf; font-weight:600; font-size:12px;"));
+
+    outer->addWidget(m_sizeLabel);
+    outer->addWidget(m_fitsLabel);
+    outer->addWidget(m_threadUsageLabel);
+    outer->addWidget(m_timeEstLabel);
+
+    // --- Threads ---
+    outer->addWidget(sectionTitle(QStringLiteral("Garne (Doppelklick zum Ändern)")));
+    m_threadList = new QListWidget;
+    m_threadList->setMinimumHeight(105);
+    connect(m_threadList, &QListWidget::itemDoubleClicked, this, &MainWindow::onThreadItemDoubleClicked);
+    outer->addWidget(m_threadList, 1);
+
     // --- Hoop ---
-    outer->addWidget(sectionTitle(QStringLiteral("Stickrahmen")));
+    outer->addWidget(sectionTitle(QStringLiteral("Stickrahmen & Position")));
     m_hoopCombo = new QComboBox;
     m_hoopCombo->addItem(QStringLiteral("✨ Automatisch (optimale Passform)"), -1);
     for (HoopType t : mp.hoops) {
@@ -1090,8 +1425,6 @@ QWidget* MainWindow::buildInfoPanel()
     connect(btnFitHoop, &QPushButton::clicked, this, &MainWindow::fitDesignToHoop);
     outer->addWidget(btnFitHoop);
 
-    // --- Position im Rahmen ---
-    outer->addWidget(sectionTitle(QStringLiteral("Position im Rahmen")));
     auto* posLayout = new QGridLayout;
     posLayout->setSpacing(6);
     posLayout->addWidget(new QLabel(QStringLiteral("X-Mitte:")), 0, 0);
@@ -1137,75 +1470,14 @@ QWidget* MainWindow::buildInfoPanel()
     outer->addLayout(posLayout);
     outer->addLayout(nudgeBar);
 
-    // --- Design size / fit ---
-    outer->addWidget(sectionTitle(QStringLiteral("Design & Metriken")));
-    m_sizeLabel = new QLabel(QStringLiteral("—"));
-    m_fitsLabel = new QLabel(QStringLiteral(" "));
-    m_threadUsageLabel = new QLabel(QStringLiteral(" "));
-    m_threadUsageLabel->setStyleSheet(QStringLiteral("color:#8b93a4; font-size:12px;"));
-    m_timeEstLabel = new QLabel(QStringLiteral(" "));
-    m_timeEstLabel->setStyleSheet(QStringLiteral("color:#2dd4bf; font-weight:600; font-size:12px;"));
-
-    outer->addWidget(m_sizeLabel);
-    outer->addWidget(m_fitsLabel);
-    outer->addWidget(m_threadUsageLabel);
-    outer->addWidget(m_timeEstLabel);
-
-    // --- Threads ---
-    outer->addWidget(sectionTitle(QStringLiteral("Garne (Doppelklick zum Ändern)")));
-    m_threadList = new QListWidget;
-    m_threadList->setMinimumHeight(120);
-    connect(m_threadList, &QListWidget::itemDoubleClicked, this, &MainWindow::onThreadItemDoubleClicked);
-    outer->addWidget(m_threadList, 1);
-
-    // --- Stitch properties ---
-    outer->addWidget(sectionTitle(QStringLiteral("Sticheigenschaften")));
-    auto* form = new QFormLayout; form->setLabelAlignment(Qt::AlignLeft);
-    m_density = new QDoubleSpinBox; m_density->setRange(0.20, 1.20); m_density->setSingleStep(0.05);
-    m_density->setValue(mp.satinDensityMm); m_density->setSuffix(QStringLiteral(" mm"));
-    m_density->setToolTip(QStringLiteral("Abstand zwischen den Stichreihen. Kleiner = dichter, "
-        "voller — braucht aber mehr Garn und Zeit."));
-    m_pull = new QDoubleSpinBox; m_pull->setRange(0.00, 0.60); m_pull->setSingleStep(0.05);
-    m_pull->setValue(mp.pullCompMm); m_pull->setSuffix(QStringLiteral(" mm"));
-    m_pull->setToolTip(QStringLiteral("Gleicht das Zusammenziehen des Stoffes aus, indem jede "
-        "Reihe seitlich etwas verbreitert wird."));
-    m_maxStitch = new QDoubleSpinBox; m_maxStitch->setRange(1.5, 7.0); m_maxStitch->setSingleStep(0.5);
-    m_maxStitch->setValue(4.0); m_maxStitch->setSuffix(QStringLiteral(" mm"));
-    m_maxStitch->setToolTip(QStringLiteral("Längster Einzelstich. Lange Stiche werden automatisch "
-        "in kürzere aufgeteilt, damit sie nicht hängen bleiben."));
-    m_underlay = new QCheckBox(QStringLiteral("Unterlage sticken (empfohlen)"));
-    m_underlay->setChecked(true);
-    m_underlay->setToolTip(QStringLiteral("Stickt zuerst Kontur & Unterlage, dann die Deckstiche — "
-        "so wird die Stickerei fest und sauber, ohne Wellen."));
-    form->addRow(QStringLiteral("Stichdichte"), m_density);
-    m_fillAngleSpin = new QDoubleSpinBox; m_fillAngleSpin->setRange(0.0, 360.0); m_fillAngleSpin->setSingleStep(15.0);
-    m_fillAngleSpin->setValue(45.0); m_fillAngleSpin->setSuffix(QStringLiteral("°"));
-    m_fillAngleSpin->setToolTip(QStringLiteral("Richtung der Stichreihen (0°-360°). Bricht das Licht auf dem Garn unterschiedlich."));
-
-    m_patternCombo = new QComboBox;
-    for (auto pt : { TatamiFill::PatternType::StandardTatami, TatamiFill::PatternType::Brick,
-                     TatamiFill::PatternType::Twill, TatamiFill::PatternType::Basketweave,
-                     TatamiFill::PatternType::Honeycomb, TatamiFill::PatternType::ContourEcho }) {
-        m_patternCombo->addItem(TatamiFill::patternName(pt), int(pt));
-    }
-    form->addRow(QStringLiteral("Füllwinkel"), m_fillAngleSpin);
-    form->addRow(QStringLiteral("Füllmuster"), m_patternCombo);
-    form->addRow(QStringLiteral("Zugausgleich"), m_pull);
-    form->addRow(QStringLiteral("Max. Stichlänge"), m_maxStitch);
-    outer->addLayout(form);
-    outer->addWidget(m_underlay);
-    auto* hint = new QLabel(QStringLiteral("Tipp: Doppelklick auf ein Garn in der Liste oben öffnet die Farbauswahl."));
-    hint->setWordWrap(true); hint->setStyleSheet(QStringLiteral("color:#8b93a4;font-size:11px;"));
-    outer->addWidget(hint);
-
     auto* scroll = new QScrollArea;
     scroll->setObjectName(QStringLiteral("InfoPanelScroll"));
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setWidget(panel);
-    scroll->setMinimumWidth(260);
-    scroll->setMaximumWidth(320);
+    scroll->setMinimumWidth(275);
+    scroll->setMaximumWidth(335);
     return scroll;
 }
 
@@ -1372,6 +1644,38 @@ void MainWindow::selectHoop(HoopType type)
 void MainWindow::setCurrentSequence(const StitchSequence& s, const QString& label)
 {
     m_current = s;
+    m_baseSequence = s;
+    if (m_hasTextParams) {
+        if (m_currentTextParams.style == TextDigitizer::StitchStyle::PaddedSatin ||
+            m_currentTextParams.style == TextDigitizer::StitchStyle::SatinOutline) {
+            m_baseDensityMm = m_currentTextParams.borderPitchMm;
+        } else {
+            m_baseDensityMm = m_currentTextParams.densityMm;
+        }
+    } else {
+        m_baseDensityMm = detectSequenceBaseDensity(s);
+    }
+    m_basePullMm = m_pull ? m_pull->value() : 0.20;
+
+    if (m_editor && m_editor->pathCount() == 0) {
+        if (m_density) {
+            QSignalBlocker b(m_density);
+            m_density->setValue(m_baseDensityMm);
+        }
+        if (m_densitySlider) {
+            QSignalBlocker b(m_densitySlider);
+            m_densitySlider->setValue(std::clamp(int(std::round(m_baseDensityMm * 100.0)), 20, 80));
+        }
+    }
+    if (m_densityStateLabel) {
+        m_densityStateLabel->setText(
+            QStringLiteral("Basis-Dichte: %1 mm · %2 Stiche")
+                .arg(m_baseDensityMm, 0, 'f', 2)
+                .arg(m_baseSequence.realStitchCount()));
+    }
+
+    registerOrUpdateOpenTab(label.isEmpty() ? QStringLiteral("Entwurf") : label, m_currentFilePath, m_current);
+
     m_editor->setSequence(m_current);
     m_editor->fitInView();
     m_view->setSequence(m_current);
@@ -1388,6 +1692,16 @@ void MainWindow::mirrorHorizontal()
         m_editor->flipHorizontalSelected();
     }
     if (!m_current.empty() && m_current.mirrorHorizontal()) {
+        m_baseSequence.mirrorHorizontal();
+        m_hasTextParams = false;
+        if (m_docTabBar) {
+            const int tabIdx = m_docTabBar->currentIndex();
+            if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+                m_openDocs[tabIdx].currentSeq    = m_current;
+                m_openDocs[tabIdx].baseSeq       = m_baseSequence;
+                m_openDocs[tabIdx].hasTextParams = false;
+            }
+        }
         m_editor->setSequence(m_current);
         m_view->setSequence(m_current);
         updateInfoPanel();
@@ -1402,6 +1716,16 @@ void MainWindow::mirrorVertical()
         m_editor->flipVerticalSelected();
     }
     if (!m_current.empty() && m_current.mirrorVertical()) {
+        m_baseSequence.mirrorVertical();
+        m_hasTextParams = false;
+        if (m_docTabBar) {
+            const int tabIdx = m_docTabBar->currentIndex();
+            if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+                m_openDocs[tabIdx].currentSeq    = m_current;
+                m_openDocs[tabIdx].baseSeq       = m_baseSequence;
+                m_openDocs[tabIdx].hasTextParams = false;
+            }
+        }
         m_editor->setSequence(m_current);
         m_view->setSequence(m_current);
         updateInfoPanel();
@@ -1416,6 +1740,16 @@ void MainWindow::rotate90(bool clockwise)
         m_editor->rotateSelected(clockwise ? 90.0 : -90.0);
     }
     if (!m_current.empty() && m_current.rotate90(clockwise)) {
+        m_baseSequence.rotate90(clockwise);
+        m_hasTextParams = false;
+        if (m_docTabBar) {
+            const int tabIdx = m_docTabBar->currentIndex();
+            if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+                m_openDocs[tabIdx].currentSeq    = m_current;
+                m_openDocs[tabIdx].baseSeq       = m_baseSequence;
+                m_openDocs[tabIdx].hasTextParams = false;
+            }
+        }
         m_editor->setSequence(m_current);
         m_view->setSequence(m_current);
         updateInfoPanel();
@@ -1437,6 +1771,16 @@ void MainWindow::rotateFree()
     if (!ok || std::abs(deg) < 1e-4) return;
 
     if (m_current.rotate(deg)) {
+        m_baseSequence.rotate(deg);
+        m_hasTextParams = false;
+        if (m_docTabBar) {
+            const int tabIdx = m_docTabBar->currentIndex();
+            if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+                m_openDocs[tabIdx].currentSeq    = m_current;
+                m_openDocs[tabIdx].baseSeq       = m_baseSequence;
+                m_openDocs[tabIdx].hasTextParams = false;
+            }
+        }
         m_editor->setSequence(m_current);
         m_view->setSequence(m_current);
         updateInfoPanel();
@@ -1455,6 +1799,11 @@ void MainWindow::modeChanged(int index)
 void MainWindow::generate()
 {
     const auto paths = m_editor->paths();
+    if (paths.isEmpty()) {
+        applyDensityToLoadedDesign();
+        return;
+    }
+
     const double density  = m_density->value();
     const double pull     = m_pull->value();
     const double maxStit  = m_maxStitch->value();
@@ -1464,6 +1813,10 @@ void MainWindow::generate()
         int usable = 0;
         for (const auto& p : paths) if (p.count() >= 2) ++usable;
         if (usable < 2) {
+            if (!m_baseSequence.empty()) {
+                applyDensityToLoadedDesign();
+                return;
+            }
             statusBar()->showMessage(QStringLiteral("Satin braucht zwei Rails mit je ≥2 Punkten."), 6000);
             return;
         }
@@ -1480,6 +1833,10 @@ void MainWindow::generate()
             if (p.count() >= 3) validCount++;
         }
         if (validCount == 0) {
+            if (!m_baseSequence.empty()) {
+                applyDensityToLoadedDesign();
+                return;
+            }
             statusBar()->showMessage(QStringLiteral("Tatami braucht ein Polygon mit ≥3 Punkten."), 6000);
             return;
         }
@@ -1529,12 +1886,16 @@ void MainWindow::generate()
         }
     }
 
+    m_hasTextParams = false;
+    m_currentFilePath.clear();
     setCurrentSequence(m_current, QStringLiteral("Erzeugt"));
 }
 
 // ---------------------------------------------------------------------------
 void MainWindow::loadSatinDemo()
 {
+    m_hasTextParams = false;
+    m_currentFilePath.clear();
     m_mode->setCurrentIndex(0);
     m_editor->setMode(PathEditorWidget::Mode::SatinRails);
     EditPath railA;
@@ -1551,6 +1912,8 @@ void MainWindow::loadSatinDemo()
 // ---------------------------------------------------------------------------
 void MainWindow::loadTatamiDemo()
 {
+    m_hasTextParams = false;
+    m_currentFilePath.clear();
     m_mode->setCurrentIndex(1);
     m_editor->setMode(PathEditorWidget::Mode::TatamiPolygon);
     const double r = 34.0, k = r * 0.5522847498;
@@ -1688,9 +2051,17 @@ void MainWindow::makeText()
     tp.style           = TextDigitizer::StitchStyle(stitchCombo->currentData().toInt());
     tp.raised          = (tp.style == TextDigitizer::StitchStyle::Raised);
     tp.densityMm       = m_density->value();
+    tp.borderPitchMm   = m_density->value();
     tp.maxStitchMm     = m_maxStitch->value();
     tp.underlay        = m_underlay->isChecked();
 
+    if (m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath.clear();
+    m_hasTextParams = true;
+    m_currentTextParams = tp;
     m_current = TextDigitizer::generate(tp);
     m_current.palette = { ThreadCatalog::snap(QColor(150, 40, 60)) };
     setCurrentSequence(m_current, QStringLiteral("Text: %1").arg(tp.text));
@@ -1774,6 +2145,13 @@ void MainWindow::makeMonogram()
     mp.heightMm = 34.0;
     mp.color = QColor(40, 55, 90);
     mp.frameColor = QColor(185, 140, 45); // Gold / Bronze
+
+    if (m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_hasTextParams = false;
+    m_currentFilePath.clear();
     m_current = MonogramGenerator::generate(mp);
     setCurrentSequence(m_current, QStringLiteral("Monogramm: %1").arg(mp.letters));
 }
@@ -1839,6 +2217,7 @@ void MainWindow::fitDesignToHoop()
         }
     }
 
+    m_hasTextParams = false;
     setCurrentSequence(m_current, QStringLiteral("Eingepasst"));
     m_editor->setSequence(m_current);
     m_view->setSequence(m_current);
@@ -2000,6 +2379,7 @@ void MainWindow::resizeDesign()
                 .arg(m_current.realStitchCount()), 8000);
     } else {
         const double maxStitch = m_maxStitch ? m_maxStitch->value() : 4.0;
+        m_hasTextParams = false;
         m_current = m_current.scaled(factor, center, maxStitch, 0.35);
         setCurrentSequence(m_current, QStringLiteral("Skaliert"));
         m_editor->setSequence(m_current);
@@ -2021,6 +2401,12 @@ void MainWindow::makeLogo()
 
 void MainWindow::loadMefOriginal(int style)
 {
+    if (m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath.clear();
+    m_hasTextParams = false;
     m_current = LogoGenerator::mefOriginalBadge(style, 150.0);
     if (m_current.empty()) {
         m_current = LogoGenerator::knueppelBadge();
@@ -2103,6 +2489,12 @@ void MainWindow::importSvg()
         return;
     }
 
+    if (m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath = fn;
+    m_hasTextParams = false;
     setCurrentSequence(m_current, QStringLiteral("SVG: %1").arg(QFileInfo(fn).fileName()));
     statusBar()->showMessage(QStringLiteral("SVG-Vektordatei '%1' erfolgreich digitalisiert (%2 Stiche).")
                              .arg(QFileInfo(fn).fileName()).arg(m_current.stitches.size()), 8000);
@@ -2141,8 +2533,8 @@ bool MainWindow::loadFile(const QString& filePath)
     } else if (ext == QStringLiteral("png") || ext == QStringLiteral("jpg") || ext == QStringLiteral("jpeg") || ext == QStringLiteral("bmp")) {
         QImage img(filePath);
         if (!img.isNull()) {
-            digitizeWithDialog(img, fi.fileName());
             m_currentFilePath = filePath;
+            digitizeWithDialog(img, fi.fileName());
             setWindowTitle(QStringLiteral("StickCore Studio – %1").arg(fi.fileName()));
             return true;
         }
@@ -2159,7 +2551,13 @@ bool MainWindow::loadFile(const QString& filePath)
         return false;
     }
 
+    if (m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+
     m_currentFilePath = filePath;
+    m_hasTextParams = false;
     setWindowTitle(QStringLiteral("StickCore Studio – %1").arg(fi.fileName()));
     addRecentFile(filePath);
 
@@ -2173,15 +2571,21 @@ bool MainWindow::loadFile(const QString& filePath)
         selectHoop(bestHoop);
     }
 
-    setCurrentSequence(seq, QStringLiteral("Geladen: %1").arg(fi.fileName()));
-    statusBar()->showMessage(QStringLiteral("Stickdatei '%1' geladen (%2 Stiche, %3 Farben). Bereit zum Bearbeiten.")
+    setCurrentSequence(seq, fi.fileName());
+    statusBar()->showMessage(QStringLiteral("Stickdatei '%1' geladen (%2 Stiche, %3 Farben). Fadendichte rechts frei anpassbar.")
         .arg(fi.fileName()).arg(seq.realStitchCount()).arg(seq.palette.size()), 6000);
     return true;
 }
 
 void MainWindow::openEmbroideryFile()
 {
-    QString startDir = QStringLiteral("F:/EmbF5/Feuerwehr");
+    QString startDir = QCoreApplication::applicationDirPath() + QStringLiteral("/output");
+    if (!QDir(startDir).exists()) {
+        startDir = QStringLiteral("E:/StickCore/output");
+    }
+    if (!QDir(startDir).exists()) {
+        startDir = QStringLiteral("F:/EmbF5/Feuerwehr");
+    }
     if (!QDir(startDir).exists()) {
         startDir = QDir::homePath();
     }
@@ -2456,9 +2860,10 @@ void MainWindow::digitizeImage()
     if (path.isEmpty()) return;
     QImage img(path);
     if (img.isNull()) { QMessageBox::warning(this, windowTitle(), QStringLiteral("Bild konnte nicht geladen werden.")); return; }
+    m_currentFilePath = path;
     m_editor->setBackgroundImage(img);
     m_isDigitizing = true;
-    digitizeWithDialog(img, QStringLiteral("Bild digitalisiert"));
+    digitizeWithDialog(img, QFileInfo(path).fileName());
     m_isDigitizing = false;
 }
 
@@ -2510,6 +2915,7 @@ void MainWindow::digitizeWithDialog(const QImage& img, const QString& label)
             QStringLiteral("Keine Stiche erzeugt — probiere mehr Kontrast oder einen anderen Schwellwert."));
         return;
     }
+    m_hasTextParams = false;
     m_editor->setBackgroundImage(img);
     setCurrentSequence(s, label);
 }
@@ -2527,6 +2933,8 @@ void MainWindow::digitizeFrom(const QImage& img, const QString& label)
         QMessageBox::information(this, windowTitle(), QStringLiteral("Keine Stiche erzeugt (zu wenig Kontrast?)."));
         return;
     }
+    m_currentFilePath.clear();
+    m_hasTextParams = false;
     m_editor->setBackgroundImage(img);
     setCurrentSequence(s, label);
 }
@@ -2544,6 +2952,7 @@ void MainWindow::phoneUpload()
                 m_qrDialog->close();
                 m_qrDialog = nullptr;
             }
+            m_currentFilePath.clear();
             m_editor->setBackgroundImage(img);
             m_isDigitizing = true;
             digitizeWithDialog(img, QStringLiteral("Handy-Bild digitalisiert"));
@@ -2795,6 +3204,9 @@ void MainWindow::captureManualScreenshots(const QString& outDir)
 
         StitchSequence letterSeq = TextDigitizer::generate(tp);
         letterSeq.palette = { ThreadCatalog::snap(QColor(45, 212, 191)) };
+        m_currentFilePath.clear();
+        m_hasTextParams = true;
+        m_currentTextParams = tp;
         setCurrentSequence(letterSeq, QStringLiteral("Janome ArcUp Lettering"));
         QApplication::processEvents();
         if (m_editor) m_editor->grab().save(outDir + QStringLiteral("/04b_curved_lettering_canvas.png"));
@@ -2824,6 +3236,12 @@ void MainWindow::loadHuntingMotif(int typeIdx, bool editable)
         hp.pattern = m_patternCombo ? TatamiFill::PatternType(m_patternCombo->currentData().toInt()) : TatamiFill::PatternType::StandardTatami;
         hp.densityMm = m_density ? m_density->value() : 0.40;
         hp.underlay = m_underlay ? m_underlay->isChecked() : true;
+        if (m_editor) {
+            m_editor->clearAll();
+            m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+        }
+        m_currentFilePath.clear();
+        m_hasTextParams = false;
         m_current = HuntingMotifs::generateStitches(type, hp);
         setCurrentSequence(m_current, name);
         statusBar()->showMessage(QStringLiteral("'%1' als fertiges Stickmotiv erzeugt.").arg(name), 5000);
@@ -2842,6 +3260,7 @@ void MainWindow::smartColorSort()
     StitchSequence sorted = ColorSorter::sort(m_current, &stats);
 
     if (stats.colorChangesAfter < stats.colorChangesBefore) {
+        m_hasTextParams = false;
         m_current = sorted;
         setCurrentSequence(m_current, QStringLiteral("Farbsortiert"));
         QMessageBox::information(this, QStringLiteral("Intelligente Farbsortierung (Smart Color Sort)"),
@@ -2871,6 +3290,7 @@ void MainWindow::addBastingBox()
     if (dlg.exec() == QDialog::Accepted) {
         const auto bp = dlg.params();
         const auto& hoop = m_view->hoop();
+        m_hasTextParams = false;
         m_current = BastingGenerator::prependTo(m_current, bp, hoop.widthMm, hoop.heightMm);
         setCurrentSequence(m_current, QStringLiteral("Mit Heftrahmen"));
         statusBar()->showMessage(QStringLiteral("Heftrahmen (Basting Box) erfolgreich vor das Muster gesetzt."), 6000);
@@ -2887,6 +3307,12 @@ void MainWindow::digitizeSfumato()
             return;
         }
         const auto sp = dlg.params();
+        if (m_editor) {
+            m_editor->clearAll();
+            m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+        }
+        m_currentFilePath.clear();
+        m_hasTextParams = false;
         m_current = SfumatoGenerator::generate(dlg.sourceImage(), sp);
         setCurrentSequence(m_current, QStringLiteral("Sfumato Photo-Stitch"));
         statusBar()->showMessage(QStringLiteral("Sfumato Photo-Stitch mit %1 Stichen generiert.").arg(m_current.size()), 6000);
@@ -2903,6 +3329,12 @@ void MainWindow::digitizeCrossStitch()
             return;
         }
         const auto cp = dlg.params();
+        if (m_editor) {
+            m_editor->clearAll();
+            m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+        }
+        m_currentFilePath.clear();
+        m_hasTextParams = false;
         m_current = CrossStitchGenerator::generate(dlg.sourceImage(), cp);
         setCurrentSequence(m_current, QStringLiteral("Traditioneller Kreuzstich"));
         statusBar()->showMessage(QStringLiteral("Kreuzstichmuster mit %1 Stichen generiert.").arg(m_current.size()), 6000);
@@ -2944,6 +3376,8 @@ void MainWindow::multiHoopSplit()
                 JefCodec::exportToFile(p2Fn, res.hoop2, HoopType::HoopB_140x200);
             }
 
+            m_currentFilePath = p1Fn;
+            m_hasTextParams = false;
             m_current = res.hoop1;
             setCurrentSequence(m_current, QStringLiteral("Rahmen 1 (Teil 1)"));
 
@@ -3008,6 +3442,12 @@ void MainWindow::applyTatamiCarving()
     tp.carving = chosen;
     tp.carvingScaleMm = scale;
 
+    if (paths.isEmpty() && m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath.clear();
+    m_hasTextParams = false;
     m_current = TatamiFill::generate(poly, tp);
     m_current.palette = { ThreadCatalog::snap(QColor(34, 139, 34)) };
     setCurrentSequence(m_current, QStringLiteral("Tatami mit %1").arg(CarvingPattern::presetName(chosen)));
@@ -3023,6 +3463,7 @@ void MainWindow::generateGradientFill()
     for (const auto& p : m_editor->paths()) {
         if (p.count() >= 3) { poly = p.toPolygon(); break; }
     }
+    const bool hadPaths = !poly.isEmpty();
     if (poly.isEmpty()) {
         poly << QPointF(-35, -40) << QPointF(35, -40) << QPointF(35, 10)
              << QPointF(0, 40) << QPointF(-35, 10);
@@ -3062,6 +3503,12 @@ void MainWindow::generateGradientFill()
         gp.color2 = ThreadColor(QColor(184, 115, 51), QStringLiteral("Kupfer/Bronze"), 1070);
     }
 
+    if (!hadPaths && m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath.clear();
+    m_hasTextParams = false;
     m_current = GradientFill::generate(poly, gp);
     setCurrentSequence(m_current, QStringLiteral("Ombré-Farbverlauf (%1 → %2)")
                        .arg(gp.color1.description, gp.color2.description));
@@ -3080,6 +3527,7 @@ void MainWindow::generateBeanStitchOutline()
             if (p.count() >= 2) path.addPath(p.toPainterPath());
         }
     }
+    const bool hadPaths = !path.isEmpty();
     if (path.isEmpty()) {
         path.addRoundedRect(QRectF(-40, -40, 80, 80), 14, 14);
     }
@@ -3102,6 +3550,12 @@ void MainWindow::generateBeanStitchOutline()
     bp.stitchLengthMm = 2.50;
     bp.threadColor = ThreadColor(QColor(40, 40, 40), QStringLiteral("Anthrazit Kontur"));
 
+    if (!hadPaths && m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath.clear();
+    m_hasTextParams = false;
     m_current = BeanStitchGenerator::generate(path, bp);
     setCurrentSequence(m_current, QStringLiteral("Bean Stitch (%1)")
                        .arg(bp.mode == BeanStitchGenerator::Mode::FivePass ? "5-Pass" : "3-Pass"));
@@ -3118,6 +3572,7 @@ void MainWindow::generateStipplingFill()
     for (const auto& p : m_editor->paths()) {
         if (p.count() >= 3) { poly = p.toPolygon(); break; }
     }
+    const bool hadPaths = !poly.isEmpty();
     if (poly.isEmpty()) {
         const double s = 35.0;
         poly << QPointF(-s, -s) << QPointF(s, -s) << QPointF(s, s) << QPointF(-s, s);
@@ -3136,6 +3591,12 @@ void MainWindow::generateStipplingFill()
     sp.marginMm = 1.50;
     sp.threadColor = ThreadColor(QColor(70, 130, 180), QStringLiteral("Quilt-Blau"));
 
+    if (!hadPaths && m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath.clear();
+    m_hasTextParams = false;
     m_current = StipplingGenerator::generate(poly, sp);
     setCurrentSequence(m_current, QStringLiteral("Mäander-Quilt (Stippling %1 mm)").arg(spacing, 0, 'f', 1));
     statusBar()->showMessage(
@@ -3150,6 +3611,7 @@ void MainWindow::generateFlorentineFill()
     for (const auto& p : m_editor->paths()) {
         if (p.count() >= 3) { poly = p.toPolygon(); break; }
     }
+    const bool hadPaths = !poly.isEmpty();
     if (poly.isEmpty()) {
         poly << QPointF(-40, -30) << QPointF(40, -30) << QPointF(45, 10)
              << QPointF(0, 35) << QPointF(-45, 10);
@@ -3171,6 +3633,12 @@ void MainWindow::generateFlorentineFill()
     fp.underlay = m_underlay ? m_underlay->isChecked() : true;
     fp.threadColor = ThreadColor(QColor(0, 139, 139), QStringLiteral("Smaragd Wellenglanz"));
 
+    if (!hadPaths && m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath.clear();
+    m_hasTextParams = false;
     m_current = FlorentineFill::generate(poly, fp);
     setCurrentSequence(m_current, QStringLiteral("Florentiner Wellen-Tatami (Amp %1 mm)").arg(amplitude, 0, 'f', 1));
     statusBar()->showMessage(
@@ -3185,15 +3653,26 @@ void MainWindow::openArcTextStudio()
     if (dlg.exec() == QDialog::Accepted) {
         StitchSequence seq = dlg.resultSequence();
         if (!seq.empty()) {
-            m_editor->clearAll();
-            m_current = seq;
+            if (m_editor) {
+                m_editor->clearAll();
+                m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+            }
             m_currentFilePath.clear();
-            m_view->setSequence(m_current);
-            m_editor->setSequence(m_current);
-            m_view->showAll();
-            updateInfoPanel();
-            setWindowTitle(QStringLiteral("StickCore Studio — Bogen-Schrift"));
-            statusBar()->showMessage(QStringLiteral("Bogen-Schriftzug mit 3D-Relief Polsterung ins Studio geladen (%1 Stiche).").arg(m_current.stitches.size()), 5000);
+            m_hasTextParams = true;
+            m_currentTextParams = dlg.textParams();
+
+            double minX, minY, maxX, maxY;
+            if (seq.bounds(minX, minY, maxX, maxY)) {
+                const auto& mp = MachineProfile::current();
+                selectHoop(mp.hoopFor(maxX - minX, maxY - minY));
+            }
+
+            const QString tabTitle = QStringLiteral("Bogen-Schrift: %1").arg(m_currentTextParams.text);
+            setCurrentSequence(seq, tabTitle);
+            setWindowTitle(QStringLiteral("StickCore Studio — %1").arg(tabTitle));
+            statusBar()->showMessage(
+                QStringLiteral("Bogen-Schriftzug „%1“ mit 3D-Relief Polsterung ins Studio geladen (%2 Stiche). Fadendichte rechts frei anpassbar.")
+                    .arg(m_currentTextParams.text).arg(m_current.realStitchCount()), 6000);
         }
     }
 }
@@ -3250,6 +3729,13 @@ void MainWindow::makeJerseyNumbers()
     tp.paddingPitchMm = 0.48;
     tp.raised = (tp.style == TextDigitizer::StitchStyle::Raised);
 
+    if (m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+    m_currentFilePath.clear();
+    m_hasTextParams = true;
+    m_currentTextParams = tp;
     m_current = TextDigitizer::generate(tp);
     m_current.palette = { ThreadCatalog::snap(QColor(180, 30, 45)) };
     setCurrentSequence(m_current, QStringLiteral("College-Nummer: %1").arg(tp.text));
@@ -3258,6 +3744,55 @@ void MainWindow::makeJerseyNumbers()
 // ---------------------------------------------------------------------------
 void MainWindow::loadOfficialKielWappen()
 {
+    const QString appDir = QCoreApplication::applicationDirPath();
+    QStringList searchDirs = {
+        QStringLiteral("E:/StickCore/output"),
+        appDir + QStringLiteral("/output"),
+        appDir + QStringLiteral("/../output"),
+        QStringLiteral("F:/EmbF5/Feuerwehr")
+    };
+
+    QString volPath, ktlPath, blkPath;
+    for (const QString& d : searchDirs) {
+        if (volPath.isEmpty() && QFile::exists(d + QStringLiteral("/KIEL_VOL.JEF")))
+            volPath = d + QStringLiteral("/KIEL_VOL.JEF");
+        if (ktlPath.isEmpty() && QFile::exists(d + QStringLiteral("/KIEL_KTL.JEF")))
+            ktlPath = d + QStringLiteral("/KIEL_KTL.JEF");
+        if (blkPath.isEmpty() && QFile::exists(d + QStringLiteral("/KIEL_BLK.JEF")))
+            blkPath = d + QStringLiteral("/KIEL_BLK.JEF");
+    }
+
+    if (!volPath.isEmpty() || !ktlPath.isEmpty() || !blkPath.isEmpty()) {
+        QStringList items;
+        QStringList paths;
+        if (!volPath.isEmpty()) {
+            items << QStringLiteral("⚓ KIEL_VOL.JEF — Vollstick komplett gefüllt (1. Weiß → 2. Schwarz → 3. Rot)");
+            paths << volPath;
+        }
+        if (!ktlPath.isEmpty()) {
+            items << QStringLiteral("🛡️ KIEL_KTL.JEF — Kettelrand-Aufnäher für weißen Stoff (1. Schwarz → 2. Weiß → 3. Rot)");
+            paths << ktlPath;
+        }
+        if (!blkPath.isEmpty()) {
+            items << QStringLiteral("⚫ KIEL_BLK.JEF — Vollstick Schwarz zuerst (1. Schwarz → 2. Weiß → 3. Rot)");
+            paths << blkPath;
+        }
+
+        bool ok = false;
+        const QString chosen = QInputDialog::getItem(
+            this,
+            QStringLiteral("Kieler Stadtwappen (JEF) laden"),
+            QStringLiteral("Welche Kieler-Wappen-Variante möchtest du öffnen und bearbeiten?"),
+            items, 0, false, &ok);
+        if (!ok) return;
+
+        const int idx = items.indexOf(chosen);
+        if (idx >= 0 && idx < paths.size()) {
+            loadFile(paths[idx]);
+            return;
+        }
+    }
+
     QString svgPath = QStringLiteral(":/svg/wappen_kiel.svg");
     if (!QFile::exists(svgPath)) {
         svgPath = QStringLiteral("assets/wappen_kiel_official.svg");
@@ -3267,20 +3802,26 @@ void MainWindow::loadOfficialKielWappen()
         SvgDigitizer::Params sp;
         sp.style = SvgDigitizer::StitchStyle::AuthenticPatchSatin;
         sp.targetWidthMm = 100.0;
-        sp.spacingMm = 0.40;
+        sp.spacingMm = m_density ? m_density->value() : 0.38;
         StitchSequence seq = SvgDigitizer::digitizeSvgFile(svgPath, sp);
         if (!seq.empty()) {
+            if (m_editor) {
+                m_editor->clearAll();
+                m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+            }
+            m_currentFilePath.clear();
+            m_hasTextParams = false;
             seq.palette = {
                 ThreadCatalog::snap(QColor(210, 25, 40)),   // Schleswig-Holstein Rot
                 ThreadCatalog::snap(QColor(245, 245, 250)),  // Silbernes Nesselblatt
                 ThreadCatalog::snap(QColor(25, 25, 30))      // Kieler Boot Schwarz
             };
-            setCurrentSequence(seq, QStringLiteral("Kieler Stadtwappen (Offizieller Aufnäher)"));
+            setCurrentSequence(seq, QStringLiteral("Kieler Stadtwappen"));
             statusBar()->showMessage(QStringLiteral("Offizielles Kieler Stadtwappen geladen (%1 Stiche, 3 Farben).").arg(seq.stitches.size()), 5000);
             return;
         }
     }
-    QMessageBox::warning(this, QStringLiteral("Wappen nicht gefunden"), QStringLiteral("Die Vektordatei wappen_kiel_official.svg konnte nicht geladen werden."));
+    QMessageBox::warning(this, QStringLiteral("Wappen nicht gefunden"), QStringLiteral("Die Kieler Wappen-Dateien konnten nicht gefunden werden."));
 }
 
 // ---------------------------------------------------------------------------
@@ -3376,6 +3917,17 @@ void MainWindow::optimizeTieStitches()
     }
 
     m_current = opt;
+    m_baseSequence = m_current;
+    m_hasTextParams = false;
+    if (m_docTabBar) {
+        const int tabIdx = m_docTabBar->currentIndex();
+        if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+            m_openDocs[tabIdx].baseSeq       = m_baseSequence;
+            m_openDocs[tabIdx].currentSeq    = m_current;
+            m_openDocs[tabIdx].hasTextParams = false;
+        }
+    }
+    m_editor->setSequence(m_current);
     m_view->setSequence(m_current);
     updateInfoPanel();
     QMessageBox::information(this, QStringLiteral("Stich-Sicherung (Tie-In / Tie-Off)"),
@@ -3451,6 +4003,778 @@ void MainWindow::checkForUpdatesManual()
     if (m_updater) {
         m_updater->checkForUpdates(false);
     }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::registerOrUpdateOpenTab(const QString& title, const QString& filePath, const StitchSequence& seq)
+{
+    if (!m_docTabBar) return;
+
+    QString cleanTitle = title;
+    if (cleanTitle.startsWith(QStringLiteral("Geladen: "))) {
+        cleanTitle = cleanTitle.mid(9);
+    }
+
+    int foundIdx = -1;
+    for (int i = 0; i < m_openDocs.size(); ++i) {
+        if (!filePath.isEmpty() && QFileInfo(m_openDocs[i].filePath) == QFileInfo(filePath)) {
+            foundIdx = i;
+            break;
+        }
+        if (filePath.isEmpty() && m_openDocs[i].filePath.isEmpty() && m_openDocs[i].title == cleanTitle) {
+            foundIdx = i;
+            break;
+        }
+    }
+
+    QSignalBlocker blocker(m_docTabBar);
+    if (foundIdx >= 0) {
+        m_openDocs[foundIdx].title            = cleanTitle;
+        m_openDocs[foundIdx].filePath         = filePath;
+        m_openDocs[foundIdx].baseSeq          = m_baseSequence;
+        m_openDocs[foundIdx].currentSeq       = seq;
+        m_openDocs[foundIdx].baseDensityMm    = m_baseDensityMm;
+        m_openDocs[foundIdx].currentDensityMm = m_density ? m_density->value() : m_baseDensityMm;
+        m_openDocs[foundIdx].basePullMm       = m_basePullMm;
+        m_openDocs[foundIdx].currentPullMm    = m_pull ? m_pull->value() : m_basePullMm;
+        m_openDocs[foundIdx].hasTextParams    = m_hasTextParams;
+        m_openDocs[foundIdx].textParams       = m_currentTextParams;
+        m_docTabBar->setTabText(foundIdx, QStringLiteral("🧵 %1").arg(cleanTitle));
+        m_docTabBar->setTabToolTip(foundIdx, filePath.isEmpty() ? cleanTitle : filePath);
+        m_docTabBar->setCurrentIndex(foundIdx);
+    } else {
+        OpenDocEntry entry;
+        entry.title            = cleanTitle;
+        entry.filePath         = filePath;
+        entry.baseSeq          = m_baseSequence;
+        entry.currentSeq       = seq;
+        entry.baseDensityMm    = m_baseDensityMm;
+        entry.currentDensityMm = m_density ? m_density->value() : m_baseDensityMm;
+        entry.basePullMm       = m_basePullMm;
+        entry.currentPullMm    = m_pull ? m_pull->value() : m_basePullMm;
+        entry.hasTextParams    = m_hasTextParams;
+        entry.textParams       = m_currentTextParams;
+        m_openDocs.push_back(entry);
+
+        const int newIdx = m_docTabBar->addTab(QStringLiteral("🧵 %1").arg(cleanTitle));
+        m_docTabBar->setTabToolTip(newIdx, filePath.isEmpty() ? cleanTitle : filePath);
+        m_docTabBar->setCurrentIndex(newIdx);
+    }
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::onDocTabChanged(int index)
+{
+    if (index < 0 || index >= m_openDocs.size()) return;
+
+    const OpenDocEntry& entry = m_openDocs[index];
+    m_currentFilePath   = entry.filePath;
+    m_baseSequence      = entry.baseSeq;
+    m_current           = entry.currentSeq;
+    m_baseDensityMm     = entry.baseDensityMm;
+    m_basePullMm        = entry.basePullMm;
+    m_hasTextParams     = entry.hasTextParams;
+    m_currentTextParams = entry.textParams;
+
+    if (m_editor) {
+        m_editor->clearAll();
+        m_editor->setCanvasMode(PathEditorWidget::CanvasMode::Stitches2D);
+    }
+
+    if (m_density) {
+        QSignalBlocker b(m_density);
+        m_density->setValue(entry.currentDensityMm);
+    }
+    if (m_densitySlider) {
+        QSignalBlocker b(m_densitySlider);
+        m_densitySlider->setValue(std::clamp(int(std::round(entry.currentDensityMm * 100.0)), 20, 80));
+    }
+    if (m_pull) {
+        QSignalBlocker b(m_pull);
+        m_pull->setValue(entry.currentPullMm);
+    }
+
+    // Update hoop fit
+    double minX, minY, maxX, maxY;
+    if (m_current.bounds(minX, minY, maxX, maxY)) {
+        const auto& mp = MachineProfile::current();
+        selectHoop(mp.hoopFor(maxX - minX, maxY - minY));
+    }
+
+    m_editor->setSequence(m_current);
+    m_editor->fitInView();
+    m_view->setSequence(m_current);
+    m_view->showAll();
+    updateInfoPanel();
+
+    const int baseCnt = m_baseSequence.realStitchCount();
+    const int curCnt  = m_current.realStitchCount();
+    if (m_densityStateLabel) {
+        if (std::abs(entry.currentDensityMm - m_baseDensityMm) > 0.005 || curCnt != baseCnt) {
+            const double pct = baseCnt > 0 ? ((curCnt - baseCnt) * 100.0 / baseCnt) : 0.0;
+            const QString sign = pct >= 0.0 ? QStringLiteral("+") : QString();
+            m_densityStateLabel->setText(
+                QStringLiteral("✓ Dichte: %1 → %2 mm (%3%4% · %5 statt %6 Stiche)")
+                    .arg(m_baseDensityMm, 0, 'f', 2)
+                    .arg(entry.currentDensityMm, 0, 'f', 2)
+                    .arg(sign).arg(pct, 0, 'f', 0)
+                    .arg(curCnt).arg(baseCnt));
+        } else {
+            m_densityStateLabel->setText(
+                QStringLiteral("Basis-Dichte: %1 mm · %2 Stiche")
+                    .arg(m_baseDensityMm, 0, 'f', 2)
+                    .arg(baseCnt));
+        }
+    }
+
+    setWindowTitle(QStringLiteral("StickCore Studio – %1").arg(entry.title));
+    setStatusForSequence(entry.title);
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::onDocTabCloseRequested(int index)
+{
+    if (!m_docTabBar || index < 0 || index >= m_openDocs.size()) return;
+    if (m_openDocs.size() <= 1) {
+        statusBar()->showMessage(QStringLiteral("Mindestens ein Arbeitsblatt bleibt im Studio geöffnet."), 3000);
+        return;
+    }
+
+    m_openDocs.removeAt(index);
+    {
+        QSignalBlocker b(m_docTabBar);
+        m_docTabBar->removeTab(index);
+    }
+    const int activeIdx = std::clamp(m_docTabBar->currentIndex(), 0, int(m_openDocs.size()) - 1);
+    onDocTabChanged(activeIdx);
+}
+
+// ---------------------------------------------------------------------------
+double MainWindow::detectSequenceBaseDensity(const StitchSequence& seq)
+{
+    if (seq.stitches.size() < 16) return 0.38;
+
+    std::vector<double> satinPitches;
+    satinPitches.reserve(512);
+
+    for (size_t i = 1; i + 2 < seq.stitches.size(); ++i) {
+        const Stitch& s0 = seq.stitches[i - 1];
+        const Stitch& s1 = seq.stitches[i];
+        const Stitch& s2 = seq.stitches[i + 1];
+        const Stitch& s3 = seq.stitches[i + 2];
+        if ((s1.flags & (SF_Jump | SF_Trim | SF_ColorChange | SF_Stop)) ||
+            (s2.flags & (SF_Jump | SF_Trim | SF_ColorChange | SF_Stop)) ||
+            (s3.flags & (SF_Jump | SF_Trim | SF_ColorChange | SF_Stop))) {
+            continue;
+        }
+        const double dx1 = s1.x - s0.x, dy1 = s1.y - s0.y;
+        const double dx2 = s2.x - s1.x, dy2 = s2.y - s1.y;
+        const double dx3 = s3.x - s2.x, dy3 = s3.y - s2.y;
+        const double l1 = std::hypot(dx1, dy1);
+        const double l2 = std::hypot(dx2, dy2);
+        const double l3 = std::hypot(dx3, dy3);
+        if (l1 >= 1.0 && l1 <= 11.0 && l2 >= 1.0 && l2 <= 11.0 && l3 >= 1.0 && l3 <= 11.0) {
+            if (std::abs(l1 - l2) < 0.7 && std::abs(l2 - l3) < 0.7) {
+                const double cosA1 = (dx1 * dx2 + dy1 * dy2) / (l1 * l2);
+                const double cosA2 = (dx2 * dx3 + dy2 * dy3) / (l2 * l3);
+                if (cosA1 < -0.60 && cosA2 < -0.60) {
+                    const double advance = std::hypot(s2.x - s0.x, s2.y - s0.y);
+                    if (advance >= 0.16 && advance <= 1.10) {
+                        satinPitches.push_back(advance);
+                    }
+                }
+            }
+        }
+    }
+
+    if (satinPitches.size() >= 20) {
+        std::sort(satinPitches.begin(), satinPitches.end());
+        double med = satinPitches[satinPitches.size() / 2];
+        // Staggered zig-zag satin advances by 1*spacing on each half-step, so s0->s2 is 2*spacing
+        if (med > 0.54) {
+            med *= 0.5;
+        }
+        return std::clamp(std::round(med * 50.0) / 50.0, 0.24, 0.54);
+    }
+
+    return 0.38;
+}
+
+// ---------------------------------------------------------------------------
+StitchSequence MainWindow::rebuildSequenceWithDensity(
+    const StitchSequence& baseSeq,
+    double baseDensityMm,
+    double targetDensityMm,
+    double pullDeltaMm,
+    double maxStitchMm) const
+{
+    if (baseSeq.empty()) return baseSeq;
+
+    baseDensityMm   = std::clamp(baseDensityMm, 0.20, 1.20);
+    targetDensityMm = std::clamp(targetDensityMm, 0.20, 1.20);
+    maxStitchMm     = std::clamp(maxStitchMm, 1.50, 7.00);
+
+    // Group stitches into Color Blocks
+    struct ColorBlock {
+        int colorIdx = 0;
+        std::vector<Stitch> stitches;
+    };
+    std::vector<ColorBlock> blocks;
+    for (const Stitch& st : baseSeq.stitches) {
+        if (st.flags & SF_End) continue;
+        if (blocks.empty() || st.colorIdx != blocks.back().colorIdx || (st.flags & SF_ColorChange)) {
+            ColorBlock cb;
+            cb.colorIdx = st.colorIdx;
+            cb.stitches.push_back(st);
+            blocks.push_back(std::move(cb));
+        } else {
+            blocks.back().stitches.push_back(st);
+        }
+    }
+
+    struct SubItem {
+        enum Type { JumpStitch, SatinRun, NonSatinRun } type = JumpStitch;
+        Stitch jumpSt;
+        std::vector<QPointF> pts;
+    };
+
+    auto remeshSatinSubrun = [&](const std::vector<QPointF>& pts) -> std::vector<QPointF> {
+        const size_t n = pts.size();
+        if (n < 6) return pts;
+
+        std::vector<QPointF> railA, railB;
+        railA.reserve((n + 1) / 2);
+        railB.reserve(n / 2);
+        for (size_t i = 0; i < n; i += 2) railA.push_back(pts[i]);
+        for (size_t i = 1; i < n; i += 2) railB.push_back(pts[i]);
+
+        const size_t m = std::min(railA.size(), railB.size());
+        if (m < 3) return pts;
+        railA.resize(m);
+        railB.resize(m);
+
+        // Apply Pull Compensation outward along each rung
+        if (std::abs(pullDeltaMm) > 1e-4) {
+            for (size_t k = 0; k < m; ++k) {
+                const double vx = railB[k].x() - railA[k].x();
+                const double vy = railB[k].y() - railA[k].y();
+                const double len = std::hypot(vx, vy);
+                if (len > 0.1) {
+                    const double ux = vx / len;
+                    const double uy = vy / len;
+                    railA[k] = QPointF(railA[k].x() - ux * pullDeltaMm, railA[k].y() - uy * pullDeltaMm);
+                    railB[k] = QPointF(railB[k].x() + ux * pullDeltaMm, railB[k].y() + uy * pullDeltaMm);
+                }
+            }
+        }
+
+        // Compute centerline cumulative arc length
+        std::vector<double> cumLen(m, 0.0);
+        for (size_t k = 1; k < m; ++k) {
+            const QPointF c0 = 0.5 * (railA[k - 1] + railB[k - 1]);
+            const QPointF c1 = 0.5 * (railA[k]     + railB[k]);
+            cumLen[k] = cumLen[k - 1] + std::hypot(c1.x() - c0.x(), c1.y() - c0.y());
+        }
+        const double totalLen = cumLen.back();
+        if (totalLen < 0.25) return pts;
+
+        const double ratio = targetDensityMm / baseDensityMm;
+        const int newRungs = std::max(2, static_cast<int>(std::round(static_cast<double>(m) / ratio)));
+
+        std::vector<QPointF> outPts;
+        outPts.reserve(static_cast<size_t>(newRungs) * 2 + 4);
+
+        size_t segIdx = 0;
+        for (int r = 0; r < newRungs; ++r) {
+            const double targetD = (newRungs > 1) ? (totalLen * r / (newRungs - 1)) : 0.0;
+            while (segIdx + 1 < m && cumLen[segIdx + 1] < targetD) {
+                ++segIdx;
+            }
+            double t = 0.0;
+            if (segIdx + 1 < m) {
+                const double span = cumLen[segIdx + 1] - cumLen[segIdx];
+                if (span > 1e-6) t = std::clamp((targetD - cumLen[segIdx]) / span, 0.0, 1.0);
+            }
+            const QPointF pA = (segIdx + 1 < m)
+                ? (railA[segIdx] * (1.0 - t) + railA[segIdx + 1] * t)
+                : railA.back();
+            const QPointF pB = (segIdx + 1 < m)
+                ? (railB[segIdx] * (1.0 - t) + railB[segIdx + 1] * t)
+                : railB.back();
+
+            outPts.push_back(pA);
+            // Split extra-wide satin rungs if they exceed 1.8 * maxStitchMm
+            const double rungLen = std::hypot(pB.x() - pA.x(), pB.y() - pA.y());
+            if (rungLen > maxStitchMm * 1.8 && maxStitchMm > 1.5) {
+                const int sub = static_cast<int>(std::ceil(rungLen / (maxStitchMm * 1.6)));
+                for (int s = 1; s < sub; ++s) {
+                    const double st = static_cast<double>(s) / sub;
+                    outPts.push_back(pA * (1.0 - st) + pB * st);
+                }
+            }
+            outPts.push_back(pB);
+        }
+        return outPts;
+    };
+
+    auto remeshTatamiGroup = [&](const std::vector<std::vector<QPointF>>& nonSatinRuns,
+                                 std::vector<std::pair<bool, QPointF>>& emittedGroup) -> bool {
+        struct Seg {
+            QPointF p0, p1;
+            double len = 0.0;
+            double ang = 0.0;
+        };
+        std::vector<Seg> allSegs;
+        for (const auto& r : nonSatinRuns) {
+            for (size_t i = 0; i + 1 < r.size(); ++i) {
+                const double dx = r[i + 1].x() - r[i].x();
+                const double dy = r[i + 1].y() - r[i].y();
+                const double l = std::hypot(dx, dy);
+                if (l >= 0.35 && l <= 12.0) {
+                    allSegs.push_back({ r[i], r[i + 1], l, std::atan2(dy, dx) });
+                }
+            }
+        }
+        if (allSegs.size() < 12) return false;
+
+        double sumCos2 = 0.0, sumSin2 = 0.0, totalW = 0.0;
+        for (const Seg& s : allSegs) {
+            sumCos2 += s.len * std::cos(2.0 * s.ang);
+            sumSin2 += s.len * std::sin(2.0 * s.ang);
+            totalW  += s.len;
+        }
+        if (totalW < 10.0) return false;
+
+        const double coherence = std::hypot(sumCos2, sumSin2) / totalW;
+        if (coherence < 0.40) return false;
+
+        const double domAngle = 0.5 * std::atan2(sumSin2, sumCos2);
+        const double ca = std::cos(-domAngle);
+        const double sa = std::sin(-domAngle);
+        auto rot = [&](const QPointF& p) -> QPointF {
+            return QPointF(p.x() * ca - p.y() * sa, p.x() * sa + p.y() * ca);
+        };
+        const double caInv = std::cos(domAngle);
+        const double saInv = std::sin(domAngle);
+        auto unrot = [&](double rx, double ry) -> QPointF {
+            return QPointF(rx * caInv - ry * saInv, rx * saInv + ry * caInv);
+        };
+
+        std::vector<std::vector<QPointF>> underlayRuns;
+        std::vector<std::pair<QPointF, QPointF>> tatamiRotSegs;
+        tatamiRotSegs.reserve(allSegs.size());
+
+        for (const auto& r : nonSatinRuns) {
+            double alignedW = 0.0, runW = 0.0;
+            for (size_t i = 0; i + 1 < r.size(); ++i) {
+                const double dx = r[i + 1].x() - r[i].x();
+                const double dy = r[i + 1].y() - r[i].y();
+                const double l = std::hypot(dx, dy);
+                if (l > 0.1) {
+                    runW += l;
+                    const double a = std::atan2(dy, dx);
+                    if (std::abs(std::cos(a - domAngle)) >= 0.90) {
+                        alignedW += l;
+                    }
+                }
+            }
+            if (runW > 0.5 && (alignedW / runW) >= 0.55) {
+                for (size_t i = 0; i + 1 < r.size(); ++i) {
+                    const QPointF rp0 = rot(r[i]);
+                    const QPointF rp1 = rot(r[i + 1]);
+                    if (std::abs(rp1.y() - rp0.y()) <= 0.85 && std::abs(rp1.x() - rp0.x()) >= 0.15) {
+                        tatamiRotSegs.push_back({ rp0, rp1 });
+                    }
+                }
+            } else {
+                underlayRuns.push_back(r);
+            }
+        }
+
+        if (tatamiRotSegs.size() < 8) return false;
+
+        // Estimate original row spacing from rotated y coordinates
+        std::vector<double> rowYs;
+        rowYs.reserve(tatamiRotSegs.size());
+        double minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+        for (const auto& seg : tatamiRotSegs) {
+            const double ym = 0.5 * (seg.first.y() + seg.second.y());
+            rowYs.push_back(ym);
+            minX = std::min({ minX, seg.first.x(), seg.second.x() });
+            maxX = std::max({ maxX, seg.first.x(), seg.second.x() });
+            minY = std::min(minY, ym);
+            maxY = std::max(maxY, ym);
+        }
+        if (maxX - minX < 1.0 || maxY - minY < 0.8) return false;
+
+        std::sort(rowYs.begin(), rowYs.end());
+        std::vector<double> uniqueYs;
+        for (double y : rowYs) {
+            if (uniqueYs.empty() || (y - uniqueYs.back()) > 0.15) {
+                uniqueYs.push_back(y);
+            }
+        }
+        double estRowSp = baseDensityMm;
+        if (uniqueYs.size() >= 4) {
+            std::vector<double> dys;
+            for (size_t i = 0; i + 1 < uniqueYs.size(); ++i) {
+                const double dy = uniqueYs[i + 1] - uniqueYs[i];
+                if (dy >= 0.18 && dy <= 0.95) dys.push_back(dy);
+            }
+            if (!dys.empty()) {
+                std::sort(dys.begin(), dys.end());
+                estRowSp = std::clamp(dys[dys.size() / 2], 0.25, 0.65);
+            }
+        }
+
+        // Rasterize Tatami region onto 2D grayscale mask
+        const double scale = 12.0; // 12 px per mm
+        const double pad = 1.5;
+        const double ox = minX - pad;
+        const double oy = minY - pad;
+        const int imgW = std::max(8, static_cast<int>(std::ceil((maxX - minX + 2.0 * pad) * scale)) + 2);
+        const int imgH = std::max(8, static_cast<int>(std::ceil((maxY - minY + 2.0 * pad) * scale)) + 2);
+
+        QImage mask(imgW, imgH, QImage::Format_Grayscale8);
+        mask.fill(0);
+        {
+            QPainter painter(&mask);
+            painter.setRenderHint(QPainter::Antialiasing, false);
+            const int penPx = std::max(2, static_cast<int>(std::round(estRowSp * 1.75 * scale)));
+            QPen pen(Qt::white, penPx, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin);
+            painter.setPen(pen);
+            for (const auto& seg : tatamiRotSegs) {
+                const QPointF p0((seg.first.x()  - ox) * scale, (seg.first.y()  - oy) * scale);
+                const QPointF p1((seg.second.x() - ox) * scale, (seg.second.y() - oy) * scale);
+                painter.drawLine(p0, p1);
+            }
+        }
+
+        // Emit preserved underlay runs first
+        for (const auto& uRun : underlayRuns) {
+            if (uRun.empty()) continue;
+            emittedGroup.push_back({ true, uRun.front() });
+            for (size_t i = 1; i < uRun.size(); ++i) {
+                emittedGroup.push_back({ false, uRun[i] });
+            }
+        }
+
+        // Rescan mask at targetDensityMm
+        const double newSpacing = targetDensityMm;
+        const int numRows = std::max(1, static_cast<int>(std::floor((maxY - minY) / newSpacing)) + 1);
+        int rowIdx = 0;
+        QPointF prevEnd;
+        bool hasPrevEnd = false;
+
+        for (int r = 0; r < numRows; ++r) {
+            const double ry = minY + 0.5 * newSpacing + r * newSpacing;
+            const int py = std::clamp(static_cast<int>(std::round((ry - oy) * scale)), 0, imgH - 1);
+            const uchar* line = mask.constScanLine(py);
+
+            std::vector<std::pair<double, double>> intervals;
+            int x = 0;
+            while (x < imgW) {
+                while (x < imgW && line[x] < 128) ++x;
+                if (x >= imgW) break;
+                const int xStart = x;
+                while (x < imgW && line[x] >= 128) ++x;
+                const int xEnd = x - 1;
+                double rx0 = ox + (xStart / scale);
+                double rx1 = ox + (xEnd   / scale);
+                if (rx1 - rx0 >= 0.30) {
+                    if (!intervals.empty() && (rx0 - intervals.back().second) < 0.35) {
+                        intervals.back().second = rx1;
+                    } else {
+                        intervals.push_back({ rx0, rx1 });
+                    }
+                }
+            }
+
+            if (intervals.empty()) continue;
+            if (rowIdx % 2 == 1) {
+                std::reverse(intervals.begin(), intervals.end());
+            }
+
+            for (auto iv : intervals) {
+                double x0 = iv.first  - pullDeltaMm;
+                double x1 = iv.second + pullDeltaMm;
+                if (x1 - x0 < 0.25) continue;
+
+                const double segLen = x1 - x0;
+                const bool rev = (rowIdx % 2 == 1);
+                const double phase = ((rowIdx % 4) * 0.25) * maxStitchMm;
+
+                std::vector<double> xs;
+                xs.push_back(rev ? x1 : x0);
+                double d = phase > 0.2 ? phase : maxStitchMm;
+                while (d < segLen - 0.35) {
+                    xs.push_back(rev ? (x1 - d) : (x0 + d));
+                    d += maxStitchMm;
+                }
+                xs.push_back(rev ? x0 : x1);
+
+                for (size_t k = 0; k < xs.size(); ++k) {
+                    const QPointF wp = unrot(xs[k], ry);
+                    if (k == 0) {
+                        const bool needJump = !hasPrevEnd || std::hypot(wp.x() - prevEnd.x(), wp.y() - prevEnd.y()) > 2.2;
+                        emittedGroup.push_back({ needJump, wp });
+                    } else {
+                        emittedGroup.push_back({ false, wp });
+                    }
+                    prevEnd = wp;
+                    hasPrevEnd = true;
+                }
+            }
+            ++rowIdx;
+        }
+
+        return true;
+    };
+
+    StitchSequence out;
+    out.palette = baseSeq.palette;
+    out.stitches.reserve(static_cast<size_t>(baseSeq.stitches.size() * (baseDensityMm / targetDensityMm) * 1.15));
+
+    for (size_t bIdx = 0; bIdx < blocks.size(); ++bIdx) {
+        const ColorBlock& cb = blocks[bIdx];
+        const int cIdx = cb.colorIdx;
+
+        // 1. Extract contiguous SF_Normal runs & standalone Jumps
+        auto isNormalStitch = [](const Stitch& s) {
+            return (s.flags & (SF_Jump | SF_Trim | SF_ColorChange | SF_Stop | SF_End)) == 0;
+        };
+
+        std::vector<SubItem> rawItems;
+        size_t i = 0;
+        while (i < cb.stitches.size()) {
+            const Stitch& st = cb.stitches[i];
+            if (isNormalStitch(st)) {
+                std::vector<QPointF> runPts;
+                if (i > 0) {
+                    runPts.push_back(QPointF(cb.stitches[i - 1].x, cb.stitches[i - 1].y));
+                }
+                while (i < cb.stitches.size() && isNormalStitch(cb.stitches[i])) {
+                    const QPointF pt(cb.stitches[i].x, cb.stitches[i].y);
+                    if (runPts.empty() || std::hypot(pt.x() - runPts.back().x(), pt.y() - runPts.back().y()) > 1e-4) {
+                        runPts.push_back(pt);
+                    }
+                    ++i;
+                }
+                if (runPts.size() >= 2) {
+                    SubItem item;
+                    item.type = SubItem::NonSatinRun;
+                    item.pts = std::move(runPts);
+                    rawItems.push_back(std::move(item));
+                }
+            } else {
+                const bool nextIsNormal = (i + 1 < cb.stitches.size()) && isNormalStitch(cb.stitches[i + 1]);
+                if (!nextIsNormal) {
+                    SubItem item;
+                    item.type = SubItem::JumpStitch;
+                    item.jumpSt = st;
+                    rawItems.push_back(std::move(item));
+                }
+                ++i;
+            }
+        }
+
+        // 2. Split each NonSatinRun into SatinRun vs NonSatinRun sub-runs
+        std::vector<SubItem> classified;
+        for (const SubItem& it : rawItems) {
+            if (it.type != SubItem::NonSatinRun || it.pts.size() < 8) {
+                classified.push_back(it);
+                continue;
+            }
+            const auto& pts = it.pts;
+            const size_t n = pts.size();
+            std::vector<int> rev(n, 0);
+            for (size_t k = 1; k + 1 < n; ++k) {
+                const double dx1 = pts[k].x() - pts[k - 1].x();
+                const double dy1 = pts[k].y() - pts[k - 1].y();
+                const double dx2 = pts[k + 1].x() - pts[k].x();
+                const double dy2 = pts[k + 1].y() - pts[k].y();
+                const double l1 = std::hypot(dx1, dy1);
+                const double l2 = std::hypot(dx2, dy2);
+                if (l1 >= 0.7 && l1 <= 12.0 && l2 >= 0.7 && l2 <= 12.0) {
+                    const double cosA = (dx1 * dx2 + dy1 * dy2) / (l1 * l2);
+                    if (cosA < -0.35) rev[k] = 1;
+                }
+            }
+            std::vector<bool> isSatinPt(n, false);
+            for (size_t k = 0; k < n; ++k) {
+                const size_t a = (k >= 2) ? (k - 2) : 0;
+                const size_t b = std::min(n - 1, k + 2);
+                int sum = 0;
+                for (size_t m = a; m <= b; ++m) sum += rev[m];
+                if (static_cast<double>(sum) / static_cast<double>(b - a + 1) >= 0.55) {
+                    isSatinPt[k] = true;
+                }
+            }
+
+            size_t start = 0;
+            while (start < n) {
+                const bool mode = isSatinPt[start];
+                size_t end = start + 1;
+                while (end < n && isSatinPt[end] == mode) ++end;
+                std::vector<QPointF> subPts(pts.begin() + start, pts.begin() + end);
+                if (subPts.size() >= 2) {
+                    SubItem sub;
+                    sub.type = (mode && subPts.size() >= 8) ? SubItem::SatinRun : SubItem::NonSatinRun;
+                    sub.pts = std::move(subPts);
+                    classified.push_back(std::move(sub));
+                }
+                start = end;
+            }
+        }
+
+        // 3. Process classified items, grouping consecutive NonSatin/Jump items for Tatami remeshing
+        std::vector<std::pair<bool, QPointF>> blockEmitted;
+        size_t idx = 0;
+        while (idx < classified.size()) {
+            if (classified[idx].type == SubItem::SatinRun) {
+                std::vector<QPointF> remeshed = remeshSatinSubrun(classified[idx].pts);
+                if (!remeshed.empty()) {
+                    blockEmitted.push_back({ true, remeshed.front() });
+                    for (size_t k = 1; k < remeshed.size(); ++k) {
+                        blockEmitted.push_back({ false, remeshed[k] });
+                    }
+                }
+                ++idx;
+            } else {
+                std::vector<std::vector<QPointF>> groupRuns;
+                size_t endIdx = idx;
+                while (endIdx < classified.size() && classified[endIdx].type != SubItem::SatinRun) {
+                    if (classified[endIdx].type == SubItem::NonSatinRun) {
+                        groupRuns.push_back(classified[endIdx].pts);
+                    }
+                    ++endIdx;
+                }
+
+                std::vector<std::pair<bool, QPointF>> tatamiOut;
+                if (remeshTatamiGroup(groupRuns, tatamiOut) && !tatamiOut.empty()) {
+                    blockEmitted.insert(blockEmitted.end(), tatamiOut.begin(), tatamiOut.end());
+                } else {
+                    for (const auto& r : groupRuns) {
+                        if (r.empty()) continue;
+                        blockEmitted.push_back({ true, r.front() });
+                        for (size_t k = 1; k < r.size(); ++k) {
+                            blockEmitted.push_back({ false, r[k] });
+                        }
+                    }
+                }
+                idx = endIdx;
+            }
+        }
+
+        // 4. Append blockEmitted stitches to out
+        bool firstInBlock = true;
+        for (const auto& pair : blockEmitted) {
+            const bool isJump = pair.first;
+            const QPointF& pt = pair.second;
+            int flags = isJump ? SF_Jump : SF_Normal;
+            if (firstInBlock) {
+                flags = (bIdx == 0) ? SF_Jump : SF_ColorChange;
+                firstInBlock = false;
+            } else if (!out.stitches.empty() && !isJump) {
+                const double d = std::hypot(pt.x() - out.stitches.back().x, pt.y() - out.stitches.back().y);
+                if (d < 0.08) continue;
+            }
+            out.add(pt.x(), pt.y(), flags, cIdx);
+        }
+    }
+
+    if (!out.stitches.empty()) {
+        const Stitch& last = out.stitches.back();
+        out.add(last.x, last.y, SF_End, last.colorIdx);
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+void MainWindow::applyDensityToLoadedDesign()
+{
+    if (m_baseSequence.empty()) {
+        if (m_current.empty()) return;
+        m_baseSequence  = m_current;
+        m_baseDensityMm = detectSequenceBaseDensity(m_baseSequence);
+        m_basePullMm    = m_pull ? m_pull->value() : 0.20;
+    }
+
+    const double targetDensity = m_density ? m_density->value() : 0.38;
+    const double targetPull    = m_pull ? m_pull->value() : 0.20;
+    const double maxStitch     = m_maxStitch ? m_maxStitch->value() : 4.0;
+    const double pullDelta     = targetPull - m_basePullMm;
+
+    if (m_hasTextParams && !m_currentTextParams.text.isEmpty()) {
+        TextDigitizer::Params tp = m_currentTextParams;
+        const double ratio = targetDensity / std::max(0.15, m_baseDensityMm);
+        tp.densityMm       = std::clamp(m_currentTextParams.densityMm * ratio, 0.20, 1.20);
+        tp.borderPitchMm   = std::clamp(m_currentTextParams.borderPitchMm * ratio, 0.18, 1.00);
+        tp.paddingPitchMm  = std::clamp(m_currentTextParams.paddingPitchMm * ratio, 0.22, 1.20);
+        tp.maxStitchMm     = maxStitch;
+        tp.borderWidthMm   = std::clamp(m_currentTextParams.borderWidthMm + 2.0 * pullDelta, 1.0, 12.0);
+        tp.paddingWidthMm  = std::clamp(m_currentTextParams.paddingWidthMm + 2.0 * pullDelta, 0.8, 10.0);
+        tp.underlay        = m_underlay ? m_underlay->isChecked() : m_currentTextParams.underlay;
+
+        StitchSequence regen = TextDigitizer::generate(tp);
+        if (!regen.empty()) {
+            regen.palette = m_baseSequence.palette;
+            double bMinX, bMinY, bMaxX, bMaxY;
+            double rMinX, rMinY, rMaxX, rMaxY;
+            if (m_baseSequence.bounds(bMinX, bMinY, bMaxX, bMaxY) &&
+                regen.bounds(rMinX, rMinY, rMaxX, rMaxY)) {
+                const double dx = 0.5 * (bMinX + bMaxX) - 0.5 * (rMinX + rMaxX);
+                const double dy = 0.5 * (bMinY + bMaxY) - 0.5 * (rMinY + rMaxY);
+                if (std::hypot(dx, dy) > 0.05) {
+                    for (Stitch& st : regen.stitches) {
+                        st.x += dx;
+                        st.y += dy;
+                    }
+                }
+            }
+            m_current = std::move(regen);
+        } else {
+            m_current = rebuildSequenceWithDensity(m_baseSequence, m_baseDensityMm, targetDensity, pullDelta, maxStitch);
+        }
+    } else {
+        m_current = rebuildSequenceWithDensity(m_baseSequence, m_baseDensityMm, targetDensity, pullDelta, maxStitch);
+    }
+
+    if (m_docTabBar) {
+        const int tabIdx = m_docTabBar->currentIndex();
+        if (tabIdx >= 0 && tabIdx < m_openDocs.size()) {
+            m_openDocs[tabIdx].currentSeq       = m_current;
+            m_openDocs[tabIdx].currentDensityMm = targetDensity;
+            m_openDocs[tabIdx].currentPullMm    = targetPull;
+        }
+    }
+
+    m_editor->setSequence(m_current);
+    m_view->setSequence(m_current);
+    m_view->showAll();
+    updateInfoPanel();
+
+    const int baseCnt = m_baseSequence.realStitchCount();
+    const int newCnt  = m_current.realStitchCount();
+    const double pct  = baseCnt > 0 ? ((newCnt - baseCnt) * 100.0 / baseCnt) : 0.0;
+    const QString sign = pct >= 0.0 ? QStringLiteral("+") : QString();
+
+    if (m_densityStateLabel) {
+        m_densityStateLabel->setText(
+            QStringLiteral("✓ Dichte: %1 → %2 mm (%3%4% · %5 statt %6 Stiche)")
+                .arg(m_baseDensityMm, 0, 'f', 2)
+                .arg(targetDensity, 0, 'f', 2)
+                .arg(sign).arg(pct, 0, 'f', 0)
+                .arg(newCnt).arg(baseCnt));
+    }
+
+    statusBar()->showMessage(
+        QStringLiteral("Fadendichte auf %1 mm angepasst: %2 Stiche (%3%4% gegenüber Basis %5 Stiche bei %6 mm).")
+            .arg(targetDensity, 0, 'f', 2)
+            .arg(newCnt)
+            .arg(sign).arg(pct, 0, 'f', 0)
+            .arg(baseCnt)
+            .arg(m_baseDensityMm, 0, 'f', 2), 6000);
 }
 
 } // namespace stick
