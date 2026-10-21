@@ -94,6 +94,7 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QUrl>
+#include <algorithm>
 #include <cmath>
 
 namespace {

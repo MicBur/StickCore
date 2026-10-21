@@ -13,6 +13,11 @@
 #include <QPointF>
 #include <QVector>
 #include <cmath>
+#include <algorithm>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace stick {
 

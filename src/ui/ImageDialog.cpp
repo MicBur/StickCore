@@ -25,6 +25,7 @@
 #include <QTimer>
 #include <QPixmap>
 #include <QPainter>
+#include <algorithm>
 #include <cmath>
 
 namespace stick {

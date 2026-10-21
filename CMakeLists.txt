@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
+if(MSVC)
+    add_compile_options(/utf-8 /bigobj)
+endif()
+
 # Qt 6 (Widgets pulls in Gui/Core; OpenGLWidgets is separate in Qt 6).
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets Network)
 

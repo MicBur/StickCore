@@ -25,6 +25,7 @@
 #include <QPainter>
 #include <QFontDatabase>
 #include <QDir>
+#include <algorithm>
 #include <cmath>
 
 namespace stick {

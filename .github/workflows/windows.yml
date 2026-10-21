@@ -37,7 +37,7 @@ jobs:
         run: |
           for /d %%d in ("C:\tools\opencv\build") do set OCVDIR=%%d
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=C:\tools\opencv\build
-          cmake --build build --config Release
+          cmake --build build --config Release --target StickCore --parallel
 
       - name: Qt-Abhängigkeiten, Bibliothek & Schriften sammeln (windeployqt)
         shell: cmd
@@ -67,19 +67,22 @@ jobs:
       - name: Installer bauen
         shell: cmd
         run: |
-          mkdir Output
+          if not exist Output mkdir Output
           "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\StickCore.iss
 
       - name: Portable-ZIP schnüren
         shell: pwsh
         run: |
+          if (Test-Path output\StickCore-Installieren.bat) { Copy-Item output\StickCore-Installieren.bat deploy\ -Force }
           Compress-Archive -Path deploy\* -DestinationPath Output\StickCore-Portable-v1.2.0.zip -Force
 
       - name: Installer & ZIP als Artefakt bereitstellen
         uses: actions/upload-artifact@v4
         with:
           name: StickCore-Windows-Build
-          path: Output/*
+          path: |
+            Output/StickCoreSetup.exe
+            Output/StickCore-Portable-v1.2.0.zip
           if-no-files-found: error
 
       - name: GitHub Release veröffentlichen

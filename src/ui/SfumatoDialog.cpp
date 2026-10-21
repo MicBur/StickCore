@@ -19,6 +19,8 @@
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QVBoxLayout>
+#include <algorithm>
+#include <cmath>
 
 namespace stick {
 

@@ -16,6 +16,8 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 
 namespace stick {
 

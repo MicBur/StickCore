@@ -17,6 +17,7 @@
 #include <QProcess>
 #include <QSettings>
 #include <QRegularExpression>
+#include <algorithm>
 
 namespace stick {
 

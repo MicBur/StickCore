@@ -7,7 +7,9 @@
 //  format-information (BCH). Validated by decoding the rendered output.
 // ---------------------------------------------------------------------------
 #include "net/QrCode.h"
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 
 namespace stick {

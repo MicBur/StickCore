@@ -43,6 +43,7 @@
 #include <QImage>
 #include <QtEndian>
 #include <QFile>
+#include <algorithm>
 #include <cstdio>
 #include <cmath>
 
