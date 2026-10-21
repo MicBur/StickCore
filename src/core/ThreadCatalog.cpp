@@ -21,7 +21,7 @@ const std::vector<CatalogThread>& ThreadCatalog::all()
         {"Janome","Emerald",         7,  QColor( 32,140, 92)},
         {"Janome","Royal Blue",      9,  QColor( 40, 70,150)},
         {"Janome","Sky Blue",       11,  QColor( 96,166,214)},
-        {"Janome","Brown",          13,  QColor(107, 79, 42)}, // ✓
+        {"Janome","Feuerwehrrot",   13,  QColor(220, 35, 45)}, // ✓
         {"Janome","Pale Yellow",    16,  QColor(238,228,150)},
         {"Janome","Pale Pink",      17,  QColor(236,196,200)}, // ✓
         {"Janome","Yellow Green",   22,  QColor( 63,155, 86)}, // ✓
@@ -115,7 +115,7 @@ ThreadColor ThreadCatalog::fromJanomeCode(int code)
         { 10, "Silver",      160, 165, 175 },
         { 11, "Sky Blue",    110, 180, 230 },
         { 12, "Pink",        244, 114, 182 },
-        { 13, "Brown",       107,  79,  42 },
+        { 13, "Feuerwehrrot",220,  35,  45 },
         { 14, "Red",         220,  70,  45 },
         { 15, "Pure White",  255, 255, 255 },
         { 16, "Pale Yellow", 238, 228, 150 },

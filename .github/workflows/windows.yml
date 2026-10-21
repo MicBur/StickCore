@@ -39,7 +39,7 @@ jobs:
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=C:\tools\opencv\build
           cmake --build build --config Release
 
-      - name: Qt-Abhängigkeiten & Schriften sammeln (windeployqt)
+      - name: Qt-Abhängigkeiten, Bibliothek & Schriften sammeln (windeployqt)
         shell: cmd
         run: |
           mkdir deploy
@@ -50,6 +50,9 @@ jobs:
           copy media\fonts\*.ttf deploy\fonts\
           copy media\stickcore.ico deploy\
           copy media\stickcore_logo.png deploy\
+          copy media\stickcore_badge.png deploy\
+          xcopy /E /I /Y library deploy\library
+          xcopy /E /I /Y output deploy\output
 
       - name: OpenCV-DLL beilegen
         shell: cmd
@@ -70,7 +73,7 @@ jobs:
       - name: Portable-ZIP schnüren
         shell: pwsh
         run: |
-          Compress-Archive -Path deploy\* -DestinationPath Output\StickCore-Portable-v1.0.0.zip -Force
+          Compress-Archive -Path deploy\* -DestinationPath Output\StickCore-Portable-v1.2.0.zip -Force
 
       - name: Installer & ZIP als Artefakt bereitstellen
         uses: actions/upload-artifact@v4
@@ -85,5 +88,5 @@ jobs:
         with:
           files: |
             Output/StickCoreSetup.exe
-            Output/StickCore-Portable-v1.0.0.zip
+            Output/StickCore-Portable-v1.2.0.zip
           generate_release_notes: true

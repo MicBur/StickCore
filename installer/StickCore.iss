@@ -3,7 +3,7 @@
 ; ISCC after placing the windeployqt output in the "deploy" folder.
 
 #define AppName "StickCore"
-#define AppVersion "1.0.2"
+#define AppVersion "1.2.0"
 #define AppPublisher "MicBur"
 #define AppURL "https://github.com/MicBur/StickCore"
 #define AppExeName "StickCore.exe"
@@ -40,6 +40,8 @@ Name: "installfonts"; Description: "Alle College- & Stickschriften in Windows re
 
 [Files]
 Source: "..\deploy\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\deploy\library\*"; DestDir: "{userappdata}\StickCore\library"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\deploy\library\*"; DestDir: "{userappdata}\StickCore\StickCore\library"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\deploy\fonts\*.ttf"; DestDir: "{autofonts}"; Flags: onlyifdoesntexist uninsneveruninstall; Tasks: installfonts
 
 [Icons]

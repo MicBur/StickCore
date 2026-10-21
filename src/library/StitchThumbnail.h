@@ -55,7 +55,7 @@ public:
         QColor col(30, 30, 30);
         bool have = false;
         double px = 0, py = 0;
-        const double strokeW = std::max(1.2, size / 160.0);
+        const double strokeW = std::max(1.8, size / 115.0);
 
         for (const Stitch& st : seq.stitches) {
             if (st.flags & SF_End) break;

@@ -164,11 +164,7 @@ int DesignLibrary::syncFromBundled(const QString& bundledDir)
     QDir().mkpath(m_base + QStringLiteral("/designs"));
     QDir().mkpath(m_base + QStringLiteral("/thumbs"));
 
-    // Build a set of existing IDs in user library
-    QSet<QString> existingIds;
-    for (const LibraryEntry& e : m_entries) existingIds.insert(e.id);
-
-    int added = 0;
+    int changed = 0;
     for (const QJsonValue& v : bArr) {
         const QJsonObject o = v.toObject();
         const QString id = o["id"].toString();
@@ -188,26 +184,101 @@ int DesignLibrary::syncFromBundled(const QString& bundledDir)
         const QString srcThumb = bundledDir + QStringLiteral("/") + e.thumb;
         const QString dstThumb = m_base + QStringLiteral("/") + e.thumb;
 
-        if (QFile::exists(srcFile) && !QFile::exists(dstFile)) {
-            QDir().mkpath(QFileInfo(dstFile).dir().path());
-            QFile::copy(srcFile, dstFile);
+        const bool isPriority = e.category.contains(QStringLiteral("Feuerwehr"));
+
+        if (QFile::exists(srcFile)) {
+            const bool needCopy = !QFile::exists(dstFile) || isPriority ||
+                                  (QFileInfo(srcFile).size() != QFileInfo(dstFile).size());
+            if (needCopy) {
+                QDir().mkpath(QFileInfo(dstFile).dir().path());
+                if (QFile::exists(dstFile)) QFile::remove(dstFile);
+                QFile::copy(srcFile, dstFile);
+            }
         }
-        if (QFile::exists(srcThumb) && !QFile::exists(dstThumb)) {
-            QDir().mkpath(QFileInfo(dstThumb).dir().path());
-            QFile::copy(srcThumb, dstThumb);
+        if (QFile::exists(srcThumb)) {
+            const bool needCopy = !QFile::exists(dstThumb) || isPriority ||
+                                  (QFileInfo(srcThumb).size() != QFileInfo(dstThumb).size());
+            if (needCopy) {
+                QDir().mkpath(QFileInfo(dstThumb).dir().path());
+                if (QFile::exists(dstThumb)) QFile::remove(dstThumb);
+                QFile::copy(srcThumb, dstThumb);
+            }
         }
 
-        if (!existingIds.contains(id)) {
+        bool found = false;
+        for (LibraryEntry& ex : m_entries) {
+            if (ex.id == id) {
+                if (ex.name != e.name || ex.stitches != e.stitches || ex.category != e.category || isPriority) {
+                    ex = e;
+                    changed++;
+                }
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
             m_entries.push_back(e);
-            existingIds.insert(id);
-            added++;
+            changed++;
         }
     }
 
-    if (added > 0) {
+    // Remove obsolete composite entry if present
+    for (int i = int(m_entries.size()) - 1; i >= 0; --i) {
+        if (m_entries[i].id == QStringLiteral("feuerwehr-kiel-bf30-komplett")) {
+            m_entries.removeAt(i);
+            changed++;
+        }
+    }
+
+    // Sort m_entries so "🚒 Feuerwehr & Kiel" is ALWAYS at the very top of the library
+    QVector<LibraryEntry> fwEntries;
+    QVector<LibraryEntry> otherEntries;
+    for (const LibraryEntry& e : m_entries) {
+        if (e.category.contains(QStringLiteral("Feuerwehr"))) {
+            fwEntries.push_back(e);
+        } else {
+            otherEntries.push_back(e);
+        }
+    }
+    if (!fwEntries.isEmpty()) {
+        // Order fwEntries according to bundled index priority order
+        QStringList priorityOrder = {
+            QStringLiteral("feuerwehr-kiel-wwwap-wappen"),
+            QStringLiteral("feuerwehr-zahl-30-applique-mef"),
+            QStringLiteral("feuerwehr-kiel-bf30-all"),
+            QStringLiteral("feuerwehr-kiel-nw30-all"),
+            QStringLiteral("feuerwehr-kiel-nw2-all"),
+            QStringLiteral("feuerwehr-kiel-bf30-teil1"),
+            QStringLiteral("feuerwehr-kiel-bf30-teil2"),
+            QStringLiteral("feuerwehr-kiel-bf30-teil3"),
+            QStringLiteral("feuerwehr-kiel-bf30-teil4"),
+            QStringLiteral("feuerwehr-kiel-nw30-teil1"),
+            QStringLiteral("feuerwehr-kiel-nw30-teil2"),
+            QStringLiteral("feuerwehr-kiel-nw30-teil3"),
+            QStringLiteral("feuerwehr-kiel-nw2-teil1"),
+            QStringLiteral("feuerwehr-kiel-nw2-teil2"),
+            QStringLiteral("feuerwehr-kiel-nw2-teil3"),
+            QStringLiteral("kieler-wappen-offiziell-applique"),
+            QStringLiteral("kieler-wappen-kettel-konturen")
+        };
+        std::sort(fwEntries.begin(), fwEntries.end(), [&](const LibraryEntry& a, const LibraryEntry& b) {
+            int ia = priorityOrder.indexOf(a.id);
+            int ib = priorityOrder.indexOf(b.id);
+            if (ia < 0) ia = 999;
+            if (ib < 0) ib = 999;
+            return ia < ib;
+        });
+
+        QVector<LibraryEntry> combined = fwEntries;
+        combined.append(otherEntries);
+        m_entries = combined;
+        changed++;
+    }
+
+    if (changed > 0) {
         writeIndex();
     }
-    return added;
+    return changed;
 }
 
 int DesignLibrary::ensurePopulated()
@@ -293,12 +364,21 @@ bool DesignLibrary::load(const LibraryEntry& e, StitchSequence& out) const
 QStringList DesignLibrary::categoriesPresent() const
 {
     QStringList out;
-    for (const QString& c : DesignFactory::categories())
-        for (const LibraryEntry& e : m_entries)
-            if (e.category == c) { out << c; break; }
+    // Put Feuerwehr & Kiel first if present
+    for (const LibraryEntry& e : m_entries) {
+        if (e.category.contains(QStringLiteral("Feuerwehr")) && !out.contains(e.category)) {
+            out << e.category;
+        }
+    }
+    for (const QString& c : DesignFactory::categories()) {
+        for (const LibraryEntry& e : m_entries) {
+            if (e.category == c && !out.contains(c)) { out << c; break; }
+        }
+    }
     // include any custom categories not in the built-in list
-    for (const LibraryEntry& e : m_entries)
+    for (const LibraryEntry& e : m_entries) {
         if (!out.contains(e.category)) out << e.category;
+    }
     return out;
 }
 

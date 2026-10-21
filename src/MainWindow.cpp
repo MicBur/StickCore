@@ -304,17 +304,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     centralLay->setContentsMargins(0, 0, 0, 0);
     centralLay->setSpacing(0);
 
-    auto* tabBarWall = new QWidget(centralWrapper);
-    tabBarWall->setObjectName(QStringLiteral("DocTabBarWall"));
-    auto* tabWallLay = new QHBoxLayout(tabBarWall);
+    m_tabBarWall = new QWidget(centralWrapper);
+    m_tabBarWall->setObjectName(QStringLiteral("DocTabBarWall"));
+    auto* tabWallLay = new QHBoxLayout(m_tabBarWall);
     tabWallLay->setContentsMargins(8, 2, 8, 0);
     tabWallLay->setSpacing(8);
 
-    auto* tabTitleLbl = new QLabel(QStringLiteral("📂 Geöffnete Dateien:"), tabBarWall);
+    auto* tabTitleLbl = new QLabel(QStringLiteral("📂 Geöffnete Dateien:"), m_tabBarWall);
     tabTitleLbl->setStyleSheet(QStringLiteral("color:#8b93a4; font-size:11px; font-weight:700; padding-bottom:4px;"));
     tabWallLay->addWidget(tabTitleLbl);
 
-    m_docTabBar = new QTabBar(tabBarWall);
+    m_docTabBar = new QTabBar(m_tabBarWall);
     m_docTabBar->setTabsClosable(true);
     m_docTabBar->setMovable(false);
     m_docTabBar->setExpanding(false);
@@ -323,21 +323,22 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     connect(m_docTabBar, &QTabBar::tabCloseRequested, this, &MainWindow::onDocTabCloseRequested);
     tabWallLay->addWidget(m_docTabBar, 1);
 
-    auto* btnAddTab = new QToolButton(tabBarWall);
+    auto* btnAddTab = new QToolButton(m_tabBarWall);
     btnAddTab->setText(QStringLiteral("➕ JEF öffnen…"));
     btnAddTab->setToolTip(QStringLiteral("Weitere Stickdatei (.jef, .dst, .svg) als Tab öffnen"));
     btnAddTab->setStyleSheet(QStringLiteral("QToolButton { padding:3px 10px; margin-bottom:3px; font-size:12px; }"));
     connect(btnAddTab, &QToolButton::clicked, this, &MainWindow::openEmbroideryFile);
     tabWallLay->addWidget(btnAddTab);
 
-    centralLay->addWidget(tabBarWall);
+    m_tabBarWall->setVisible(false);
+    centralLay->addWidget(m_tabBarWall);
     centralLay->addWidget(split, 1);
     setCentralWidget(centralWrapper);
 
     setupMenus();
 
     // -----------------------------------------------------------------------
-    // Aufgeräumte Haupt-Toolbar (Keine überladenen Knöpfe mehr rechts oben!)
+    // Aufgeräumte Haupt-Toolbar (Ideal für Laptop-Bildschirme!)
     // -----------------------------------------------------------------------
     QToolBar* tb = addToolBar(QStringLiteral("StudioToolbar"));
     tb->setMovable(false);
@@ -348,7 +349,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     tb->addAction(QStringLiteral("📚 Bibliothek"), this, &MainWindow::openLibrary);
     tb->addSeparator();
 
-    tb->addAction(QStringLiteral("⚓ Kieler Wappen"), this, &MainWindow::loadOfficialKielWappen);
+    tb->addAction(QStringLiteral("🚒 Feuerwehr & Wappen"), this, &MainWindow::loadOfficialKielWappen);
     tb->addAction(QStringLiteral("🌟 Bogen-Schrift"), this, &MainWindow::openArcTextStudio);
     tb->addAction(QStringLiteral("📐 Einpassen"),     this, &MainWindow::fitDesignToHoop);
 
@@ -359,13 +360,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     tb->addWidget(spacer);
 
-    // Rechts außen: Nur noch 2 klare Ansicht-Schalter für die Seitenleisten
+    // Rechts außen: Nur noch 2 klare Ansicht-Schalter für die Seitenleisten.
+    // Auf Laptops ist der linke 2D-Pfadeditor beim Start ausgeblendet, damit die große
+    // 3D-Hauptansicht den vollen Platz hat und nichts oben links überladen wirkt!
+    m_editor->setVisible(false);
     auto* actToggleEditor = tb->addAction(QStringLiteral("✏ 2D-Editor"), this, [this](bool checked){
         m_editor->setVisible(checked);
     });
     actToggleEditor->setCheckable(true);
-    actToggleEditor->setChecked(true);
-    actToggleEditor->setToolTip(QStringLiteral("Linken 2D-Editor ein-/ausblenden"));
+    actToggleEditor->setChecked(false);
+    actToggleEditor->setToolTip(QStringLiteral("Linken 2D-Pfad-Editor bei Bedarf ein-/ausblenden"));
 
     auto* actTogglePanel = tb->addAction(QStringLiteral("📋 Eigenschaften"), this, [panel](bool checked){
         panel->setVisible(checked);
@@ -375,7 +379,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     actTogglePanel->setToolTip(QStringLiteral("Rechte Leiste (Fadendichte, Rahmen, Garne) ein-/ausblenden"));
 
     setAcceptDrops(true);
-    statusBar()->showMessage(QStringLiteral("StickCore Studio bereit — für %1 eingerichtet.").arg(mp.name));
+    statusBar()->showMessage(QStringLiteral("StickCore Studio v1.2.0 bereit — für %1 eingerichtet.").arg(mp.name));
 
     m_updater = new AutoUpdater(this);
 
@@ -453,27 +457,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
             makeMonogram();
         }
     } else if (!loadedFromCli) {
-        // Lade direkt die erstellten Kieler Wappen JEF-Dateien als geöffnete Tabs, falls vorhanden
+        // Lade beim Start genau EIN klares Hauptmotiv (Feuerwehr-Wappen WWWAP.JEF oder Kieler Wappen),
+        // damit keine unübersichtliche Tab-Leiste oben links entsteht.
         const QString appOut = QCoreApplication::applicationDirPath() + QStringLiteral("/output");
-        QString ktlPath = appOut + QStringLiteral("/KIEL_KTL.JEF");
-        if (!QFile::exists(ktlPath)) {
-            ktlPath = QFile::exists(QStringLiteral("E:/StickCore/output/KIEL_KTL.JEF"))
-                ? QStringLiteral("E:/StickCore/output/KIEL_KTL.JEF")
-                : QStringLiteral("C:/Users/micbu/Downloads/KIEL_KTL.JEF");
-        }
-        QString volPath = appOut + QStringLiteral("/KIEL_VOL.JEF");
-        if (!QFile::exists(volPath)) {
-            volPath = QFile::exists(QStringLiteral("E:/StickCore/output/KIEL_VOL.JEF"))
-                ? QStringLiteral("E:/StickCore/output/KIEL_VOL.JEF")
-                : QStringLiteral("C:/Users/micbu/Downloads/KIEL_VOL.JEF");
-        }
-
+        const QStringList candidates = {
+            appOut + QStringLiteral("/fw/WWWAP.JEF"),
+            QStringLiteral("E:/StickCore/output/fw/WWWAP.JEF"),
+            appOut + QStringLiteral("/KIEL_VOL.JEF"),
+            QStringLiteral("E:/StickCore/output/KIEL_VOL.JEF")
+        };
         bool loadedDefaultJef = false;
-        if (QFile::exists(ktlPath)) {
-            loadedDefaultJef |= loadFile(ktlPath);
-        }
-        if (QFile::exists(volPath)) {
-            loadedDefaultJef |= loadFile(volPath);
+        for (const QString& cand : candidates) {
+            if (QFile::exists(cand)) {
+                loadedDefaultJef = loadFile(cand);
+                if (loadedDefaultJef) break;
+            }
         }
         if (!loadedDefaultJef) {
             loadSatinDemo();
@@ -708,7 +706,7 @@ void MainWindow::setupMenus()
         QMessageBox::about(this, QStringLiteral("Über StickCore Studio"),
             QStringLiteral("<div style='text-align:center;'>"
                            "<img src=':/logo/badge.png' width='96' height='96'><br>"
-                           "<h2>StickCore Studio v1.0.0</h2>"
+                           "<h2>StickCore Studio v1.2.0</h2>"
                            "<b>Professionelle Sticksoftware & Digitalisierungs-Suite</b><br>"
                            "Optimiert für Janome MC350E & Tajima DST"
                            "</div><br><hr>"
@@ -3745,44 +3743,63 @@ void MainWindow::makeJerseyNumbers()
 void MainWindow::loadOfficialKielWappen()
 {
     const QString appDir = QCoreApplication::applicationDirPath();
-    QStringList searchDirs = {
-        QStringLiteral("E:/StickCore/output"),
+    const QStringList searchDirs = {
+        appDir + QStringLiteral("/output/fw"),
         appDir + QStringLiteral("/output"),
+        QStringLiteral("E:/StickCore/output/fw"),
+        QStringLiteral("E:/StickCore/output"),
+        appDir + QStringLiteral("/../output/fw"),
         appDir + QStringLiteral("/../output"),
+        QStringLiteral("F:/EmbF5/MyDesign"),
         QStringLiteral("F:/EmbF5/Feuerwehr")
     };
 
-    QString volPath, ktlPath, blkPath;
-    for (const QString& d : searchDirs) {
-        if (volPath.isEmpty() && QFile::exists(d + QStringLiteral("/KIEL_VOL.JEF")))
-            volPath = d + QStringLiteral("/KIEL_VOL.JEF");
-        if (ktlPath.isEmpty() && QFile::exists(d + QStringLiteral("/KIEL_KTL.JEF")))
-            ktlPath = d + QStringLiteral("/KIEL_KTL.JEF");
-        if (blkPath.isEmpty() && QFile::exists(d + QStringLiteral("/KIEL_BLK.JEF")))
-            blkPath = d + QStringLiteral("/KIEL_BLK.JEF");
+    auto findFile = [&](const QString& fileName) -> QString {
+        for (const QString& d : searchDirs) {
+            const QString cand = d + QLatin1Char('/') + fileName;
+            if (QFile::exists(cand)) return cand;
+        }
+        return QString();
+    };
+
+    struct PresetFile {
+        QString fileName;
+        QString label;
+    };
+    const std::vector<PresetFile> presets = {
+        { QStringLiteral("WWWAP.JEF"),    QStringLiteral("🛡️ WWWAP.JEF — Feuerwehr Kiel Ärmelwappen (mit Fadenkreuz)") },
+        { QStringLiteral("30_MITTE.JEF"), QStringLiteral("🔢 30_MITTE.JEF — Ärmel- / Mitte-Zahl 30 (Applikation Original)") },
+        { QStringLiteral("BF30_ALL.JEF"), QStringLiteral("⬆️ BF30_ALL.JEF — Oberer Bogen: BERUFSFEUERWEHR KIEL (Gesamt)") },
+        { QStringLiteral("NW30_ALL.JEF"), QStringLiteral("⬇️ NW30_ALL.JEF — Gegenbogen Unten: NACHTWACHE II (Gesamt)") },
+        { QStringLiteral("NW2_ALL.JEF"),  QStringLiteral("⬇️ NW2_ALL.JEF — Gegenbogen Unten: NACHTWACHE 2 (Gesamt)") },
+        { QStringLiteral("BF30_1.JEF"),   QStringLiteral("⬆️ BF30_1.JEF — Oberer Bogen Rahmen 1: BERUFS") },
+        { QStringLiteral("BF30_2.JEF"),   QStringLiteral("⬆️ BF30_2.JEF — Oberer Bogen Rahmen 2: FEUER") },
+        { QStringLiteral("BF30_3.JEF"),   QStringLiteral("⬆️ BF30_3.JEF — Oberer Bogen Rahmen 3: WEHR") },
+        { QStringLiteral("BF30_4.JEF"),   QStringLiteral("⬆️ BF30_4.JEF — Oberer Bogen Rahmen 4: KIEL") },
+        { QStringLiteral("NW30_1.JEF"),   QStringLiteral("⬇️ NW30_1.JEF — Gegenbogen Unten Rahmen 1: NACHT") },
+        { QStringLiteral("NW30_2.JEF"),   QStringLiteral("⬇️ NW30_2.JEF — Gegenbogen Unten Rahmen 2: WACHE") },
+        { QStringLiteral("NW30_3.JEF"),   QStringLiteral("⬇️ NW30_3.JEF — Gegenbogen Unten Rahmen 3: II") },
+        { QStringLiteral("KIEL_VOL.JEF"), QStringLiteral("⚓ KIEL_VOL.JEF — Kieler Stadtwappen Vollstick (Weiß → Schwarz → Rot)") },
+        { QStringLiteral("KIEL_KTL.JEF"), QStringLiteral("🛡️ KIEL_KTL.JEF — Kieler Stadtwappen Kettelrand-Aufnäher") },
+        { QStringLiteral("KIEL_BLK.JEF"), QStringLiteral("⚫ KIEL_BLK.JEF — Kieler Stadtwappen (Schwarz zuerst)") }
+    };
+
+    QStringList items;
+    QStringList paths;
+    for (const auto& p : presets) {
+        const QString found = findFile(p.fileName);
+        if (!found.isEmpty()) {
+            items << p.label;
+            paths << found;
+        }
     }
 
-    if (!volPath.isEmpty() || !ktlPath.isEmpty() || !blkPath.isEmpty()) {
-        QStringList items;
-        QStringList paths;
-        if (!volPath.isEmpty()) {
-            items << QStringLiteral("⚓ KIEL_VOL.JEF — Vollstick komplett gefüllt (1. Weiß → 2. Schwarz → 3. Rot)");
-            paths << volPath;
-        }
-        if (!ktlPath.isEmpty()) {
-            items << QStringLiteral("🛡️ KIEL_KTL.JEF — Kettelrand-Aufnäher für weißen Stoff (1. Schwarz → 2. Weiß → 3. Rot)");
-            paths << ktlPath;
-        }
-        if (!blkPath.isEmpty()) {
-            items << QStringLiteral("⚫ KIEL_BLK.JEF — Vollstick Schwarz zuerst (1. Schwarz → 2. Weiß → 3. Rot)");
-            paths << blkPath;
-        }
-
+    if (!items.isEmpty()) {
         bool ok = false;
         const QString chosen = QInputDialog::getItem(
             this,
-            QStringLiteral("Kieler Stadtwappen (JEF) laden"),
-            QStringLiteral("Welche Kieler-Wappen-Variante möchtest du öffnen und bearbeiten?"),
+            QStringLiteral("Feuerwehr Kiel & Stadtwappen (JEF) laden"),
+            QStringLiteral("Welches Feuerwehr- / Kiel-Motiv möchtest du öffnen (Wappen, Ärmel-Zahl 30, Bogen Oben / Unten)?"),
             items, 0, false, &ok);
         if (!ok) return;
 
@@ -4060,6 +4077,10 @@ void MainWindow::registerOrUpdateOpenTab(const QString& title, const QString& fi
         m_docTabBar->setTabToolTip(newIdx, filePath.isEmpty() ? cleanTitle : filePath);
         m_docTabBar->setCurrentIndex(newIdx);
     }
+
+    if (m_tabBarWall) {
+        m_tabBarWall->setVisible(m_openDocs.size() > 1);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -4144,6 +4165,9 @@ void MainWindow::onDocTabCloseRequested(int index)
     {
         QSignalBlocker b(m_docTabBar);
         m_docTabBar->removeTab(index);
+    }
+    if (m_tabBarWall) {
+        m_tabBarWall->setVisible(m_openDocs.size() > 1);
     }
     const int activeIdx = std::clamp(m_docTabBar->currentIndex(), 0, int(m_openDocs.size()) - 1);
     onDocTabChanged(activeIdx);

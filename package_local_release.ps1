@@ -8,13 +8,22 @@ $outputDir = "E:\StickCore\output"
 if (!(Test-Path $deployDir)) { New-Item -ItemType Directory -Path $deployDir | Out-Null }
 if (!(Test-Path $outputDir)) { New-Item -ItemType Directory -Path $outputDir | Out-Null }
 
-# 1. Update StickCore.exe from build-local
-Copy-Item "E:\StickCore\build-local\StickCore.exe" "$deployDir\StickCore.exe" -Force
-Write-Host "[OK] Copied latest StickCore.exe"
+# 1. Update StickCore.exe from newest build (build\Release or build-local)
+$exeRelease = "E:\StickCore\build\Release\StickCore.exe"
+$exeLocal   = "E:\StickCore\build-local\StickCore.exe"
+if ((Test-Path $exeRelease) -and (!(Test-Path $exeLocal) -or ((Get-Item $exeRelease).LastWriteTime -ge (Get-Item $exeLocal).LastWriteTime))) {
+    Copy-Item $exeRelease "$deployDir\StickCore.exe" -Force
+    Write-Host "[OK] Copied latest StickCore.exe from build\Release"
+} else {
+    Copy-Item $exeLocal "$deployDir\StickCore.exe" -Force
+    Write-Host "[OK] Copied latest StickCore.exe from build-local"
+}
 
 # 2. Run windeployqt
 Write-Host "Running windeployqt..."
+$ErrorActionPreference = "Continue"
 & "C:\Qt\6.12.0\mingw_64\bin\windeployqt.exe" --release --compiler-runtime "$deployDir\StickCore.exe"
+$ErrorActionPreference = "Stop"
 Write-Host "[OK] windeployqt completed"
 
 # 3. Create fonts directory and copy all fonts
@@ -55,32 +64,16 @@ foreach ($sub in @("fw", "EmbF5", "mef_jef")) {
 $jefCount = (Get-ChildItem $deployOutDir -Recurse -Include "*.jef", "*.JEF" -File).Count
 Write-Host "[OK] Copied $jefCount JEF embroidery files into deploy\output"
 
-# 5. Create 1-Click Font Installer script in deploy
-$fontInstallerScript = @'
-# 1-Click Font Installer for Windows
-$fonts = Get-ChildItem -Path "$PSScriptRoot\fonts" -Filter "*.ttf"
-$fontReg = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
-$destDir = "$env:WINDIR\Fonts"
+# 5. Clean any legacy .ps1 scripts from deploy so AV heuristics never trigger on laptop
+if (Test-Path "$deployDir\Install-Fonts.ps1") { Remove-Item "$deployDir\Install-Fonts.ps1" -Force }
+if (Test-Path "$deployDir\Laptop-Installation-Ohne-Blockade.bat") { Remove-Item "$deployDir\Laptop-Installation-Ohne-Blockade.bat" -Force }
 
-Write-Host "Installiere $($fonts.Count) StickCore-Schriften in Windows..." -ForegroundColor Cyan
-foreach ($f in $fonts) {
-    $target = Join-Path $destDir $f.Name
-    if (!(Test-Path $target)) {
-        Copy-Item $f.FullName $target -Force
-        $fontName = [System.IO.Path]::GetFileNameWithoutExtension($f.Name) + " (TrueType)"
-        New-ItemProperty -Path $fontReg -Name $fontName -Value $f.Name -PropertyType String -Force | Out-Null
-    }
-}
-Write-Host "Alle Schriften erfolgreich installiert!" -ForegroundColor Green
-'@
-Set-Content -Path "$deployDir\Install-Fonts.ps1" -Value $fontInstallerScript -Encoding UTF8
-
-# 6. Create 1-Click Desktop App Setup script
+# 6. Create clean 1-Click Desktop App Setup script (standard xcopy only, zero PowerShell/WScript calls)
 $setupBat = @'
 @echo off
 chcp 65001 >nul
 echo ===================================================
-echo     StickCore Studio v1.0.2 - Setup & Installation
+echo     StickCore Studio v1.2.0 - Schnell-Start & Setup
 echo ===================================================
 echo.
 
@@ -89,21 +82,13 @@ echo [1/3] Kopiere Programmdateien nach %TARGET_DIR%...
 if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
 xcopy /E /I /Y "%~dp0*" "%TARGET_DIR%\" >nul
 
-echo [2/3] Registriere Desktop- & Startmenue-Verknuepfungen...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\StickCore Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\StickCore.exe'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.IconLocation = '%TARGET_DIR%\stickcore.ico,0'; $s.Description = 'StickCore Studio - Professionelle Sticksoftware'; $s.Save()"
+echo [2/3] Aktualisiere Stick-Bibliothek (Wappen, Gegenbogen Unten, Aermel-Zahl 30)...
+if not exist "%APPDATA%\StickCore\library" mkdir "%APPDATA%\StickCore\library"
+xcopy /E /I /Y "%~dp0library\*" "%APPDATA%\StickCore\library\" >nul
+if not exist "%APPDATA%\StickCore\StickCore\library" mkdir "%APPDATA%\StickCore\StickCore\library"
+xcopy /E /I /Y "%~dp0library\*" "%APPDATA%\StickCore\StickCore\library\" >nul
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $smDir = [Environment]::GetFolderPath('Programs') + '\StickCore'; if (!(Test-Path $smDir)) { New-Item -ItemType Directory -Path $smDir | Out-Null }; $s = $ws.CreateShortcut($smDir + '\StickCore Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\StickCore.exe'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.IconLocation = '%TARGET_DIR%\stickcore.ico,0'; $s.Description = 'StickCore Studio'; $s.Save()"
-
-echo [3/3] Registriere alle Schriftarten (Varsity, Graduate, Jersey, etc.)...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%TARGET_DIR%\Install-Fonts.ps1" 2>nul
-
-echo.
-echo ===================================================
-echo    Installation abgeschlossen!
-echo    Sie koennen StickCore jetzt vom Desktop starten.
-echo ===================================================
-echo.
-pause
+echo [3/3] Starte StickCore Studio v1.2.0...
 start "" "%TARGET_DIR%\StickCore.exe"
 '@
 Set-Content -Path "$deployDir\Setup-StickCore.bat" -Value $setupBat -Encoding OEM
@@ -136,14 +121,14 @@ if (Test-Path $iscc) {
 }
 
 # 8. Create Portable ZIP packages
+$zipFile120 = "$outputDir\StickCore-Portable-v1.2.0.zip"
 $zipFile102 = "$outputDir\StickCore-Portable-v1.0.2.zip"
-$zipFile101 = "$outputDir\StickCore-Portable-v1.0.1.zip"
-if (Test-Path $zipFile102) { Remove-Item $zipFile102 -Force }
-Write-Host "Creating ZIP archive: $zipFile102..."
-Compress-Archive -Path "$deployDir\*" -DestinationPath $zipFile102 -Force
-Copy-Item $zipFile102 $zipFile101 -Force
-$zipLen = (Get-Item $zipFile102).Length
+if (Test-Path $zipFile120) { Remove-Item $zipFile120 -Force }
+Write-Host "Creating ZIP archive: $zipFile120..."
+Compress-Archive -Path "$deployDir\*" -DestinationPath $zipFile120 -Force
+Copy-Item $zipFile120 $zipFile102 -Force
+$zipLen = (Get-Item $zipFile120).Length
 $zipSizeMb = [math]::Round($zipLen / 1MB, 2)
-Write-Host "[OK] Created ZIP package: $zipFile102 ($zipSizeMb MB)" -ForegroundColor Green
+Write-Host "[OK] Created ZIP package: $zipFile120 ($zipSizeMb MB)" -ForegroundColor Green
 
 Write-Host "=== Package & Installer Assembly Complete! ===" -ForegroundColor Cyan

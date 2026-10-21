@@ -8,13 +8,14 @@
 
 class QWidget;
 class QProgressDialog;
+class QFile;
 
 namespace stick {
 
 class AutoUpdater : public QObject {
     Q_OBJECT
 public:
-    static constexpr const char* CURRENT_VERSION = "1.0.0";
+    static constexpr const char* CURRENT_VERSION = "1.2.0";
 
     explicit AutoUpdater(QWidget* parent = nullptr);
     ~AutoUpdater() override;
@@ -49,9 +50,11 @@ private:
     QString m_newVersion;
     QString m_releaseNotes;
     QUrl m_downloadUrl;
+    QString m_downloadAssetName;
     QString m_downloadTarget;
 
     QNetworkReply* m_downloadReply = nullptr;
+    QFile* m_downloadFile = nullptr;
     QProgressDialog* m_progressDialog = nullptr;
 };
 

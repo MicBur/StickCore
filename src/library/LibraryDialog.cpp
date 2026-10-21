@@ -109,11 +109,50 @@ LibraryDialog::LibraryDialog(DesignLibrary* lib,
 
     root->addLayout(bar);
 
+    // --- Quick-filter buttons for instant 1-click access on Laptop ---
+    auto* quickBar = new QHBoxLayout;
+    quickBar->setSpacing(6);
+    auto addQuickBtn = [&](const QString& label, const QString& catText, const QString& searchTerm, bool highlight = false) {
+        auto* btn = new QPushButton(label, this);
+        if (highlight) {
+            btn->setStyleSheet(QStringLiteral(
+                "QPushButton { background:#1e3a3a; color:#2dd4bf; border:1px solid #00c8b3; border-radius:6px; padding:5px 10px; font-weight:700; font-size:12px; }"
+                "QPushButton:hover { background:#254b4b; color:#ffffff; }"));
+        } else {
+            btn->setStyleSheet(QStringLiteral(
+                "QPushButton { background:#1d212d; color:#cbd5e1; border:1px solid #2e3548; border-radius:6px; padding:5px 10px; font-weight:600; font-size:12px; }"
+                "QPushButton:hover { background:#272d3d; border-color:#00c8b3; color:#ffffff; }"));
+        }
+        connect(btn, &QPushButton::clicked, this, [this, catText, searchTerm]{
+            m_size->setCurrentIndex(0);
+            if (catText.isEmpty()) {
+                m_cat->setCurrentIndex(0);
+            } else {
+                const int idx = m_cat->findText(catText, Qt::MatchContains);
+                m_cat->setCurrentIndex(idx >= 0 ? idx : 0);
+            }
+            m_search->setText(searchTerm);
+            refresh();
+        });
+        quickBar->addWidget(btn);
+    };
+
+    addQuickBtn(QStringLiteral("🚒 Alle Feuerwehr & Kiel"), QStringLiteral("Feuerwehr"), QString(), true);
+    addQuickBtn(QStringLiteral("🛡️ Wappen (WWWAP & Kiel)"), QStringLiteral("Feuerwehr"), QStringLiteral("wappen"), true);
+    addQuickBtn(QStringLiteral("⬆️ Oberer Bogen (Berufsfeuerwehr)"), QStringLiteral("Feuerwehr"), QStringLiteral("oberbogen"), true);
+    addQuickBtn(QStringLiteral("⬇️ Gegenbogen Unten (Nachtwache II / 2)"), QStringLiteral("Feuerwehr"), QStringLiteral("gegenbogen"), true);
+    addQuickBtn(QStringLiteral("🔢 Ärmel-Zahl 30"), QStringLiteral("Feuerwehr"), QStringLiteral("30"), true);
+    addQuickBtn(QStringLiteral("🏫 College A–Z"), QStringLiteral("College Buchstaben"), QString(), false);
+    addQuickBtn(QStringLiteral("🪡 Applikation 0–9"), QStringLiteral("Applikation Ziffern"), QString(), false);
+    addQuickBtn(QStringLiteral("📚 Alle (760+)"), QString(), QString(), false);
+    quickBar->addStretch(1);
+    root->addLayout(quickBar);
+
     // --- grid ---
     m_list = new QListWidget;
     m_list->setViewMode(QListView::IconMode);
-    m_list->setIconSize(QSize(130, 130));
-    m_list->setGridSize(QSize(155, 185));
+    m_list->setIconSize(QSize(136, 136));
+    m_list->setGridSize(QSize(165, 195));
     m_list->setResizeMode(QListView::Adjust);
     m_list->setMovement(QListView::Static);
     m_list->setSpacing(6);

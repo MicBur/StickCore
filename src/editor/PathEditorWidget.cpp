@@ -534,18 +534,18 @@ public:
         if (!m_sequence.empty()) {
             double sx0, sy0, sx1, sy1;
             if (m_sequence.bounds(sx0, sy0, sx1, sy1)) {
-                minX = std::min(minX, sx0); maxX = std::max(maxX, sx1);
-                minY = std::min(minY, sy0); maxY = std::max(maxY, sy1);
+                minX = sx0; maxX = sx1;
+                minY = sy0; maxY = sy1;
             }
         }
 
-        const double wMm = std::max(20.0, maxX - minX);
-        const double hMm = std::max(20.0, maxY - minY);
+        const double wMm = std::max(30.0, maxX - minX);
+        const double hMm = std::max(30.0, maxY - minY);
         const double cxMm = (minX + maxX) * 0.5;
         const double cyMm = (minY + maxY) * 0.5;
 
-        const double scaleX = (width() * 0.85) / wMm;
-        const double scaleY = (height() * 0.85) / hMm;
+        const double scaleX = (width() * 0.82) / wMm;
+        const double scaleY = (height() * 0.82) / hMm;
         m_scale = std::clamp(std::min(scaleX, scaleY), 0.5, 40.0);
         m_pan = QPointF(width() * 0.5 - cxMm * m_scale, height() * 0.5 + cyMm * m_scale);
         update();
@@ -646,8 +646,8 @@ private:
     QPointF m_scaleOriginMm;
     QVector<EditPath> m_pathsBeforeTransform;
 
-    bool m_showNeedlePoints = true;
-    bool m_showJumps        = true;
+    bool m_showNeedlePoints = false;
+    bool m_showJumps        = false;
     bool m_showHoop         = true;
 
     // View state
@@ -1660,7 +1660,7 @@ void PathEditorWidget::setupUi()
     m_btnPoints->setText(QStringLiteral("Punkte"));
     m_btnPoints->setMinimumWidth(56);
     m_btnPoints->setCheckable(true);
-    m_btnPoints->setChecked(true);
+    m_btnPoints->setChecked(false);
     m_btnPoints->setToolTip(QStringLiteral("Nadel-Einstichpunkte ein-/ausblenden"));
     connect(m_btnPoints, &QToolButton::toggled, this, [this](bool c){ m_canvas->setShowNeedlePoints(c); });
 
@@ -1668,7 +1668,7 @@ void PathEditorWidget::setupUi()
     m_btnJumps->setText(QStringLiteral("Sprünge"));
     m_btnJumps->setMinimumWidth(64);
     m_btnJumps->setCheckable(true);
-    m_btnJumps->setChecked(true);
+    m_btnJumps->setChecked(false);
     m_btnJumps->setToolTip(QStringLiteral("Sprungstiche (gestrichelte Linien) ein-/ausblenden"));
     connect(m_btnJumps, &QToolButton::toggled, this, [this](bool c){ m_canvas->setShowJumps(c); });
 

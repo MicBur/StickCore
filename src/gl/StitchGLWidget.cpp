@@ -46,10 +46,11 @@ void main() {
     vec3 V = normalize(uViewPos - vFrag);
     vec3 H = normalize(L + V);
     float diff = max(dot(N, L), 0.0);
-    float spec = pow(max(dot(N, H), 0.0), 56.0);   // glossy polyester sheen
-    vec3 ambient  = 0.28 * vColor;
-    vec3 diffuse  = 0.80 * diff * vColor;
-    vec3 specular = 0.65 * spec * vec3(1.0);
+    float spec = pow(max(dot(N, H), 0.0), 42.0);
+    vec3 baseCol  = max(vColor, vec3(0.07, 0.08, 0.10));
+    vec3 ambient  = 0.42 * baseCol;
+    vec3 diffuse  = 0.68 * diff * baseCol;
+    vec3 specular = 0.48 * spec * vec3(1.0);
     FragColor = vec4(ambient + diffuse + specular, 1.0);
 }
 )";
@@ -68,8 +69,8 @@ void main() {
 }
 )";
 
-// Procedural woven-linen normal mapping: two orthogonal sinusoidal ridges
-// perturb the surface normal, then Blinn-Phong lights the weave.
+// Calm, high-contrast dark studio textile background so red, white, gold, and
+// dark threads stand out razor-sharp on laptop screens without waffle noise.
 static const char* kFabricFrag = R"(#version 330 core
 in vec2 vUV;
 in vec3 vFrag;
@@ -78,20 +79,11 @@ uniform vec3 uLightPos;
 uniform vec3 uViewPos;
 uniform float uFreq;
 void main() {
-    vec2 p = vUV * uFreq;
-    float bumpX = cos(p.x * 6.2831853);
-    float bumpY = cos(p.y * 6.2831853);
-    vec3 N = normalize(vec3(bumpX * 0.35, bumpY * 0.35, 1.0));
-    vec3 L = normalize(uLightPos - vFrag);
-    vec3 V = normalize(uViewPos - vFrag);
-    vec3 H = normalize(L + V);
-    float diff = max(dot(N, L), 0.0);
-    float spec = pow(max(dot(N, H), 0.0), 8.0);
-    vec3 base = vec3(0.86, 0.83, 0.74);           // unbleached linen
-    float weave = 0.5 + 0.5 * (sin(p.x*6.2831853) * sin(p.y*6.2831853));
-    base *= mix(0.82, 1.0, weave);
-    vec3 col = base * (0.35 + 0.75 * diff) + spec * 0.08;
-    FragColor = vec4(col, 1.0);
+    vec2 p = vUV * 900.0;
+    float weave = 0.5 + 0.5 * (sin(p.x * 6.2831853) * sin(p.y * 6.2831853));
+    vec3 base = vec3(0.18, 0.21, 0.27);
+    base *= mix(0.97, 1.01, weave);
+    FragColor = vec4(base, 1.0);
 }
 )";
 
@@ -517,11 +509,18 @@ void StitchGLWidget::rebuildInstances()
         havePrev = true;
     }
 
-    // Camera framing: store design bounds.
+    // Camera framing: store design bounds and center.
     double mnx, mny, mxx, mxy;
     if (m_seq.bounds(mnx, mny, mxx, mxy)) {
         m_designW = float(mxx - mnx);
         m_designH = float(mxy - mny);
+        m_designCenterX = float(0.5 * (mnx + mxx));
+        m_designCenterY = float(0.5 * (mny + mxy));
+    } else {
+        m_designW = 0.0f;
+        m_designH = 0.0f;
+        m_designCenterX = 0.0f;
+        m_designCenterY = 0.0f;
     }
 
     m_visible = int(m_segments.size());   // show all until playback starts
@@ -532,6 +531,7 @@ void StitchGLWidget::setSequence(const StitchSequence& seq)
 {
     m_seq = seq;
     rebuildInstances();
+    m_autoFrame = true;
     if (m_ready) {
         makeCurrent();
         uploadInstances();
@@ -706,19 +706,19 @@ void StitchGLWidget::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Auto-fit to the hoop and design
+    // Auto-fit tightly to the design so motifs are large and clear on laptop displays
     if (m_autoFrame) {
         const float fovY = qDegreesToRadians(42.0f);
         const float aspect = float(width()) / float(height() ? height() : 1);
         const float tanY = std::tan(fovY * 0.5f);
         const float tanX = tanY * aspect;
-        const float margin = 1.25f;
-        const float frameW = std::max(m_designW, float(m_hoop.widthMm));
-        const float frameH = std::max(m_designH, float(m_hoop.heightMm));
+        const float margin = 1.24f;
+        const float frameW = (m_designW > 5.0f) ? std::max(55.0f, m_designW) : float(m_hoop.widthMm);
+        const float frameH = (m_designH > 5.0f) ? std::max(45.0f, m_designH) : float(m_hoop.heightMm);
         const float distH = (frameH * 0.5f * margin) / tanY;
         const float distW = (frameW * 0.5f * margin) / tanX;
-        m_dist = std::max(40.0f, std::max(distH, distW));
-        m_center = QVector3D(0.0f, 0.0f, 0.0f);
+        m_dist = std::max(38.0f, std::max(distH, distW));
+        m_center = QVector3D(m_designCenterX, m_designCenterY, 0.0f);
         m_autoFrame = false;
     }
 
@@ -737,7 +737,7 @@ void StitchGLWidget::paintGL()
     m_fabricProg->setUniformValue("uProj", m_proj);
     m_fabricProg->setUniformValue("uLightPos", lightPos);
     m_fabricProg->setUniformValue("uViewPos", eye);
-    m_fabricProg->setUniformValue("uFreq", 220.0f);   // weave repeats
+    m_fabricProg->setUniformValue("uFreq", 900.0f);   // weave repeats
     glBindVertexArray(m_fabVao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
@@ -823,6 +823,7 @@ void StitchGLWidget::showAll()
 {
     m_timer.stop();
     m_visible = int(m_segments.size());
+    m_autoFrame = true;
     update();
     emit playbackStateChanged(false);
     emit playbackProgress(m_visible, int(m_segments.size()));

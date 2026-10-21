@@ -164,6 +164,7 @@ private:
                                               double maxStitchMm) const;
 
     class AutoUpdater* m_updater = nullptr;
+    QWidget*          m_tabBarWall = nullptr;
     class QTabBar*    m_docTabBar = nullptr;
     QVector<OpenDocEntry> m_openDocs;
     bool              m_switchingDocTab = false;

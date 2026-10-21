@@ -134,10 +134,11 @@ private:
 
     // Camera ----------------------------------------------------------------
     QMatrix4x4 m_proj;
-    float m_yaw = 0.0f, m_pitch = 28.0f, m_dist = 220.0f;
-    QVector3D m_center{0.0f, 0.0f, 0.0f};  // centered on hoop origin by default
+    float m_yaw = 0.0f, m_pitch = 0.0f, m_dist = 140.0f;
+    QVector3D m_center{0.0f, 0.0f, 0.0f};  // centered on design origin by default
     QPoint    m_lastMouse;
     float m_designW = 0.0f, m_designH = 0.0f;   // mm, for auto-framing
+    float m_designCenterX = 0.0f, m_designCenterY = 0.0f;
     bool  m_autoFrame = true;                    // recompute m_dist next paint
 
     // Drag interaction
