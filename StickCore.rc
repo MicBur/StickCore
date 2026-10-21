@@ -1,5 +1,5 @@
 IDI_ICON1 ICON DISCARDABLE "stickcore.ico"
-#ifndef _MSC_VER
+#ifdef __MINGW32__
 1 24 "StickCore.manifest"
 #endif
 
